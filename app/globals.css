@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand-cyan: #00BCD4;
+  --brand-green: #8BC34A;
+  --brand-pink: #E91E63;
+  --brand-yellow: #FFC107;
+  --brand-dark: #263238;
+  --bg-light: #F8F9FA;
+  
+  /* משתני הפונט מוגדרים ב-Layout */
+}
+
+body {
+  @apply bg-[#F4F6F8] text-brand-dark font-sans; /* רקע טיפה יותר אפרפר-כחלחל מודרני */
+  direction: rtl;
+}
+
+/* אפקט זכוכית יוקרתי */
+.glass {
+  @apply bg-white/80 backdrop-blur-xl border-b border-white/20;
+}
+
+/* כרטיס יוקרתי - רך, עגול, עם צל עדין */
+.card-premium {
+  @apply bg-white rounded-[32px] shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-gray-100/50 hover:shadow-[0_8px_30px_rgba(0,188,212,0.1)] transition-all duration-300;
+}
