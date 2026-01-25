@@ -16,20 +16,19 @@ export default function ManagerInbox() {
   const [replyText, setReplyText] = useState('');
   const [sendingReply, setSendingReply] = useState(false);
 
+  // בקובץ app/manager/inbox/page.tsx
+
   useEffect(() => {
     const init = async () => {
-        // 1. בדיקת מנהל על
         const { data: { user } } = await supabase.auth.getUser();
         
-        // הוסף את השורה הזו בתחילת הפונקציה (לפני ה-if):
-        const SUPER_ADMIN_EMAIL = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL;
+        const myEmail = 'avremihalperin@gmail.com'; 
 
-        // ושנה את תנאי ה-if לשורה הזו:
-        if (user?.email === SUPER_ADMIN_EMAIL) {
-              setIsSuperAdmin(true);
+        // אותה בדיקה חכמה גם כאן
+        if (user?.email === myEmail || user?.user_metadata?.contact_email === myEmail) {
+            setIsSuperAdmin(true);
         }
 
-        // 2. שליפת הודעות
         fetchMessages();
     };
     init();

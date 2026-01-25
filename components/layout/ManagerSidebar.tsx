@@ -17,12 +17,12 @@ export const ManagerSidebar = () => {
     const checkRole = async () => {
         const { data: { user } } = await supabase.auth.getUser();
         
-        // הוסף את השורה הזו בתחילת הפונקציה (לפני ה-if):
-        const SUPER_ADMIN_EMAIL = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL;
+        // המייל האמיתי שלך שקובע מי הבוס
+        const myEmail = 'avremihalperin@gmail.com'; 
 
-        // ושנה את תנאי ה-if לשורה הזו:
-        if (user?.email === SUPER_ADMIN_EMAIL) {
-           setIsSuperAdmin(true);
+        // הבדיקה החכמה: בודקים גם את המייל של הכניסה, וגם את המייל שבפרטים האישיים
+        if (user?.email === myEmail || user?.user_metadata?.contact_email === myEmail) {
+            setIsSuperAdmin(true);
         }
     };
     checkRole();
