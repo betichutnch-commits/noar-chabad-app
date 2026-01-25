@@ -17,13 +17,12 @@ export const ManagerSidebar = () => {
     const checkRole = async () => {
         const { data: { user } } = await supabase.auth.getUser();
         
-        // ---------------------------------------------------------
-        // חובה לשנות כאן לאימייל שלך!
-        const myEmail = 'avremihalperin@gmail.com'; 
-        // ---------------------------------------------------------
+        // הוסף את השורה הזו בתחילת הפונקציה (לפני ה-if):
+        const SUPER_ADMIN_EMAIL = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL;
 
-        if (user?.email === myEmail) {
-            setIsSuperAdmin(true);
+        // ושנה את תנאי ה-if לשורה הזו:
+        if (user?.email === SUPER_ADMIN_EMAIL) {
+           setIsSuperAdmin(true);
         }
     };
     checkRole();

@@ -4,9 +4,7 @@ import React, { useState, useEffect, use } from 'react' // הוספתי את use
 import { createClient } from '@supabase/supabase-js'
 import { ArrowRight, Calendar, MapPin, CheckCircle, XCircle, Clock, AlertTriangle, Link as LinkIcon, User, FileText, Check, X } from 'lucide-react'
 
-const supabaseUrl = "https://ehndiifaaobawrnlcqld.supabase.co";
-const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVobmRpaWZhYW9iYXdybmxjcWxkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgzMzY5NzAsImV4cCI6MjA4MzkxMjk3MH0.RjmlRJWHq7UXohiHPVk-Aeu34eneS5e_uBLnbA9-2X4";
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import { supabase } from '@/lib/supabaseClient'
 
 // הגדרת הטיפוסים החדשה (Promise)
 export default function ManagerTripView({ params }: { params: Promise<{ id: string }> }) {

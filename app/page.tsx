@@ -9,9 +9,7 @@ import { Input } from '@/components/ui/Input';
 // --- הגדרות ---
 const DEPARTMENTS = ["בת מלך", "בנות חב\"ד", "הפנסאים", "מועדוני המעשים הטובים", "תמים"];
 
-// *** חובה לשנות את זה למייל האמיתי שלך ***
-const SUPER_ADMIN_EMAIL = 'avremihalperin@gmail.com'; 
-// -----------------------------------------
+const SUPER_ADMIN_EMAIL = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL;
 
 export default function Home() {
   // ניהול מצבים (Views)
