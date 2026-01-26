@@ -40,11 +40,6 @@ export const ManagerSidebar = () => {
   const baseItems = [
     { label: 'לוח בקרה ראשי', href: '/manager', icon: LayoutDashboard, exact: true },
     { label: 'דואר נכנס והודעות', href: '/manager/inbox', icon: Mail },
-
-
-
-
-    
     { label: 'אישור טיולים', href: '/manager/approvals', icon: CheckSquare },
     { label: 'ניהול משתמשים', href: '/manager/users', icon: Users },
     { label: 'דוחות ונתונים', href: '/manager/reports', icon: FileBarChart },
