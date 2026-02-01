@@ -25,20 +25,37 @@ export default function Home() {
     idNumber: '', password: '', fullName: '', phone: '', email: '', birthDate: '', branch: '', role: ''
   });
 
-  // בדיקת התחברות אוטומטית (אם המשתמש כבר מחובר)
+  // בדיקת התחברות אוטומטית (מתוקן למניעת לופים)
   useEffect(() => {
     const checkSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data?.session) {
-         // בודקים הרשאות גם אם הוא כבר מחובר (למקרה שנחסם תוך כדי)
-         try {
-             await checkRoleAndRedirect(data.session.user);
-         } catch (e: any) {
-             console.log("Auto-login rejected:", e.message);
-             // אם הבדיקה נכשלה, הוא כבר נזרק החוצה בתוך הפונקציה
-         }
+      // במקום getSession, ננסה לאמת את המשתמש
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error || !session) {
+        // אם אין סשן תקין, לא עושים כלום (נשארים בדף נחיתה)
+        return;
+      }
+
+      // יש סשן, בוא נבדוק אם הוא תקף מול השרת
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        // מצאנו את הבעיה! יש סשן ישן בדפדפן אבל הוא לא תקף בשרת.
+        // ננקה את הזבל כדי למנוע את הלופ
+        await supabase.auth.signOut();
+        return;
+      }
+
+      // רק אם הכל תקין, מנסים לנתב
+      try {
+          await checkRoleAndRedirect(user);
+      } catch (e: any) {
+          console.log("Auto-login rejected:", e.message);
+          // אם נכשלנו כאן - סימן שהמשתמש חסום או לא מאושר
+          await supabase.auth.signOut(); // מנתקים אותו כדי שלא ינסה שוב
       }
     };
+    
     checkSession();
   }, []);
 

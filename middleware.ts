@@ -1,15 +1,14 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
-  // 1. הכנת התגובה הראשונית
+  // יצירת תגובה ראשונית שתאפשר לנו לעדכן עוגיות
   let response = NextResponse.next({
     request: {
       headers: request.headers,
     },
   })
 
-  // 2. יצירת הלקוח של סופאבייס שמותאם לשרת
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -19,6 +18,7 @@ export async function middleware(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
+          // עדכון העוגיות גם בבקשה (כדי ש-getUser יעבוד עכשיו) וגם בתגובה (כדי שישמרו בדפדפן)
           cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
           response = NextResponse.next({
             request: {
@@ -33,13 +33,14 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // 3. בדיקה האם המשתמש מחובר
+  // שימוש ב-getUser הבטוח כדי לוודא שהמשתמש באמת קיים בבסיס הנתונים
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // 4. הגנה על נתיבים: אם לא מחובר ומנסה להיכנס למערכת -> זרוק לדף הבית
+  // הגנה על נתיבים
   if (!user && (request.nextUrl.pathname.startsWith('/dashboard') || request.nextUrl.pathname.startsWith('/manager'))) {
+    // אם המשתמש לא מחובר ומנסה להיכנס - זרוק אותו לדף הבית
     return NextResponse.redirect(new URL('/', request.url))
   }
 
@@ -47,6 +48,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // על אילו נתיבים הקובץ הזה משפיע
   matcher: ['/dashboard/:path*', '/manager/:path*'],
 }
