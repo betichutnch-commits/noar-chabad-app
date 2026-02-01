@@ -9,7 +9,6 @@ import {
   Home, PlusCircle, FileText, User, MessageSquare, LogOut, Bell, X
 } from 'lucide-react'
 
-// הוספנו פרופס כדי שהלייאוט יוכל לשלוט על הפתיחה/סגירה
 interface SidebarProps {
     isOpen?: boolean;
     onClose?: () => void;
@@ -41,25 +40,25 @@ export const Sidebar = ({ isOpen = true, onClose }: SidebarProps) => {
             onClick={onClose}
         ></div>
 
-        {/* הסרגל עצמו */}
-        <aside className={`w-64 bg-white border-l border-gray-200 h-screen fixed right-0 top-0 z-50 flex flex-col shadow-2xl transition-transform duration-300
+        {/* הסרגל עצמו - החזרנו את כל העיצוב המקורי */}
+        <aside className={`w-64 bg-white border-l border-gray-200 h-screen fixed right-0 top-0 z-50 flex flex-col shadow-xl transition-transform duration-300
             ${isOpen ? 'translate-x-0' : 'translate-x-full'} 
-            md:translate-x-0 md:shadow-sm`} // במחשב (md) הוא תמיד פתוח וללא צל כבד
+            md:translate-x-0`}
         >
           
-          <div className="h-24 flex items-center justify-between border-b border-gray-100 p-6">
-              <div className="relative w-32 h-full flex items-center justify-start">
+          <div className="h-32 flex items-center justify-center border-b border-gray-100 p-6 relative">
+              <div className="relative w-full h-full flex items-center justify-center">
                  <Image 
                    src="/logo.png" 
                    alt="נוער חב״ד" 
-                   width={120} 
-                   height={60} 
-                   className="object-contain"
+                   width={160} 
+                   height={80} 
+                   className="object-contain max-h-20"
                    priority
                  />
               </div>
-              {/* כפתור סגירה במובייל בלבד */}
-              <button onClick={onClose} className="md:hidden text-gray-400 hover:text-red-500">
+              {/* כפתור סגירה שמופיע רק במובייל */}
+              <button onClick={onClose} className="absolute top-4 left-4 md:hidden text-gray-400 hover:text-red-500">
                   <X size={24} />
               </button>
           </div>
@@ -75,7 +74,7 @@ export const Sidebar = ({ isOpen = true, onClose }: SidebarProps) => {
                 <Link 
                   key={item.href} 
                   href={item.href}
-                  onClick={() => { if(onClose) onClose() }} // סגירת תפריט במובייל אחרי לחיצה
+                  onClick={() => { if(onClose) onClose() }} 
                   className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-200 font-bold text-sm
                     ${isActive 
                       ? 'bg-cyan-50 text-[#00BCD4] shadow-sm' 

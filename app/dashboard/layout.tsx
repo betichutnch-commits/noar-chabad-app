@@ -9,33 +9,32 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] dir-rtl">
+    <div className="min-h-screen bg-[#F8F9FA] dir-rtl text-right">
       
-      {/* כפתור תפריט למובייל (Header עליון קטן) */}
-      <div className="md:hidden flex items-center justify-between p-4 bg-white border-b border-gray-200 sticky top-0 z-30">
+      {/* כפתור תפריט למובייל (מופיע רק במסכים קטנים) */}
+      <div className="md:hidden flex items-center justify-between p-4 bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
           <button 
             onClick={() => setIsMobileMenuOpen(true)}
-            className="p-2 rounded-xl bg-gray-50 text-gray-600 hover:bg-gray-100"
+            className="p-2 rounded-xl bg-gray-50 text-gray-600 hover:bg-gray-100 active:scale-95 transition-transform"
           >
               <Menu size={24} />
           </button>
           
-          <div className="w-24">
-             <Image src="/logo.png" alt="Logo" width={100} height={40} className="object-contain"/>
+          <div className="w-24 h-8 relative">
+             <Image src="/logo.png" alt="Logo" fill className="object-contain"/>
           </div>
           
-          <div className="w-10"></div> {/* סתם כדי לאזן את האמצע */}
+          <div className="w-10"></div> {/* איזון לאמצע */}
       </div>
 
-      {/* הסרגל המקובע (מעבירים לו את המצב) */}
+      {/* הסרגל המקובע */}
       <Sidebar isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />
       
-      {/* התיקון הגדול למובייל:
-         במקום mr-64 קבוע, אנחנו עושים:
-         1. mr-0 כברירת מחדל (למובייל)
-         2. md:mr-64 (למסכים בינוניים ומעלה)
+      {/* התיקון הקריטי למרווחים:
+          md:mr-64 -> במחשב דוחף 256px שמאלה (מקום לסרגל).
+          mr-0 -> במובייל לא דוחף כלום.
       */}
-      <div className="md:mr-64 mr-0 transition-all duration-300">
+      <div className="transition-all duration-300 md:mr-64 mr-0">
         {children}
       </div>
     </div>
