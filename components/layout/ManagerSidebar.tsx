@@ -56,7 +56,8 @@ export const ManagerSidebar = () => {
   };
 
   return (
-    <aside className="w-64 bg-purple-600 text-white h-screen fixed right-0 top-0 z-50 flex flex-col shadow-xl border-l border-gray-700">
+    // השורה החדשה:
+    <aside className="w-64 bg-[#1E293B] text-white h-screen fixed right-0 top-0 z-50 flex flex-col shadow-xl border-l border-gray-700">
       
       <div className="h-32 flex flex-col items-center justify-center border-b border-gray-700 p-6 bg-[#0F172A]">
           <div className="relative w-full h-16 flex items-center justify-center mb-2">
