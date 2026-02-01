@@ -66,15 +66,19 @@ export default function Home() {
         }
     }
 
-    // ניתוב מודרני באמצעות Router
-    // אנחנו עושים refresh כדי לוודא שהעוגיות התעדכנו לפני המעבר
-    await supabase.auth.refreshSession(); 
+    // 1. קודם כל מרעננים את הראוטר
+      router.refresh(); 
+      
+      // 2. נותנים למערכת זמן לעכל את העוגייה (הגדלנו ל-500ms)
+      await new Promise(resolve => setTimeout(resolve, 500));
 
-    if (meta.department === 'בטיחות ומפעלים' || meta.role === 'safety_admin') {
-        router.push('/manager');
-    } else {
-        router.push('/dashboard');
-    }
+      // 3. ניתוב
+      if (meta.department === 'בטיחות ומפעלים' || meta.role === 'safety_admin') {
+          console.log("Redirecting to manager..."); // לוג שיעזור לנו לראות אם הגענו לכאן
+          router.push('/manager');
+      } else {
+          router.push('/dashboard');
+      }
 };
 
   const handleInputChange = (e: any) => {
