@@ -11,6 +11,12 @@ const rubik = Rubik({
 export const metadata: Metadata = {
   title: 'מערכת הטיולים | ארגון נוער חב"ד',
   description: 'מערכת לניהול, תכנון ואישור טיולים ואירועים',
+  manifest: '/manifest.json', // הוספנו את זה
+  icons: {
+    icon: '/icon.png',        // הוספנו את זה
+    apple: '/icon.png',       // אייקון לאייפון
+  },
+  themeColor: '#00BCD4',      // צבע הדפדפן במובייל
 };
 
 export default function RootLayout({

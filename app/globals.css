@@ -16,7 +16,6 @@
 body {
   @apply bg-[#F4F6F8] text-brand-dark font-sans; /* רקע טיפה יותר אפרפר-כחלחל מודרני */
   direction: rtl;
-  overflow-x: hidden; /* <--- הוסף את השורה הזו! זה ימנע את הגלילה הצידית המיותרת */
 }
 
 /* אפקט זכוכית יוקרתי */
