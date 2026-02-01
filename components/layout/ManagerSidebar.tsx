@@ -6,30 +6,32 @@ import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { 
-  LayoutDashboard, CheckSquare, Users, FileBarChart, Settings, LogOut, Mail, UserCircle
+  LayoutDashboard, CheckSquare, Users, FileBarChart, Settings, LogOut, Mail, UserCircle, X
 } from 'lucide-react'
 
-export const ManagerSidebar = () => {
+// הגדרת הפרופס החדשים
+interface SidebarProps {
+    isOpen?: boolean;
+    onClose?: () => void;
+}
+
+export const ManagerSidebar = ({ isOpen = true, onClose }: SidebarProps) => {
   const pathname = usePathname();
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   
-  // משתנים לבדיקה (יופיעו על המסך רק אם יש בעיה)
   const [debugInfo, setDebugInfo] = useState({ detectedEmail: '', contactEmail: '' });
 
   useEffect(() => {
     const checkRole = async () => {
         const { data: { user } } = await supabase.auth.getUser();
         
-        // 1. המייל הקובע (בקטן)
         const ADMIN_EMAIL = 'avremihalperin@gmail.com'; 
 
-        // 2. שליפת המיילים מהמשתמש (והמרה לאותיות קטנות כדי למנוע טעויות)
         const loginEmail = user?.email?.toLowerCase() || '';
         const contactEmail = user?.user_metadata?.contact_email?.toLowerCase() || '';
 
         setDebugInfo({ detectedEmail: loginEmail, contactEmail: contactEmail });
 
-        // 3. הבדיקה: האם אחד מהם תואם?
         if (loginEmail === ADMIN_EMAIL || contactEmail === ADMIN_EMAIL) {
             setIsSuperAdmin(true);
         }
@@ -56,44 +58,66 @@ export const ManagerSidebar = () => {
   };
 
   return (
-    // השורה החדשה:
-    <aside className="w-64 bg-[#1E293B] text-white h-screen fixed right-0 top-0 z-50 flex flex-col shadow-xl border-l border-gray-700">
-      
-      <div className="h-32 flex flex-col items-center justify-center border-b border-gray-700 p-6 bg-[#0F172A]">
-          <div className="relative w-full h-16 flex items-center justify-center mb-2">
-             <Image src="/logo.png" alt="Logo" width={120} height={60} className="object-contain"/>
-          </div>
-          <div className="text-[10px] text-gray-400 font-bold bg-gray-800 px-3 py-1 rounded-full uppercase tracking-wider">
-              ממשק ניהול בטיחות
-          </div>
-      </div>
+    <>
+        {/* מסך חשוך ברקע (רק במובייל) */}
+        <div 
+            className={`fixed inset-0 bg-black/50 z-40 transition-opacity duration-300 md:hidden 
+            ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+            onClick={onClose}
+        ></div>
 
-      <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-        {menuItems.map((item) => {
-          const isActive = item.exact ? pathname === item.href : pathname?.startsWith(item.href);
-          const Icon = item.icon;
-          return (
-            <Link key={item.href} href={item.href} className={`flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 font-bold text-sm ${isActive ? 'bg-[#00BCD4] text-white shadow-lg shadow-cyan-900/20' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}>
-              <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
-              {item.label}
-            </Link>
-          )
-        })}
-      </nav>
+        {/* הסרגל עצמו */}
+        <aside className={`w-64 bg-[#1E293B] text-white h-screen fixed right-0 top-0 z-50 flex flex-col shadow-xl border-l border-gray-700 transition-transform duration-300
+            ${isOpen ? 'translate-x-0' : 'translate-x-full'} 
+            md:translate-x-0`}
+        >
+          
+          <div className="h-32 flex flex-col items-center justify-center border-b border-gray-700 p-6 bg-[#0F172A] relative">
+              {/* כפתור סגירה למובייל */}
+              <button onClick={onClose} className="absolute top-4 left-4 md:hidden text-gray-400 hover:text-white">
+                  <X size={24} />
+              </button>
 
-      {/* אזור דיבאג זמני - יופיע למטה בצד ימין */}
-      {!isSuperAdmin && (
-          <div className="bg-red-600 text-white text-[10px] p-2 text-center" dir="ltr">
-              Login: {debugInfo.detectedEmail} <br/>
-              Contact: {debugInfo.contactEmail}
+              <div className="relative w-full h-16 flex items-center justify-center mb-2">
+                 <Image src="/logo.png" alt="Logo" width={120} height={60} className="object-contain brightness-0 invert"/>
+              </div>
+              <div className="text-[10px] text-gray-400 font-bold bg-gray-800 px-3 py-1 rounded-full uppercase tracking-wider">
+                  ממשק ניהול בטיחות
+              </div>
           </div>
-      )}
 
-      <div className="p-4 border-t border-gray-700 bg-[#0F172A]">
-        <button onClick={handleLogout} className="flex items-center gap-3 px-4 py-3.5 rounded-xl w-full text-red-400 hover:bg-red-900/20 transition-all font-bold text-sm">
-          <LogOut size={20} /> יציאה מאובטחת
-        </button>
-      </div>
-    </aside>
+          <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+            {menuItems.map((item) => {
+              const isActive = item.exact ? pathname === item.href : pathname?.startsWith(item.href);
+              const Icon = item.icon;
+              return (
+                <Link 
+                    key={item.href} 
+                    href={item.href} 
+                    onClick={() => { if(onClose) onClose() }}
+                    className={`flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 font-bold text-sm 
+                    ${isActive ? 'bg-[#00BCD4] text-white shadow-lg shadow-cyan-900/20' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
+                >
+                  <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
+                  {item.label}
+                </Link>
+              )
+            })}
+          </nav>
+
+          {!isSuperAdmin && (
+              <div className="bg-red-600 text-white text-[10px] p-2 text-center" dir="ltr">
+                  Login: {debugInfo.detectedEmail} <br/>
+                  Contact: {debugInfo.contactEmail}
+              </div>
+          )}
+
+          <div className="p-4 border-t border-gray-700 bg-[#0F172A]">
+            <button onClick={handleLogout} className="flex items-center gap-3 px-4 py-3.5 rounded-xl w-full text-red-400 hover:bg-red-900/20 transition-all font-bold text-sm">
+              <LogOut size={20} /> יציאה מאובטחת
+            </button>
+          </div>
+        </aside>
+    </>
   )
 }
