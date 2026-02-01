@@ -25,7 +25,7 @@ export default function Home() {
     idNumber: '', password: '', fullName: '', phone: '', email: '', birthDate: '', branch: '', role: ''
   });
 
-  // בדיקת התחברות אוטומטית (מתוקן למניעת לופים)
+  /*// בדיקת התחברות אוטומטית (מתוקן למניעת לופים)
   useEffect(() => {
     const checkSession = async () => {
       // במקום getSession, ננסה לאמת את המשתמש
@@ -57,7 +57,7 @@ export default function Home() {
     };
     
     checkSession();
-  }, []);
+  }, []); */
 
   // --- הפונקציה הקריטית: בדיקת אישור וניתוב ---
   const checkRoleAndRedirect = async (user: any) => {

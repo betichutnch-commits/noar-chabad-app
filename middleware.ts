@@ -2,7 +2,6 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
-  // יצירת תגובה ראשונית שתאפשר לנו לעדכן עוגיות
   let response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -14,33 +13,24 @@ export async function middleware(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
+        getAll() { return request.cookies.getAll() },
         setAll(cookiesToSet) {
-          // עדכון העוגיות גם בבקשה (כדי ש-getUser יעבוד עכשיו) וגם בתגובה (כדי שישמרו בדפדפן)
           cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options)
-          )
+          response = NextResponse.next({ request: { headers: request.headers } })
+          cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options))
         },
       },
     }
   )
 
-  // שימוש ב-getUser הבטוח כדי לוודא שהמשתמש באמת קיים בבסיס הנתונים
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  // הגנה על נתיבים
-  if (!user && (request.nextUrl.pathname.startsWith('/dashboard') || request.nextUrl.pathname.startsWith('/manager'))) {
-    // אם המשתמש לא מחובר ומנסה להיכנס - זרוק אותו לדף הבית
+  // רק אם מישהו מנסה להיכנס לדשבורד ואין לו יוזר - תעיף אותו
+  if (!user && request.nextUrl.pathname.startsWith('/dashboard')) {
+    return NextResponse.redirect(new URL('/', request.url))
+  }
+  
+  if (!user && request.nextUrl.pathname.startsWith('/manager')) {
     return NextResponse.redirect(new URL('/', request.url))
   }
 
@@ -48,5 +38,6 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
+  // הקשחנו את המאצ'ר: ה-Middleware ירוץ *רק* על הנתיבים האלה ולא על דף הבית
   matcher: ['/dashboard/:path*', '/manager/:path*'],
 }
