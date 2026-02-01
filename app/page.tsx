@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { ArrowLeft, LogIn, UserPlus, ShieldCheck, Users, Briefcase } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { useRouter } from 'next/navigation'; // שים לב: next/navigation ולא next/router
 
 // --- הגדרות ---
 const DEPARTMENTS = ["בת מלך", "בנות חב\"ד", "הפנסאים", "מועדוני המעשים הטובים", "תמים"];
@@ -13,6 +14,7 @@ const SUPER_ADMIN_EMAIL = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL;
 
 export default function Home() {
   // ניהול מצבים (Views)
+  const router = useRouter();
   const [view, setView] = useState<'landing' | 'login' | 'dept_selection' | 'role_selection' | 'register_form'>('landing');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -25,66 +27,55 @@ export default function Home() {
     idNumber: '', password: '', fullName: '', phone: '', email: '', birthDate: '', branch: '', role: ''
   });
 
-  /*// בדיקת התחברות אוטומטית (מתוקן למניעת לופים)
+  // בדיקת התחברות אוטומטית - גרסה בטוחה ללא לופים
   useEffect(() => {
-    const checkSession = async () => {
-      // במקום getSession, ננסה לאמת את המשתמש
-      const { data: { session }, error } = await supabase.auth.getSession();
-      
-      if (error || !session) {
-        // אם אין סשן תקין, לא עושים כלום (נשארים בדף נחיתה)
-        return;
-      }
+    const autoLogin = async () => {
+      // 1. בדיקה שקטה האם יש סשן שמור בדפדפן
+      const { data: { session } } = await supabase.auth.getSession();
 
-      // יש סשן, בוא נבדוק אם הוא תקף מול השרת
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-
-      if (userError || !user) {
-        // מצאנו את הבעיה! יש סשן ישן בדפדפן אבל הוא לא תקף בשרת.
-        // ננקה את הזבל כדי למנוע את הלופ
-        await supabase.auth.signOut();
-        return;
-      }
-
-      // רק אם הכל תקין, מנסים לנתב
-      try {
-          await checkRoleAndRedirect(user);
-      } catch (e: any) {
-          console.log("Auto-login rejected:", e.message);
-          // אם נכשלנו כאן - סימן שהמשתמש חסום או לא מאושר
-          await supabase.auth.signOut(); // מנתקים אותו כדי שלא ינסה שוב
-      }
-    };
-    
-    checkSession();
-  }, []); */
-
-  // --- הפונקציה הקריטית: בדיקת אישור וניתוב ---
-  const checkRoleAndRedirect = async (user: any) => {
-      const meta = user.user_metadata || {};
-      // אם אין סטטוס, נתייחס אליו כממתין
-      const status = meta.status || 'pending'; 
-
-      // בדיקת השומר:
-      // אם זה לא המנהל הראשי, והסטטוס אינו 'approved' - זורקים החוצה
-      if (user.email !== SUPER_ADMIN_EMAIL && status !== 'approved') {
-        
-        await supabase.auth.signOut(); // ניתוק מיידי
-        
-        if (status === 'pending') {
-            throw new Error('ההרשמה שלך נקלטה אך טרם אושרה על ידי המטה.');
-        } else {
-            throw new Error('הגישה למערכת נחסמה. לפרטים נוספים פנה למטה.');
+      if (session) {
+        setLoading(true); // מציג טעינה כדי שלא יראו את דף הנחיתה לשבריר שנייה
+        try {
+          // 2. אם יש סשן, מנסים לנתב אותו לפי התפקיד
+          await checkRoleAndRedirect(session.user);
+        } catch (error) {
+          // 3. אם היה כישלון (למשל משתמש חסום), לא עושים ריפרש!
+          // פשוט מנתקים אותו ומשאירים אותו בדף הבית
+          console.log("Auto-login failed:", error);
+          await supabase.auth.signOut();
+          setLoading(false);
         }
       }
+    };
 
-      // אם עברנו את השומר - ניתוב לפי תפקיד
-      if (meta.department === 'בטיחות ומפעלים' || meta.role === 'safety_admin') {
-          window.location.href = '/manager';
-      } else {
-          window.location.href = '/dashboard';
-      }
-  };
+    autoLogin();
+  }, []);
+
+  const checkRoleAndRedirect = async (user: any) => {
+    const meta = user.user_metadata || {};
+    const status = meta.status || 'pending';
+
+    console.log("Checking user role:", meta); // לוג לבדיקה
+
+    if (user.email !== SUPER_ADMIN_EMAIL && status !== 'approved') {
+        await supabase.auth.signOut();
+        if (status === 'pending') {
+            throw new Error('ההרשמה נקלטה אך טרם אושרה.');
+        } else {
+            throw new Error('הגישה למערכת נחסמה.');
+        }
+    }
+
+    // ניתוב מודרני באמצעות Router
+    // אנחנו עושים refresh כדי לוודא שהעוגיות התעדכנו לפני המעבר
+    await supabase.auth.refreshSession(); 
+
+    if (meta.department === 'בטיחות ומפעלים' || meta.role === 'safety_admin') {
+        router.push('/manager');
+    } else {
+        router.push('/dashboard');
+    }
+};
 
   const handleInputChange = (e: any) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
