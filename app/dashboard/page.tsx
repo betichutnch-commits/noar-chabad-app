@@ -4,11 +4,11 @@ import React, { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { Header } from '@/components/layout/Header'
 import { Button } from '@/components/ui/Button'
-import { Input } from '@/components/ui/Input'
 import { 
-  Loader2, Clock, X, CheckCircle, Search, Calendar as CalendarIcon,
-  MapPin, ShieldAlert, Sun, ArrowRight, User, Layout, Archive
+  Loader2, Clock, X, CheckCircle, Search, 
+  MapPin, ShieldAlert, Sun, ArrowRight
 } from 'lucide-react'
+import Link from 'next/link'
 
 // --- עזרים לוגיים ---
 const getHebrewDateSimple = (dateString: string) => {
@@ -25,7 +25,6 @@ export default function DashboardPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
 
-  // טעינת נתונים
   useEffect(() => {
     const fetchData = async () => {
         setLoading(true);
@@ -48,25 +47,23 @@ export default function DashboardPage() {
   }, []);
 
   const getStatusBadge = (status: string) => {
-      const styles = {
+      const styles: any = {
           approved: "bg-green-50 text-green-700 border-green-200",
           pending: "bg-yellow-50 text-yellow-700 border-yellow-200",
           rejected: "bg-red-50 text-red-700 border-red-200"
       };
-      const icons = {
+      const icons: any = {
           approved: <CheckCircle size={14}/>,
           pending: <Clock size={14}/>,
           rejected: <X size={14}/>
       };
-      const labels = { approved: 'אושר', pending: 'בבדיקה', rejected: 'נדחה' };
+      const labels: any = { approved: 'אושר', pending: 'בבדיקה', rejected: 'נדחה' };
       
-      // @ts-ignore
       return <span className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 border ${styles[status]}`}>{icons[status]} {labels[status]}</span>;
   };
 
   if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
 
-  // חישובים לתצוגה
   const today = new Date().toISOString().split('T')[0];
   const upcomingTrip = trips.filter(t => t.start_date >= today).sort((a,b) => a.start_date.localeCompare(b.start_date))[0];
   const displayTrips = trips.filter(t => {
@@ -79,10 +76,12 @@ export default function DashboardPage() {
     <>
       <Header title={`שלום, ${user?.user_metadata?.full_name?.split(' ')[0]}`} />
 
-      <div className="max-w-6xl mx-auto p-6 space-y-6 animate-fadeIn pb-32">
+      {/* תיקון קריטי לרוחב במובייל */}
+      <div className="p-4 md:p-6 space-y-6 animate-fadeIn pb-32 max-w-[100vw] overflow-x-hidden md:max-w-6xl md:mx-auto">
           
-          {/* שורת סטטוסים קומפקטית */}
+          {/* שורת סטטוסים */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              
               {/* כרטיס הטיול הבא */}
               <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm relative overflow-hidden group">
                   <div className="relative z-10">
@@ -122,13 +121,16 @@ export default function DashboardPage() {
 
           {/* אזור הטיולים */}
           <div className="space-y-4">
+              
+              {/* סרגל כלים - מותאם למובייל עם גלילה אופקית */}
               <div className="flex flex-col md:flex-row justify-between items-end gap-4">
-                  <div className="flex gap-2 bg-gray-100 p-1 rounded-xl">
+                  <div className="flex gap-2 bg-gray-100 p-1 rounded-xl w-full md:w-auto overflow-x-auto">
                       {['all', 'approved', 'pending', 'rejected'].map(f => {
                           const labels: any = { all: 'הכל', approved: 'אושר', pending: 'בבדיקה', rejected: 'נדחה' };
                           return (
                             <button key={f} onClick={() => setActiveFilter(f)} 
-                                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeFilter === f ? 'bg-white text-[#00BCD4] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex-1 md:flex-none
+                                ${activeFilter === f ? 'bg-white text-[#00BCD4] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
                                 {labels[f]}
                             </button>
                           )
@@ -147,7 +149,7 @@ export default function DashboardPage() {
                   </div>
               </div>
 
-              {/* רשימת הטיולים - עיצוב שורות קומפקטי */}
+              {/* רשימת הטיולים */}
               <div className="grid grid-cols-1 gap-3">
                   {displayTrips.length === 0 ? (
                       <div className="py-16 text-center bg-white rounded-2xl border border-dashed border-gray-200">
@@ -157,7 +159,7 @@ export default function DashboardPage() {
                       <div key={trip.id} className="bg-white border border-gray-200 rounded-2xl p-4 hover:border-[#00BCD4] transition-all group flex flex-col md:flex-row items-center gap-4">
                           
                           {/* תאריך */}
-                          <div className="flex flex-row md:flex-col items-center justify-center bg-gray-50 rounded-xl px-4 py-2 md:w-20 md:h-20 shrink-0 gap-2 md:gap-0 border border-gray-100">
+                          <div className="flex flex-row md:flex-col items-center justify-center bg-gray-50 rounded-xl px-4 py-2 w-full md:w-20 md:h-20 shrink-0 gap-2 md:gap-0 border border-gray-100">
                               <span className="text-xl font-bold text-gray-800">{trip.start_date.split('-')[2]}</span>
                               <span className="text-[10px] font-bold text-gray-400 uppercase">{new Date(trip.start_date).toLocaleString('en-US', { month: 'short' })}</span>
                           </div>
@@ -178,9 +180,11 @@ export default function DashboardPage() {
 
                           {/* כפתור פעולה */}
                           <div className="w-full md:w-auto">
-                              <Button variant="ghost" className="w-full md:w-auto bg-gray-50 hover:bg-[#E0F7FA] text-[#00BCD4] rounded-xl h-10 px-4" icon={<ArrowRight size={18}/>}>
-                                  פרטים
-                              </Button>
+                              <Link href={`/dashboard/trip/${trip.id}`}>
+                                <Button variant="ghost" className="w-full md:w-auto bg-gray-50 hover:bg-[#E0F7FA] text-[#00BCD4] rounded-xl h-10 px-4" icon={<ArrowRight size={18}/>}>
+                                    פרטים
+                                </Button>
+                              </Link>
                           </div>
                       </div>
                   ))}

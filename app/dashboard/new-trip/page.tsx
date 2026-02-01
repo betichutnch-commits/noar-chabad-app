@@ -2,15 +2,13 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabaseClient'
-import { Button } from '@/components/ui/Button'
-import { Input } from '@/components/ui/Input'
 import { Header } from '@/components/layout/Header'
 import { 
   Calendar, MapPin, Bus, Tent, Utensils, Ticket, 
   AlertTriangle, Save, CheckCircle, FileUp, 
   Flag, ChevronDown, ChevronUp, Lock, Unlock, HelpCircle, 
   Check, Trash2, Loader2, Link as LinkIcon,
-  Home, Navigation, MessageSquare, X 
+  Home, Navigation, MessageSquare 
 } from 'lucide-react'
 
 // --- קבועים ורשימות ---
@@ -108,12 +106,12 @@ export default function NewTripPage() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   
-  // --- ניהול מודל מתקדם (כולל Confirm) ---
+  // --- ניהול מודל מתקדם ---
   const [modalState, setModalState] = useState<{
       show: boolean;
       message: string;
       type: 'error' | 'success' | 'confirm';
-      onConfirm?: () => void; // פונקציה שתרוץ אם המשתמש ילחץ "כן"
+      onConfirm?: () => void;
   }>({ show: false, message: '', type: 'error' });
   
   const showModal = (type: 'error' | 'success' | 'confirm', msg: string, onConfirm?: () => void) => {
@@ -143,12 +141,10 @@ export default function NewTripPage() {
   const [isRowsLocked, setIsRowsLocked] = useState(false);
   const [showDateToast, setShowDateToast] = useState(false);
   
-  // משתנים לתפריטים
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [showSubCategoryDropdown, setShowSubCategoryDropdown] = useState(false);
 
-  // Refs for Inputs
   const startDateRef = useRef<HTMLInputElement>(null);
   const startTimeRef = useRef<HTMLInputElement>(null);
   const endDateRef = useRef<HTMLInputElement>(null);
@@ -188,23 +184,7 @@ export default function NewTripPage() {
       if (!dateString) return '';
       try {
           const date = new Date(dateString);
-          const weekday = new Intl.DateTimeFormat('he-IL', { weekday: 'long' }).format(date);
-          const days = ["", "א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ז׳", "ח׳", "ט׳", "י׳", "י״א", "י״ב", "י״ג", "י״ד", "ט״ו", "ט״ז", "י״ז", "י״ח", "י״ט", "כ׳", "כ״א", "כ״ב", "כ״ג", "כ״ד", "כ״ה", "כ״ו", "כ״ז", "כ״ח", "כ״ט", "ל׳", "ל״א"];
-          const options: any = { calendar: 'hebrew', day: 'numeric', month: 'long', year: 'numeric' };
-          const parts = new Intl.DateTimeFormat('he-IL', options).formatToParts(date);
-          let hDay = '', hMonth = '', hYear = '';
-          parts.forEach(p => {
-              if (p.type === 'day') {
-                  const num = parseInt(p.value);
-                  hDay = !isNaN(num) && days[num] ? days[num] : p.value;
-              }
-              if (p.type === 'month') hMonth = p.value;
-              if (p.type === 'year') {
-                  const years: any = { '5785': 'תשפ״ה', '5786': 'תשפ״ו', '5787': 'תשפ״ז' };
-                  hYear = years[p.value] || p.value;
-              }
-          });
-          return `${weekday}, ${hDay} ב${hMonth} ${hYear}`;
+          return new Intl.DateTimeFormat('he-IL', { calendar: 'hebrew', day: 'numeric', month: 'long', weekday: 'long' }).format(date);
       } catch (e) { return ''; }
   };
 
@@ -318,45 +298,11 @@ export default function NewTripPage() {
     }
   };
 
-  const handleCurrentLineDualUpload = async (event: any, type: 'license' | 'insurance') => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    event.target.value = ''; // איפוס הקובץ
-    const setUploadingState = type === 'license' ? setIsUploadingLicense : setIsUploadingInsurance;
-    setUploadingState(true);
-
-    try {
-        const fileExt = file.name.split('.').pop();
-        const storageName = `${user.id}/${Date.now()}_${type}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-        const { error: uploadError } = await supabase.storage.from('trip-files').upload(storageName, file);
-        if (uploadError) throw uploadError;
-        const { data: { publicUrl } } = supabase.storage.from('trip-files').getPublicUrl(storageName);
-        
-        setCurrentLine(prev => ({ ...prev, [type === 'license' ? 'licenseFile' : 'insuranceFile']: { url: publicUrl, name: file.name } }));
-    } catch (error: any) { showModal('error', 'שגיאה בהעלאה: ' + error.message); } 
-    finally { setUploadingState(false); }
-  };
-
   const handleExistingLineDualUpload = async (event: any, itemId: string, type: 'license' | 'insurance') => {
     const file = event.target.files[0];
     if (!file) return;
     event.target.value = '';
-    setUploadingFileId(`${itemId}_${type}`);
-
-    try {
-        const fileExt = file.name.split('.').pop();
-        const storageName = `${user.id}/${Date.now()}_${type}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-        const { error: uploadError } = await supabase.storage.from('trip-files').upload(storageName, file);
-        if (uploadError) throw uploadError;
-        const { data: { publicUrl } } = supabase.storage.from('trip-files').getPublicUrl(storageName);
-        
-        setTimeline(prevTimeline => prevTimeline.map(item => {
-            if (item.id === itemId) return { ...item, [type === 'license' ? 'licenseFile' : 'insuranceFile']: { url: publicUrl, name: file.name } };
-            return item;
-        }));
-    } catch (error: any) { showModal('error', 'שגיאה בהעלאה: ' + error.message); } 
-    finally { setUploadingFileId(null); }
+    handleUpload(file, type, itemId);
   };
 
   const handleLockToggle = () => {
@@ -431,21 +377,20 @@ export default function NewTripPage() {
 
       {showDateToast && <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-[100] bg-[#8BC34A] text-white px-8 py-4 rounded-full shadow-2xl animate-fadeIn flex items-center gap-3 border-2 border-white/20"><div className="bg-white/20 p-2 rounded-full"><Calendar size={24} /></div><div><p className="font-bold text-lg">שימו לב: התאריך עודכן ליום המחרת</p></div></div>}
 
-      <main className="max-w-[1600px] mx-auto px-6 py-8 space-y-8 animate-fadeIn pb-32">
+      <div className="p-4 md:p-8 animate-fadeIn pb-32 max-w-[100vw] overflow-x-hidden">
         
         {/* חלק א: פרטים כלליים */}
-        <section className="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-visible relative z-20">
+        <section className="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-visible relative z-20 mb-8">
           <div className="bg-[#00BCD4] text-white h-12 flex items-center px-6 font-bold text-lg shadow-sm gap-2 rounded-t-3xl">
                 <Flag size={20} />
                 <span>פרטים כלליים</span>
           </div>
           
           <div className="p-6 space-y-8">
-            {/* שורה עליונה - הכל בשורה אחת ב-Grid 12 */}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
                 
-                {/* 1. סוג הפעילות (3 עמודות) */}
-                <div className="md:col-span-3 relative">
+                {/* 1. סוג הפעילות */}
+                <div className="md:col-span-3 relative w-full">
                       <label className="text-xs font-bold text-gray-500 block mb-1">סוג הפעילות</label>
                       <div className="relative group">
                           <select className="w-full px-3 rounded-xl border border-gray-200 focus:border-[#E91E63] focus:ring-1 focus:ring-[#E91E63] outline-none transition-all text-sm h-[60px] cursor-pointer appearance-none bg-white"
@@ -464,15 +409,15 @@ export default function NewTripPage() {
                       )}
                 </div>
 
-                {/* 2. שם הפעילות (3 עמודות) */}
-                <div className="md:col-span-3">
+                {/* 2. שם הפעילות */}
+                <div className="md:col-span-3 w-full">
                       <label className="text-xs font-bold text-gray-500 block mb-1">שם הפעילות</label>
                       <input type="text" className="w-full px-3 rounded-xl border border-gray-200 focus:border-[#E91E63] focus:ring-1 focus:ring-[#E91E63] outline-none transition-all text-sm h-[60px]" 
-                        value={generalInfo.name} onChange={(e) => setGeneralInfo({...generalInfo, name: e.target.value})} placeholder="לדוגמה: טיול לצפון" />
+                         value={generalInfo.name} onChange={(e) => setGeneralInfo({...generalInfo, name: e.target.value})} placeholder="לדוגמה: טיול לצפון" />
                 </div>
 
-                {/* 3. תאריכים ושעות - יציאה וחזרה (6 עמודות) */}
-                <div className="md:col-span-6 grid grid-cols-2 gap-4">
+                {/* 3. תאריכים ושעות */}
+                <div className="md:col-span-6 grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
                     {/* יציאה */}
                     <div>
                         <label className="text-xs font-bold text-gray-500 block mb-1">התחלה</label>
@@ -515,10 +460,10 @@ export default function NewTripPage() {
 
             <div className="h-px bg-gray-100"></div>
 
-            {/* שורה שניה */}
+            {/* שורה שניה - כמות וצוות */}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
                 
-                <div className="md:col-span-3">
+                <div className="md:col-span-3 w-full">
                     <label className="text-xs font-bold text-gray-500 block mb-1">שכבות גיל</label>
                     <div className="flex items-center gap-2 bg-gray-50 p-1 rounded-xl border border-gray-200 h-[60px] focus-within:border-[#E91E63] focus-within:bg-white transition-colors">
                         <select className="bg-transparent text-sm p-1 outline-none font-bold w-full cursor-pointer h-full text-gray-700" value={generalInfo.gradeFrom} onChange={(e) => setGeneralInfo({...generalInfo, gradeFrom: e.target.value})}>
@@ -531,12 +476,12 @@ export default function NewTripPage() {
                     </div>
                 </div>
 
-                <div className="md:col-span-2">
+                <div className="md:col-span-2 w-full">
                     <label className="text-xs font-bold text-gray-500 block mb-1">ס"ה כמות חניכים</label>
                     <input type="number" className="w-full px-3 rounded-xl border border-gray-200 text-sm outline-none focus:border-[#E91E63] focus:bg-white h-[60px] transition-colors" value={generalInfo.chanichimCount} onChange={(e) => setGeneralInfo({...generalInfo, chanichimCount: e.target.value})} />
                 </div>
 
-                <div className="md:col-span-5 relative bg-white rounded-xl border border-gray-100 p-2 min-h-[74px] flex flex-col justify-center group hover:border-pink-200 transition-colors">
+                <div className="md:col-span-5 w-full relative bg-white rounded-xl border border-gray-100 p-2 min-h-[74px] flex flex-col justify-center group hover:border-pink-200 transition-colors">
                     <div className="flex items-center gap-2 px-1 mb-1">
                         <label className="text-xs font-bold text-gray-500 group-hover:text-[#E91E63] transition-colors">צוות משתתף בטיול</label>
                         <span className="text-[10px] text-gray-400 font-normal">(ניתן לבחור מס' אפשרויות)</span>
@@ -560,7 +505,7 @@ export default function NewTripPage() {
                     )}
                 </div>
 
-                <div className="md:col-span-2">
+                <div className="md:col-span-2 w-full">
                     <label className="text-xs font-bold text-gray-500 block mb-1">ס"ה משתתפים</label>
                     <input type="number" className="w-full px-3 rounded-xl border border-gray-200 text-sm outline-none focus:border-[#E91E63] bg-[#E0F7FA] font-bold text-[#00BCD4] h-[60px] transition-colors" placeholder="חניכים + צוות" value={generalInfo.totalTravelers} onChange={(e) => setGeneralInfo({...generalInfo, totalTravelers: e.target.value})} />
                 </div>
@@ -570,7 +515,7 @@ export default function NewTripPage() {
         </section>
 
         {/* === חלק ב': פירוט הטיול === */}
-        <section className="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-visible relative z-10">
+        <section className="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-visible relative z-10 mb-8">
            <div className="bg-[#00BCD4] text-white h-12 flex items-center px-6 font-bold text-lg shadow-sm justify-between rounded-t-3xl">
                <div className="flex items-center gap-2"><MapPin size={20}/> <span>פירוט הפעילות / טיול</span></div>
                <span className="text-xs bg-white/20 px-3 py-1 rounded-full">{timeline.length} שורות</span>
@@ -588,25 +533,34 @@ export default function NewTripPage() {
                     <div key={item.id} className={`border rounded-xl overflow-hidden bg-white transition-all group shadow-sm hover:shadow-md ${isMissingLicense ? 'border-red-300 ring-1 ring-red-100' : 'border-gray-200 hover:border-[#E91E63]'}`}>
                         
                         {/* שורה סגורה */}
-                        <div className="flex items-center gap-4 p-4 cursor-pointer" onClick={() => setExpandedItem(isExpanded ? null : item.id)}>
-                            <div className={`p-3 rounded-xl text-white shadow-sm`} style={{backgroundColor: colorClass}}><CatIcon size={20} /></div>
-                            <div className="text-xs font-bold w-24 text-gray-500 bg-gray-50 border px-2 py-1.5 rounded-lg text-center flex flex-col justify-center">
-                                <span className="text-[10px] text-gray-400">תאריך</span>
-                                {item.date ? `${item.date.split('-')[2]}/${item.date.split('-')[1]}` : '-'}
+                        <div className="flex flex-col md:flex-row items-start md:items-center gap-4 p-4 cursor-pointer" onClick={() => setExpandedItem(isExpanded ? null : item.id)}>
+                            <div className="flex items-center gap-4 w-full md:w-auto">
+                                <div className={`p-3 rounded-xl text-white shadow-sm`} style={{backgroundColor: colorClass}}><CatIcon size={20} /></div>
+                                <div className="text-xs font-bold w-24 text-gray-500 bg-gray-50 border px-2 py-1.5 rounded-lg text-center flex flex-col justify-center">
+                                    <span className="text-[10px] text-gray-400">תאריך</span>
+                                    {item.date ? `${item.date.split('-')[2]}/${item.date.split('-')[1]}` : '-'}
+                                </div>
+                                {/* חץ למובייל */}
+                                <div className="md:hidden text-gray-300 ml-auto">
+                                    {isExpanded ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}
+                                </div>
                             </div>
-                            <div className="flex-1">
+
+                            <div className="flex-1 w-full pl-8 md:pl-0">
                                 <div className="text-sm font-black text-gray-800">{item.finalSubCategory}</div>
                                 <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5"><MapPin size={12} className="text-[#E91E63]"/> {item.finalLocation}</div>
                             </div>
                             
                             {item.requiresLicense && (
-                             <div className={`hidden md:flex text-xs px-3 py-1 rounded-full border items-center gap-1.5 font-bold 
+                             <div className={`text-xs px-3 py-1 rounded-full border items-center gap-1.5 font-bold flex w-fit
                                 ${(item.licenseFile && item.insuranceFile) ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
                                 {(item.licenseFile && item.insuranceFile) ? <CheckCircle size={12}/> : <AlertTriangle size={12}/>}
                                 <span>{(item.licenseFile && item.insuranceFile) ? 'יש אישורים' : 'חסרים אישורים'}</span>
                              </div>
                             )}
-                            <div className="text-gray-300 group-hover:text-[#E91E63] transition-colors">{isExpanded ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}</div>
+                            
+                            {/* חץ למחשב */}
+                            <div className="hidden md:block text-gray-300 group-hover:text-[#E91E63] transition-colors">{isExpanded ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}</div>
                         </div>
 
                         {/* שורה פתוחה */}
@@ -661,10 +615,11 @@ export default function NewTripPage() {
                 <div className="bg-white p-5 rounded-2xl border-2 border-[#E91E63] border-dashed shadow-sm animate-fadeIn mt-4 relative">
                     <div className="absolute -top-3 right-4 bg-white px-2 text-xs font-bold text-[#E91E63]">הוספת שורה חדשה</div>
                     
+                    {/* המהפך: גריד אנכי בטלפון */}
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
                         
                         {/* 1. תאריך */}
-                        <div className="md:col-span-1">
+                        <div className="md:col-span-1 w-full">
                             <label className="text-[10px] font-bold text-gray-400 mb-1 block">תאריך</label>
                             <div className="w-full text-xs p-2 rounded-xl border border-gray-100 bg-gray-100 text-gray-500 h-[48px] flex items-center justify-center font-bold select-none cursor-default whitespace-nowrap overflow-hidden text-ellipsis">
                                 {currentLine.date ? `${currentLine.date.split('-')[2]}/${currentLine.date.split('-')[1]}/${currentLine.date.split('-')[0]}` : '-'}
@@ -672,7 +627,7 @@ export default function NewTripPage() {
                         </div>
                         
                         {/* 2. מיקום */}
-                        <div className="md:col-span-2 relative">
+                        <div className="md:col-span-2 relative w-full">
                             <label className="text-[10px] font-bold text-gray-400 mb-1 block">מיקום</label>
                             <div className="relative">
                                 <input type="text" className={`w-full text-sm p-3 rounded-xl border outline-none h-[48px] transition-colors ${currentLine.locationType === 'branch' ? 'bg-pink-50 border-pink-200 text-[#E91E63] font-bold cursor-not-allowed' : 'bg-gray-50 border-gray-200 focus:border-[#E91E63] focus:bg-white'}`} placeholder="הזן מיקום" value={currentLine.locationValue} readOnly={currentLine.locationType === 'branch'} 
@@ -693,7 +648,7 @@ export default function NewTripPage() {
                         </div>
 
                         {/* 3. התרחשות + פירוט */}
-                        <div className="md:col-span-5 flex gap-2">
+                        <div className="md:col-span-5 flex flex-col md:flex-row gap-2 w-full">
                             <div className="flex-1 relative">
                                 <label className="text-[10px] font-bold text-gray-400 mb-1 block">התרחשות</label>
                                 <div className="w-full text-xs p-2 rounded-xl border border-gray-200 hover:border-[#E91E63] bg-gray-50 hover:bg-white cursor-pointer h-[48px] flex items-center justify-between px-3 transition-all" onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}>
@@ -724,20 +679,23 @@ export default function NewTripPage() {
                         </div>
 
                         {/* 4. פרטים וכפתור הוספה */}
-                        <div className="md:col-span-4 flex gap-2 items-end">
+                        <div className="md:col-span-4 flex gap-2 items-end w-full">
                             {currentLine.subCategory === 'לינת מבנה' ? (
-                                <div className="flex-grow flex gap-2">
+                                <div className="flex-grow flex flex-col md:flex-row gap-2">
                                     <div className="flex-1"><label className="text-[10px] font-bold text-red-400 mb-1 block">שם המקום/כתובת (חובה)</label><input type="text" className="w-full text-xs p-3 rounded-xl border border-red-200 bg-red-50 focus:border-red-400 focus:bg-white outline-none h-[48px]" placeholder="שם המקום/כתובת" value={currentLine.otherDetail} onChange={e => setCurrentLine({...currentLine, otherDetail: e.target.value})} /></div>
                                     <div className="flex-1"><label className="text-[10px] font-bold text-gray-400 mb-1 block">פרטים נוספים</label><input type="text" className="w-full text-xs p-3 rounded-xl border border-gray-200 focus:border-[#E91E63] outline-none bg-gray-50 focus:bg-white h-[48px]" placeholder="הערות..." value={currentLine.details} onChange={e => setCurrentLine({...currentLine, details: e.target.value})} /></div>
                                 </div>
                             ) : (
-                                <div className="flex-grow relative">
+                                <div className="flex-grow relative w-full">
                                     <div className="flex justify-between items-end mb-1"><label className="text-[10px] font-bold text-gray-400 block">{currentLine.category === 'hiking' ? 'פירוט המסלול' : 'פרטים נוספים'}</label>{currentLine.category === 'hiking' && (<a href="https://mokedteva.co.il/InfoCenter/TrackWizard" target="_blank" rel="noreferrer" className="text-[10px] font-bold text-[#E91E63] flex items-center gap-1 hover:underline"><LinkIcon size={10} />לכניסה לאשף המסלולים של מוקד טבע</a>)}</div>
                                     <input type="text" className="w-full text-xs p-3 rounded-xl border border-gray-200 focus:border-[#E91E63] outline-none bg-gray-50 focus:bg-white h-[48px]" placeholder={currentLine.category === 'hiking' ? 'מס\' המסלול וכו\'' : 'פרטים נוספים...'} value={currentLine.details} onChange={e => setCurrentLine({...currentLine, details: e.target.value})} />
                                 </div>
                             )}
-                            <div>
-                                <button onClick={handleAddLine} className="bg-[#8BC34A] hover:bg-[#7CB342] text-white h-[48px] w-[48px] rounded-xl flex items-center justify-center shadow-lg transition-all active:scale-95 flex-shrink-0 mb-[1px]" title="לאישור השורה ופתיחת שורה חדשה"><Check size={28} strokeWidth={3} /></button>
+                            <div className="w-full md:w-auto mt-2 md:mt-0">
+                                <button onClick={handleAddLine} className="bg-[#8BC34A] hover:bg-[#7CB342] text-white h-[48px] w-full md:w-[48px] rounded-xl flex items-center justify-center shadow-lg transition-all active:scale-95 flex-shrink-0 mb-[1px]" title="לאישור השורה ופתיחת שורה חדשה">
+                                    <Check size={28} strokeWidth={3} />
+                                    <span className="md:hidden mr-2 font-bold">הוסף שורה ללו"ז</span>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -766,7 +724,7 @@ export default function NewTripPage() {
                 </div>
               )}
               
-              <div className="flex justify-center pt-4">
+              <div className="flex justify-center pt-4 pb-20">
                   <button onClick={handleLockToggle} className={`text-xs flex items-center gap-2 px-6 py-2 rounded-full border transition-all font-bold ${isRowsLocked ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-[#E91E63] border-[#E91E63] hover:bg-[#E91E63] hover:text-white'}`}>
                       {isRowsLocked ? <><Lock size={14}/> מצב צפייה (לחץ לעריכה)</> : <><Unlock size={14}/> סיום הוספת שורות</>}
                   </button>
@@ -775,7 +733,7 @@ export default function NewTripPage() {
         </section>
 
         {/* === חלק ג': הערות וסיום === */}
-        <section className="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-hidden">
+        <section className="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-hidden mb-24">
             <div className="bg-[#00BCD4] text-white h-12 flex items-center px-6 font-bold text-lg shadow-sm gap-2">
                <MessageSquare size={20} />
                <span>הערות</span>
@@ -786,19 +744,18 @@ export default function NewTripPage() {
                  <textarea className="w-full p-4 rounded-xl bg-gray-50 border border-gray-200 outline-none focus:border-[#E91E63] focus:ring-1 focus:ring-[#E91E63] min-h-[100px] resize-y" placeholder="דגשים מיוחדים, בקשות וכו'..." value={generalInfo.generalComments} onChange={(e) => setGeneralInfo({...generalInfo, generalComments: e.target.value})}></textarea>
             </div>
         </section>
-      </main>
+      </div>
       
-      {/* Footer Actions */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-md border-t border-gray-100 p-4 z-40 transition-all" style={{ right: 'var(--sidebar-width, 0)' }}>
-          <div className="max-w-6xl mx-auto flex justify-end gap-4">
-              {isUrgentError && <div className="bg-red-50 text-red-600 px-4 py-3 rounded-2xl text-xs font-bold flex items-center gap-2"><AlertTriangle size={16}/> תאריך היציאה קרוב מדי!</div>}
-              <button onClick={handleSubmit} disabled={loading || isUrgentError} className={`bg-[#8BC34A] hover:bg-[#7CB342] text-white px-8 py-3.5 rounded-2xl font-black text-lg shadow-lg hover:shadow-green-200 transition-all flex items-center gap-3 transform hover:-translate-y-1 ${loading || isUrgentError ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}>
+      {/* Footer Actions - דביק למטה במובייל */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-gray-100 p-4 z-40 transition-all md:pr-64">
+          <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-end gap-4">
+              {isUrgentError && <div className="bg-red-50 text-red-600 px-4 py-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-2"><AlertTriangle size={16}/> תאריך היציאה קרוב מדי!</div>}
+              <button onClick={handleSubmit} disabled={loading || isUrgentError} className={`bg-[#8BC34A] hover:bg-[#7CB342] text-white px-8 py-3.5 rounded-2xl font-black text-lg shadow-lg hover:shadow-green-200 transition-all flex items-center justify-center gap-3 transform hover:-translate-y-1 ${loading || isUrgentError ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}>
                   {loading ? 'שולח...' : (<><span>סיום ושליחת בקשה</span><Save size={20} /></>)}
               </button>
           </div>
       </div>
 
-      <datalist id="cities">{ISRAEL_CITIES.map(c => <option key={c} value={c} />)}</datalist>
       <style jsx>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } } .animate-fadeIn { animation: fadeIn 0.3s ease-out; }`}</style>
     </>
   )

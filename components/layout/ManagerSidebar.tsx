@@ -9,7 +9,6 @@ import {
   LayoutDashboard, CheckSquare, Users, FileBarChart, Settings, LogOut, Mail, UserCircle, X
 } from 'lucide-react'
 
-// הגדרת הפרופס החדשים
 interface SidebarProps {
     isOpen?: boolean;
     onClose?: () => void;
@@ -24,12 +23,9 @@ export const ManagerSidebar = ({ isOpen = true, onClose }: SidebarProps) => {
   useEffect(() => {
     const checkRole = async () => {
         const { data: { user } } = await supabase.auth.getUser();
-        
         const ADMIN_EMAIL = 'avremihalperin@gmail.com'; 
-
         const loginEmail = user?.email?.toLowerCase() || '';
         const contactEmail = user?.user_metadata?.contact_email?.toLowerCase() || '';
-
         setDebugInfo({ detectedEmail: loginEmail, contactEmail: contactEmail });
 
         if (loginEmail === ADMIN_EMAIL || contactEmail === ADMIN_EMAIL) {
@@ -59,27 +55,37 @@ export const ManagerSidebar = ({ isOpen = true, onClose }: SidebarProps) => {
 
   return (
     <>
-        {/* מסך חשוך ברקע (רק במובייל) */}
         <div 
-            className={`fixed inset-0 bg-black/50 z-40 transition-opacity duration-300 md:hidden 
+            className={`fixed inset-0 bg-black/60 z-40 transition-opacity duration-300 md:hidden 
             ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
             onClick={onClose}
         ></div>
 
-        {/* הסרגל עצמו */}
         <aside className={`w-64 bg-[#1E293B] text-white h-screen fixed right-0 top-0 z-50 flex flex-col shadow-xl border-l border-gray-700 transition-transform duration-300
             ${isOpen ? 'translate-x-0' : 'translate-x-full'} 
             md:translate-x-0`}
         >
           
           <div className="h-32 flex flex-col items-center justify-center border-b border-gray-700 p-6 bg-[#0F172A] relative">
-              {/* כפתור סגירה למובייל */}
-              <button onClick={onClose} className="absolute top-4 left-4 md:hidden text-gray-400 hover:text-white">
+              
+              {/* כפתור סגירה - מודגש ולחיץ */}
+              <button 
+                onClick={onClose} 
+                className="absolute top-4 left-4 md:hidden text-white hover:text-red-400 p-2 bg-white/10 rounded-full transition-colors z-50"
+              >
                   <X size={24} />
               </button>
 
+              {/* לוגו - הורדנו את הפילטרים כדי שיראו את הלוגו המקורי */}
               <div className="relative w-full h-16 flex items-center justify-center mb-2">
-                 <Image src="/logo.png" alt="Logo" width={120} height={60} className="object-contain brightness-0 invert"/>
+                 <Image 
+                    src="/logo.png" 
+                    alt="Logo" 
+                    width={140} 
+                    height={70} 
+                    className="object-contain" // הורדנו את brightness-0 invert
+                    priority
+                 />
               </div>
               <div className="text-[10px] text-gray-400 font-bold bg-gray-800 px-3 py-1 rounded-full uppercase tracking-wider">
                   ממשק ניהול בטיחות

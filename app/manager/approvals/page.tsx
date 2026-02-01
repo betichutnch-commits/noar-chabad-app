@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { ManagerHeader } from '@/components/layout/ManagerHeader'
-import { Loader2, MapPin, Search, Eye } from 'lucide-react'
+import { Loader2, MapPin, Search, Eye, Calendar, User } from 'lucide-react'
 import Link from 'next/link'
 import { Input } from '@/components/ui/Input'
 
@@ -43,7 +43,7 @@ export default function ApprovalsPage() {
       };
       const labels: any = { approved: 'אושר', pending: 'ממתין', rejected: 'נדחה' };
       return (
-          <span className={`px-3 py-1 rounded-full text-xs font-bold border ${styles[status] || styles.pending}`}>
+          <span className={`px-3 py-1 rounded-full text-xs font-bold border w-fit ${styles[status] || styles.pending}`}>
               {labels[status]}
           </span>
       );
@@ -55,15 +55,18 @@ export default function ApprovalsPage() {
     <>
         <ManagerHeader title="אישור ובקרת טיולים" />
 
-        <div className="p-8 animate-fadeIn pb-32">
+        <div className="p-4 md:p-8 animate-fadeIn pb-32 max-w-[100vw] overflow-x-hidden">
             
-            <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
-                <div className="flex bg-white p-1 rounded-xl border border-gray-200 shadow-sm">
+            {/* סרגל כלים וחיפוש */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                
+                {/* פילטרים - בטלפון הם יהיו בגלילה אופקית אם צריך */}
+                <div className="flex bg-white p-1 rounded-xl border border-gray-200 shadow-sm w-full md:w-auto overflow-x-auto">
                     {['pending', 'approved', 'rejected', 'all'].map((f) => (
                         <button
                             key={f}
                             onClick={() => setFilter(f)}
-                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all
+                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap flex-1 md:flex-none
                             ${filter === f ? 'bg-gray-800 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
                         >
                             {f === 'pending' ? 'ממתינים' : f === 'approved' ? 'אושרו' : f === 'rejected' ? 'נדחו' : 'הכל'}
@@ -73,7 +76,7 @@ export default function ApprovalsPage() {
 
                 <div className="relative w-full md:w-80">
                     <Input 
-                        placeholder="חיפוש לפי שם, סניף או רכז..." 
+                        placeholder="חיפוש..." 
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
                         icon={<Search size={18}/>}
@@ -82,7 +85,8 @@ export default function ApprovalsPage() {
                 </div>
             </div>
 
-            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+            {/* --- תצוגה 1: טבלה (רק למחשב) --- */}
+            <div className="hidden md:block bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
                     <table className="w-full text-right">
                         <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 text-xs font-bold uppercase">
@@ -132,8 +136,49 @@ export default function ApprovalsPage() {
                         </tbody>
                     </table>
                 </div>
-                {filteredTrips.length === 0 && <div className="p-12 text-center text-gray-400 font-medium">לא נמצאו טיולים</div>}
             </div>
+
+            {/* --- תצוגה 2: כרטיסים (רק לטלפון) --- */}
+            <div className="md:hidden space-y-4">
+                {filteredTrips.map((trip) => (
+                    <div key={trip.id} className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm">
+                        
+                        {/* כותרת וסטטוס */}
+                        <div className="flex justify-between items-start mb-3">
+                            <div>
+                                <h3 className="font-black text-gray-800 text-lg">{trip.name}</h3>
+                                <div className="text-xs text-gray-500 flex items-center gap-1 mt-1">
+                                    <MapPin size={12}/> {trip.details?.timeline?.[0]?.finalLocation || 'לא צוין'}
+                                </div>
+                            </div>
+                            {getStatusBadge(trip.status)}
+                        </div>
+
+                        {/* פרטים נוספים */}
+                        <div className="bg-gray-50 rounded-xl p-3 mb-4 space-y-2 text-sm text-gray-600">
+                            <div className="flex items-center gap-2">
+                                <User size={14} className="text-gray-400"/>
+                                <span className="font-bold">{trip.coordinator_name}</span> 
+                                <span className="text-gray-400">|</span> 
+                                <span>{trip.branch}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Calendar size={14} className="text-gray-400"/>
+                                <span>{new Date(trip.start_date).toLocaleDateString('he-IL')}</span>
+                            </div>
+                        </div>
+
+                        {/* כפתור פעולה */}
+                        <Link href={`/manager/approvals/${trip.id}`} className="block">
+                            <button className="w-full bg-[#00BCD4] text-white py-3 rounded-xl font-bold shadow-md shadow-cyan-100 flex items-center justify-center gap-2 active:scale-95 transition-all">
+                                <Eye size={18}/> כנס לטיפול בבקשה
+                            </button>
+                        </Link>
+                    </div>
+                ))}
+            </div>
+
+            {filteredTrips.length === 0 && <div className="p-12 text-center text-gray-400 font-medium">לא נמצאו טיולים</div>}
         </div>
     </>
   )

@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { ManagerHeader } from '@/components/layout/ManagerHeader'
 import { Button } from '@/components/ui/Button'
-import { Loader2, AlertTriangle, HelpCircle, CheckCircle, Bug, Reply, Send, X } from 'lucide-react'
+import { Loader2, HelpCircle, CheckCircle, Bug, Reply, Send, X, Clock, User } from 'lucide-react'
 
 export default function ManagerInbox() {
   const [loading, setLoading] = useState(true);
@@ -16,19 +16,14 @@ export default function ManagerInbox() {
   const [replyText, setReplyText] = useState('');
   const [sendingReply, setSendingReply] = useState(false);
 
-  // בקובץ app/manager/inbox/page.tsx
-
   useEffect(() => {
     const init = async () => {
         const { data: { user } } = await supabase.auth.getUser();
-        
         const myEmail = 'avremihalperin@gmail.com'; 
 
-        // אותה בדיקה חכמה גם כאן
         if (user?.email === myEmail || user?.user_metadata?.contact_email === myEmail) {
             setIsSuperAdmin(true);
         }
-
         fetchMessages();
     };
     init();
@@ -81,9 +76,11 @@ export default function ManagerInbox() {
     <>
       <ManagerHeader title="דואר נכנס והודעות" />
 
-      <div className="p-8 animate-fadeIn max-w-6xl mx-auto pb-32">
+      {/* התיקון לגלילה: max-w-[100vw] overflow-x-hidden */}
+      <div className="p-4 md:p-8 animate-fadeIn max-w-[100vw] overflow-x-hidden pb-32">
           
-          <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden">
+          {/* --- תצוגה 1: טבלה (רק למחשב) --- */}
+          <div className="hidden md:block bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-right">
                     <thead className="bg-gray-50 text-gray-500 text-xs font-bold uppercase border-b border-gray-100">
@@ -98,11 +95,7 @@ export default function ManagerInbox() {
                     <tbody className="divide-y divide-gray-50">
                         {messages.map((msg) => {
                             const isBug = msg.subject?.includes('תקלה') || msg.subject?.includes('באג');
-                            
-                            // *** כאן הסינון החכם: ***
-                            // אם זה באג, ואני לא מנהל על -> אל תציג את השורה הזו בכלל
                             if (isBug && !isSuperAdmin) return null;
-
                             const isReplying = replyingTo === msg.id;
                             const senderName = msg.user?.raw_user_meta_data?.full_name || 'משתמש לא ידוע';
 
@@ -139,8 +132,6 @@ export default function ManagerInbox() {
                                             )}
                                         </td>
                                     </tr>
-                                    
-                                    {/* שורת תגובה נפתחת */}
                                     {isReplying && (
                                         <tr className="bg-blue-50/50 animate-fadeIn">
                                             <td colSpan={5} className="p-5">
@@ -167,6 +158,75 @@ export default function ManagerInbox() {
                     </tbody>
                 </table>
               </div>
+          </div>
+
+          {/* --- תצוגה 2: כרטיסים (רק לטלפון) --- */}
+          <div className="md:hidden space-y-4">
+              {messages.map((msg) => {
+                  const isBug = msg.subject?.includes('תקלה') || msg.subject?.includes('באג');
+                  if (isBug && !isSuperAdmin) return null;
+                  const isReplying = replyingTo === msg.id;
+                  const senderName = msg.user?.raw_user_meta_data?.full_name || 'משתמש לא ידוע';
+
+                  return (
+                      <div key={msg.id} className={`bg-white p-5 rounded-2xl border shadow-sm ${isReplying ? 'border-blue-300 ring-2 ring-blue-50' : 'border-gray-200'}`}>
+                          
+                          {/* כותרת הכרטיס */}
+                          <div className="flex justify-between items-start mb-3">
+                              <div className="flex items-start gap-2">
+                                  {isBug ? <Bug size={18} className="text-red-500 mt-1"/> : <HelpCircle size={18} className="text-blue-500 mt-1"/>}
+                                  <div>
+                                      <h3 className="font-bold text-gray-800 text-sm leading-tight">{msg.subject}</h3>
+                                      <div className="flex items-center gap-2 mt-1">
+                                          <span className="text-xs text-gray-500 flex items-center gap-1"><User size={12}/> {senderName}</span>
+                                          <span className="text-gray-300">|</span>
+                                          <span className="text-xs text-gray-500 flex items-center gap-1"><Clock size={12}/> {new Date(msg.created_at).toLocaleDateString('he-IL')}</span>
+                                      </div>
+                                  </div>
+                              </div>
+                              {msg.status === 'treated' 
+                                  ? <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[10px] font-bold border border-green-200">טופל</span>
+                                  : <span className="bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded text-[10px] font-bold border border-yellow-200">חדש</span>
+                              }
+                          </div>
+
+                          {/* תוכן ההודעה */}
+                          <div className="bg-gray-50 p-3 rounded-xl text-sm text-gray-700 mb-4 border border-gray-100">
+                              {msg.message}
+                          </div>
+
+                          {/* פעולות */}
+                          {msg.status !== 'treated' && !isReplying && (
+                              <div className="flex gap-2">
+                                  <button onClick={() => setReplyingTo(msg.id)} className="flex-1 bg-blue-600 text-white py-2.5 rounded-xl font-bold text-sm shadow-md flex items-center justify-center gap-2">
+                                      <Reply size={16}/> השב להודעה
+                                  </button>
+                                  <button onClick={() => markAsTreated(msg.id)} className="bg-green-50 text-green-600 border border-green-200 py-2.5 px-4 rounded-xl font-bold text-sm flex items-center justify-center">
+                                      <CheckCircle size={18}/>
+                                  </button>
+                              </div>
+                          )}
+
+                          {/* אזור תגובה בתוך הכרטיס */}
+                          {isReplying && (
+                              <div className="animate-fadeIn mt-2 pt-2 border-t border-blue-100">
+                                  <p className="text-xs font-bold text-blue-600 mb-2">תגובה שלך:</p>
+                                  <textarea 
+                                      className="w-full p-3 border border-gray-200 rounded-xl text-sm focus:border-blue-500 outline-none bg-blue-50/30"
+                                      placeholder="הקלד תשובה..."
+                                      rows={3}
+                                      value={replyText}
+                                      onChange={e => setReplyText(e.target.value)}
+                                  ></textarea>
+                                  <div className="flex gap-2 mt-3">
+                                      <Button variant="secondary" onClick={() => setReplyingTo(null)} className="bg-gray-100 text-gray-500 h-10 px-0 w-12 flex items-center justify-center"><X size={18}/></Button>
+                                      <Button onClick={() => sendReply(msg)} isLoading={sendingReply} icon={<Send size={16}/>} className="bg-blue-600 h-10 text-sm flex-1">שלח</Button>
+                                  </div>
+                              </div>
+                          )}
+                      </div>
+                  )
+              })}
           </div>
       </div>
     </>

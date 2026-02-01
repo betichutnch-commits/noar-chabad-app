@@ -49,7 +49,7 @@ export default function ManagerHomePage() {
     <>
       <ManagerHeader title="לוח בקרה ראשי" />
       
-      <div className="p-10 animate-fadeIn pb-32">
+      <div className="p-4 md:p-10 animate-fadeIn pb-32 max-w-[100vw] overflow-x-hidden">
         <header className="mb-10">
             <h2 className="text-xl font-bold text-gray-500">תמונת מצב - ניהול מפעלים וטיולים</h2>
         </header>

@@ -33,34 +33,40 @@ export const Sidebar = ({ isOpen = true, onClose }: SidebarProps) => {
 
   return (
     <>
-        {/* מסך חשוך ברקע במובייל - לחיצה עליו סוגרת את התפריט */}
+        {/* מסך חשוך ברקע במובייל */}
         <div 
-            className={`fixed inset-0 bg-black/50 z-40 transition-opacity duration-300 md:hidden 
+            className={`fixed inset-0 bg-black/60 z-40 transition-opacity duration-300 md:hidden 
             ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
             onClick={onClose}
         ></div>
 
-        {/* הסרגל עצמו - החזרנו את כל העיצוב המקורי */}
-        <aside className={`w-64 bg-white border-l border-gray-200 h-screen fixed right-0 top-0 z-50 flex flex-col shadow-xl transition-transform duration-300
+        <aside className={`w-64 bg-white border-l border-gray-200 h-screen fixed right-0 top-0 z-50 flex flex-col shadow-2xl transition-transform duration-300
             ${isOpen ? 'translate-x-0' : 'translate-x-full'} 
             md:translate-x-0`}
         >
           
-          <div className="h-32 flex items-center justify-center border-b border-gray-100 p-6 relative">
-              <div className="relative w-full h-full flex items-center justify-center">
+          {/* כותרת ולוגו */}
+          <div className="h-32 flex flex-col items-center justify-center border-b border-gray-100 p-6 relative">
+              
+              {/* כפתור X מתוקן - ממוקם בפינה השמאלית העליונה */}
+              <button 
+                onClick={onClose} 
+                className="absolute top-4 left-4 md:hidden text-gray-500 hover:text-red-500 p-2 bg-gray-50 rounded-full hover:bg-gray-100 transition-colors z-50"
+              >
+                  <X size={24} />
+              </button>
+
+              {/* לוגו מתוקן - בלי פילטרים שמעלימים אותו */}
+              <div className="relative w-full h-16 flex items-center justify-center mb-2">
                  <Image 
                    src="/logo.png" 
                    alt="נוער חב״ד" 
-                   width={160} 
-                   height={80} 
-                   className="object-contain max-h-20"
-                   priority
+                   width={140} 
+                   height={70} 
+                   className="object-contain"
+                   priority // טוען את הלוגו מיד
                  />
               </div>
-              {/* כפתור סגירה שמופיע רק במובייל */}
-              <button onClick={onClose} className="absolute top-4 left-4 md:hidden text-gray-400 hover:text-red-500">
-                  <X size={24} />
-              </button>
           </div>
 
           <nav className="flex-1 p-4 space-y-2 overflow-y-auto">

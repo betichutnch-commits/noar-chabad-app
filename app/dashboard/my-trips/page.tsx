@@ -6,8 +6,9 @@ import { Header } from '@/components/layout/Header'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { 
-  Loader2, Search, MapPin, Calendar, CheckCircle, Clock, XCircle, ChevronLeft, FileText
+  Loader2, Search, MapPin, Calendar, CheckCircle, Clock, XCircle, ChevronLeft, FileText, Eye
 } from 'lucide-react'
+import Link from 'next/link'
 
 export default function MyTripsPage() {
   const [loading, setLoading] = useState(true);
@@ -55,10 +56,11 @@ export default function MyTripsPage() {
     <>
       <Header title="הטיולים שלי" />
 
-      <div className="max-w-6xl mx-auto p-8 space-y-6 animate-fadeIn pb-32">
+      {/* תיקון הגלילה והריווח: p-4 במובייל */}
+      <div className="p-4 md:p-8 animate-fadeIn pb-32 max-w-[100vw] overflow-x-hidden">
         
         {/* סרגל כלים */}
-        <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-[24px] border border-gray-200 shadow-sm">
+        <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-[24px] border border-gray-200 shadow-sm mb-6">
             <div className="relative w-full md:w-96">
                 <Input 
                     placeholder="חיפוש לפי שם טיול..." 
@@ -68,13 +70,13 @@ export default function MyTripsPage() {
                     className="bg-gray-50 border-transparent focus:bg-white"
                 />
             </div>
-            <div className="text-gray-500 text-sm font-bold">
+            <div className="text-gray-500 text-sm font-bold w-full md:w-auto text-center md:text-right">
                 סה"כ {filteredTrips.length} טיולים
             </div>
         </div>
 
-        {/* טבלה */}
-        <div className="bg-white rounded-[32px] border border-gray-200 overflow-hidden shadow-sm">
+        {/* --- תצוגה 1: טבלה (רק למחשב) --- */}
+        <div className="hidden md:block bg-white rounded-[32px] border border-gray-200 overflow-hidden shadow-sm">
             {filteredTrips.length === 0 ? (
                 <div className="p-16 text-center text-gray-400">
                     <FileText size={48} className="mx-auto mb-4 opacity-20"/>
@@ -110,9 +112,11 @@ export default function MyTripsPage() {
                                     </td>
                                     <td className="p-6">{getStatusBadge(trip.status)}</td>
                                     <td className="p-6 text-left">
-                                        <button className="text-[#00BCD4] hover:bg-cyan-50 p-2 rounded-xl transition-all">
-                                            <ChevronLeft size={20}/>
-                                        </button>
+                                        <Link href={`/dashboard/trip/${trip.id}`}>
+                                            <button className="text-[#00BCD4] hover:bg-cyan-50 p-2 rounded-xl transition-all">
+                                                <ChevronLeft size={20}/>
+                                            </button>
+                                        </Link>
                                     </td>
                                 </tr>
                             ))}
@@ -121,6 +125,51 @@ export default function MyTripsPage() {
                 </div>
             )}
         </div>
+
+        {/* --- תצוגה 2: כרטיסים (רק לטלפון) --- */}
+        <div className="md:hidden space-y-4">
+            {filteredTrips.length === 0 ? (
+                 <div className="p-10 text-center text-gray-400 bg-white rounded-3xl border border-gray-200">
+                    <FileText size={40} className="mx-auto mb-4 opacity-20"/>
+                    <p className="font-bold">לא נמצאו טיולים</p>
+                </div>
+            ) : (
+                filteredTrips.map((trip) => (
+                    <div key={trip.id} className="bg-white p-5 rounded-3xl border border-gray-200 shadow-sm relative overflow-hidden">
+                        
+                        {/* פס צבע צדדי לפי סטטוס */}
+                        <div className={`absolute top-0 right-0 bottom-0 w-1.5 
+                            ${trip.status === 'approved' ? 'bg-green-500' : trip.status === 'rejected' ? 'bg-red-500' : 'bg-orange-400'}`}>
+                        </div>
+
+                        <div className="pr-4"> {/* ריווח בגלל הפס הצדדי */}
+                            <div className="flex justify-between items-start mb-3">
+                                <h3 className="font-black text-gray-800 text-lg leading-tight">{trip.name}</h3>
+                                {getStatusBadge(trip.status)}
+                            </div>
+
+                            <div className="space-y-2 mb-4">
+                                <div className="flex items-center gap-2 text-sm text-gray-600">
+                                    <Calendar size={14} className="text-[#00BCD4]"/>
+                                    <span>{new Date(trip.start_date).toLocaleDateString('he-IL')}</span>
+                                </div>
+                                <div className="flex items-center gap-2 text-sm text-gray-600">
+                                    <MapPin size={14} className="text-[#E91E63]"/>
+                                    <span className="truncate max-w-[200px]">{trip.details?.timeline?.[0]?.finalLocation || 'לא צוין מיקום'}</span>
+                                </div>
+                            </div>
+
+                            <Link href={`/dashboard/trip/${trip.id}`}>
+                                <button className="w-full bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold py-3 rounded-xl border border-gray-200 flex items-center justify-center gap-2 transition-all active:scale-95">
+                                    <Eye size={18}/> צפייה בפרטים מלאים
+                                </button>
+                            </Link>
+                        </div>
+                    </div>
+                ))
+            )}
+        </div>
+
       </div>
     </>
   )
