@@ -26,9 +26,9 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
 
   // רק אם מישהו מנסה להיכנס לדשבורד ואין לו יוזר - תעיף אותו
-//  if (!user && request.nextUrl.pathname.startsWith('/dashboard')) {
- //   return NextResponse.redirect(new URL('/', request.url))
-  //}
+  if (!user && request.nextUrl.pathname.startsWith('/dashboard')) {
+   return NextResponse.redirect(new URL('/', request.url))
+}
   
   if (!user && request.nextUrl.pathname.startsWith('/manager')) {
     return NextResponse.redirect(new URL('/', request.url))
