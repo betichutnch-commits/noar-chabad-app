@@ -1,13 +1,12 @@
 "use client"
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, Suspense } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { Header } from '@/components/layout/Header'
 import { 
   Calendar, MapPin, AlertTriangle, Save, CheckCircle, FileUp, 
-  Flag, ChevronDown, ChevronUp, Lock, Unlock, Check, Trash2, 
-  Loader2, Link as LinkIcon, Home, Info, ArrowRight, FileEdit,
-  HelpCircle, MessageSquare // <-- הוספתי את אלו
+  Flag, ChevronDown, ChevronUp, Lock, Unlock, Check, Trash2, Loader2, Link as LinkIcon,
+  Home, Info, ArrowRight, FileEdit, HelpCircle, MessageSquare 
 } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
 
@@ -18,7 +17,8 @@ import {
 } from '@/lib/constants'
 import { getHebrewDateString, toHebrewDay } from '@/lib/dateUtils'
 
-export default function NewTripPage() {
+// --- חלק 1: הקומפוננטה הפנימית עם כל הלוגיקה ---
+function NewTripContent() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(0); 
@@ -375,7 +375,6 @@ export default function NewTripPage() {
   };
 
   const currentLineNeedsLicense = isLicenseRequired(currentLine.category, currentLine.subCategory);
-  
   const currentLogic = TRIP_LOGIC[generalInfo.tripType] || TRIP_LOGIC['אחר'];
 
   return (
@@ -828,5 +827,14 @@ export default function NewTripPage() {
       </div>
       <style jsx>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } } .animate-fadeIn { animation: fadeIn 0.3s ease-out; }`}</style>
     </>
+  )
+}
+
+// 2. Export the wrapper
+export default function NewTripPage() {
+  return (
+    <Suspense fallback={<div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>}>
+       <NewTripContent />
+    </Suspense>
   )
 }
