@@ -3,7 +3,17 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  // הסרנו את eslint ואת experimental כדי למנוע אזהרות
+  // הגדרת אישור לטעינת תמונות מ-Supabase
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'ehndiifaaobawrnlcqld.supabase.co',
+        port: '',
+        pathname: '/**',
+      },
+    ],
+  },
 };
 
 module.exports = nextConfig;

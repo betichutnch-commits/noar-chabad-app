@@ -1,6 +1,6 @@
 {
-  "name": "מערכת ניהול בטיחות - נוער חב״ד",
-  "short_name": "בטיחות חב״ד",
+  "name": "בטיחות ומפעלים נוער חבד",
+  "short_name": "בטיחות ומפעלים",
   "description": "מערכת לניהול ואישור טיולים",
   "start_url": "/dashboard",
   "display": "standalone",

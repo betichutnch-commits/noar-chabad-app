@@ -2,18 +2,44 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { ArrowLeft, LogIn, UserPlus, ShieldCheck, Users, Briefcase } from 'lucide-react';
+import { ArrowLeft, UserPlus, ShieldCheck, Users, Briefcase, ArrowRight, Check } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { useRouter } from 'next/navigation'; // שים לב: next/navigation ולא next/router
+import { useRouter } from 'next/navigation';
+import Image from 'next/image'; 
 
-// --- הגדרות ---
-const DEPARTMENTS = ["בת מלך", "בנות חב\"ד", "הפנסאים", "מועדוני המעשים הטובים", "תמים"];
+// --- הגדרות עיצוב ומגדר לכל מחלקה ---
+const DEPARTMENTS_CONFIG: Record<string, { color: string; gender: 'male' | 'female' | 'mixed'; logo: string }> = {
+  "בת מלך": { 
+      color: "border-pink-400 text-pink-600 bg-pink-50 hover:bg-pink-100", 
+      gender: "female", 
+      logo: "/logos/bat-melech.png" 
+  },
+  "בנות חב\"ד": { 
+      color: "border-pink-400 text-pink-600 bg-pink-50 hover:bg-pink-100", 
+      gender: "female", 
+      logo: "/logos/bnos-chabad.png" 
+  },
+  "הפנסאים": { 
+      color: "border-blue-400 text-blue-600 bg-blue-50 hover:bg-blue-100", 
+      gender: "male", 
+      logo: "/logos/hapanasim.png" 
+  },
+  "תמים": { 
+      color: "border-blue-400 text-blue-600 bg-blue-50 hover:bg-blue-100", 
+      gender: "male", 
+      logo: "/logos/temimim.png" 
+  },
+  "מועדוני המעשים הטובים": { 
+      color: "border-green-400 text-green-600 bg-green-50 hover:bg-green-100", 
+      gender: "mixed", 
+      logo: "/logos/clubs.png" 
+  }
+};
 
 const SUPER_ADMIN_EMAIL = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL;
 
 export default function Home() {
-  // ניהול מצבים (Views)
   const router = useRouter();
   const [view, setView] = useState<'landing' | 'login' | 'dept_selection' | 'role_selection' | 'register_form'>('landing');
   const [loading, setLoading] = useState(false);
@@ -27,27 +53,33 @@ export default function Home() {
     idNumber: '', password: '', fullName: '', phone: '', email: '', birthDate: '', branch: '', role: ''
   });
 
-  // בדיקת התחברות אוטומטית - גרסה בטוחה ללא לופים
+  const getRoleLabel = (roleType: 'coordinator' | 'hq') => {
+    const config = DEPARTMENTS_CONFIG[selectedDept];
+    const gender = config?.gender || 'mixed';
+
+    if (roleType === 'coordinator') {
+        if (gender === 'female') return 'רכזת סניף';
+        if (gender === 'male') return 'רכז סניף';
+        return 'רכז/ת סניף';
+    } else { // HQ
+        return 'צוות מטה';
+    }
+  };
+
   useEffect(() => {
     const autoLogin = async () => {
-      // 1. בדיקה שקטה האם יש סשן שמור בדפדפן
       const { data: { session } } = await supabase.auth.getSession();
-
       if (session) {
-        setLoading(true); // מציג טעינה כדי שלא יראו את דף הנחיתה לשבריר שנייה
+        setLoading(true);
         try {
-          // 2. אם יש סשן, מנסים לנתב אותו לפי התפקיד
           await checkRoleAndRedirect(session.user);
         } catch (error) {
-          // 3. אם היה כישלון (למשל משתמש חסום), לא עושים ריפרש!
-          // פשוט מנתקים אותו ומשאירים אותו בדף הבית
           console.log("Auto-login failed:", error);
           await supabase.auth.signOut();
           setLoading(false);
         }
       }
     };
-
     autoLogin();
   }, []);
 
@@ -55,45 +87,31 @@ export default function Home() {
     const meta = user.user_metadata || {};
     const status = meta.status || 'pending';
 
-    console.log("Checking user role:", meta); // לוג לבדיקה
-
     if (user.email !== SUPER_ADMIN_EMAIL && status !== 'approved') {
         await supabase.auth.signOut();
-        if (status === 'pending') {
-            throw new Error('ההרשמה נקלטה אך טרם אושרה.');
-        } else {
-            throw new Error('הגישה למערכת נחסמה.');
-        }
+        throw new Error(status === 'pending' ? 'ההרשמה נקלטה אך טרם אושרה.' : 'הגישה למערכת נחסמה.');
     }
 
-    // 1. קודם כל מרעננים את הראוטר
-      router.refresh(); 
-      
-      // 2. נותנים למערכת זמן לעכל את העוגייה (הגדלנו ל-500ms)
-      await new Promise(resolve => setTimeout(resolve, 500));
+    router.refresh(); 
+    await new Promise(resolve => setTimeout(resolve, 500));
 
-      // 3. ניתוב
-      if (meta.department === 'בטיחות ומפעלים' || meta.role === 'safety_admin') {
-          console.log("Redirecting to manager..."); // לוג שיעזור לנו לראות אם הגענו לכאן
-          router.push('/manager');
-      } else {
-          router.push('/dashboard');
-      }
-};
+    if (meta.department === 'בטיחות ומפעלים' || meta.role === 'safety_admin') {
+        router.push('/manager');
+    } else {
+        router.push('/dashboard');
+    }
+  };
 
   const handleInputChange = (e: any) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // --- לוגיקה לכניסה ---
   const handleLogin = async (e: any) => {
     e.preventDefault();
     setLoading(true); setErrorMsg('');
 
     try {
-        // תמיכה בהתחברות עם ת"ז או אימייל
         const email = formData.idNumber.includes('@') ? formData.idNumber : `${formData.idNumber}@noar.chabad.co.il`; 
-        
         const { data, error } = await supabase.auth.signInWithPassword({ email: email, password: formData.password });
 
         if (error) {
@@ -101,19 +119,14 @@ export default function Home() {
           setLoading(false);
           return;
         }
-
-        // אם הסיסמה נכונה, בודקים אם הוא מאושר
         await checkRoleAndRedirect(data.user);
-        
     } catch (err: any) {
         console.error(err);
-        // מציג את השגיאה שנזרקה מ-checkRoleAndRedirect (למשל: "טרם אושרת")
         setErrorMsg(err.message || 'שגיאה כללית במערכת');
         setLoading(false);
     }
   };
 
-  // --- לוגיקה להרשמה ---
   const handleRegister = async (e: any) => {
     e.preventDefault();
     setLoading(true); setErrorMsg('');
@@ -133,7 +146,7 @@ export default function Home() {
               phone: formData.phone,
               contact_email: formData.email,
               birth_date: formData.birthDate,
-              status: 'pending' // <--- הוספה חשובה: ברירת מחדל לממתין
+              status: 'pending'
             },
           },
         });
@@ -155,41 +168,59 @@ export default function Home() {
     }
   };
 
-  // --- View: Landing ---
+  // --- View: Landing (דף כניסה) ---
   if (view === 'landing') {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-4 relative overflow-hidden bg-white">
-        <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-brand-cyan via-brand-green to-brand-pink"></div>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#F8F9FA] p-4 relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-[#00BCD4] via-[#4CAF50] to-[#E91E63]"></div>
         
-        <main className="max-w-md w-full text-center z-10 animate-fadeIn">
-          <div className="mb-8 flex justify-center">
-             <div className="bg-white p-6 rounded-full shadow-xl w-40 h-40 flex items-center justify-center border-4 border-white ring-1 ring-gray-100">
-                <img src="/logo.png" alt="לוגו נוער חב״ד" className="w-full h-full object-contain"/>
-             </div>
+        <main className="max-w-md w-full text-center space-y-8 relative z-10 animate-fadeIn">
+          
+          <div className="relative mx-auto w-32 h-20 bg-white p-3 rounded-2xl shadow-lg flex items-center justify-center mb-6 border border-gray-50 transform hover:scale-105 transition-transform duration-500">
+            <Image 
+                src="/logo.png" 
+                alt="לוגו נוער חב״ד" 
+                fill
+                className="object-contain p-1"
+                priority
+            />
           </div>
 
-          <h1 className="text-3xl font-black mb-3 text-brand-green leading-tight">
-            ברוכים הבאים למערכת הטיולים והאירועים של ארגון נוער חב"ד
-          </h1>
-          
-          <h2 className="text-lg text-gray-500 font-medium mb-10 px-4">
-            פלטפורמת הניהול לתכנון, אישור ובקרה – הכל במקום אחד
-          </h2>
+          <div className="space-y-3">
+            <h1 className="text-3xl md:text-4xl font-black text-[#00BCD4] leading-tight drop-shadow-sm">
+                מערכת הטיולים והאירועים
+                <span className="block text-2xl md:text-3xl text-gray-800 mt-1">של ארגון נוער חב"ד</span>
+            </h1>
+            
+            <p className="text-gray-500 font-medium text-lg px-4">
+                פלטפורמת הניהול לתכנון, אישור ובקרה
+            </p>
+          </div>
 
-          <div className="space-y-4">
-            <Button onClick={() => setView('login')} className="w-full justify-between group" icon={<LogIn size={20} />}>
+          <div className="space-y-4 pt-4 px-6">
+            
+            <Button 
+                onClick={() => setView('login')} 
+                className="w-full bg-[#4DD0E1] border-2 border-[#00BCD4] text-white text-lg py-6 rounded-2xl shadow-lg transition-all font-bold justify-center hover:bg-[#00BCD4]"
+            >
               כניסה למערכת
-              <ArrowLeft className="group-hover:-translate-x-1 transition-transform" />
             </Button>
 
-            <div className="relative py-2">
-              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-100"></div></div>
-              <div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-2 text-gray-400">משתמש חדש?</span></div>
+            <div className="pt-2 space-y-3">
+                <div className="relative flex py-2 items-center">
+                    <div className="flex-grow border-t border-gray-200"></div>
+                    <span className="flex-shrink-0 mx-4 text-gray-400 text-xs font-bold">משתמש/ת חדש/ה?</span>
+                    <div className="flex-grow border-t border-gray-200"></div>
+                </div>
+
+                <Button 
+                    onClick={() => setView('dept_selection')} 
+                    className="w-full bg-white border-2 border-[#E91E63] !text-[#E91E63] hover:bg-[#FCE4EC] text-lg py-6 rounded-2xl transition-all font-bold justify-center flex items-center gap-2"
+                >
+                    <UserPlus size={20} className="text-[#E91E63]" />
+                    <span className="text-[#E91E63]">להרשמה</span>
+                </Button>
             </div>
-
-            <Button onClick={() => setView('dept_selection')} variant="outline" className="w-full justify-center gap-2" icon={<UserPlus size={20} />}>
-              הרשמה למערכת
-            </Button>
           </div>
 
           <div className="mt-16 text-xs text-gray-300 font-medium">© ארגון נוער חב"ד</div>
@@ -202,13 +233,13 @@ export default function Home() {
   if (view === 'login') {
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6">
-        <button onClick={() => setView('landing')} className="absolute top-6 right-6 text-gray-400 hover:text-brand-cyan transition-colors">
+        <button onClick={() => setView('landing')} className="absolute top-6 right-6 text-gray-400 hover:text-[#00BCD4] transition-colors">
             <ArrowLeft size={24} className="rotate-180" />
         </button>
 
         <div className="w-full max-w-sm animate-fadeIn">
             <div className="text-center mb-8">
-                <h2 className="text-2xl font-black text-brand-dark">התחברות</h2>
+                <h2 className="text-2xl font-black text-gray-800">התחברות</h2>
                 <p className="text-gray-400 text-sm mt-1">הזן את פרטיך לכניסה למערכת</p>
             </div>
 
@@ -222,7 +253,7 @@ export default function Home() {
                   </div>
               )}
 
-              <Button type="submit" isLoading={loading} className="w-full mt-4">כניסה</Button>
+              <Button type="submit" isLoading={loading} className="w-full mt-4 bg-[#00BCD4] hover:bg-cyan-600">כניסה</Button>
             </form>
         </div>
       </div>
@@ -232,28 +263,48 @@ export default function Home() {
   // --- View: Dept Selection ---
   if (view === 'dept_selection') {
     return (
-      <div className="min-h-screen bg-bg-light p-6 flex flex-col items-center">
-        <header className="w-full max-w-md flex justify-between items-center mb-10 mt-4">
-            <button onClick={() => setView('landing')} className="text-gray-400 hover:text-brand-cyan"><ArrowLeft className="rotate-180"/></button>
+      <div className="min-h-screen bg-[#F8F9FA] p-6 flex flex-col items-center">
+        <header className="w-full max-w-md flex justify-between items-center mb-8 mt-4">
+            <button onClick={() => setView('landing')} className="text-gray-400 hover:text-[#00BCD4]"><ArrowLeft className="rotate-180"/></button>
             <div className="text-xs font-bold text-gray-300">שלב 1 מתוך 3</div>
         </header>
 
         <main className="w-full max-w-md animate-fadeIn">
-          <h2 className="text-2xl font-black text-brand-dark mb-2 text-center">לאיזו מחלקה בארגון את/ה שייך/ת?</h2>
-          <p className="text-center text-gray-400 mb-8 text-sm">בחר את המחלקה הרלוונטית להמשך ההרשמה</p>
+          <h2 className="text-2xl font-black text-gray-800 mb-2 text-center">לאיזו מחלקה את/ה שייך/ת?</h2>
+          <p className="text-center text-gray-400 mb-8 text-sm">בחר/י את המחלקה הרלוונטית להמשך ההרשמה</p>
           
-          <div className="space-y-3">
-            {DEPARTMENTS.map((dept) => (
-                <button key={dept} onClick={() => { setSelectedDept(dept); setView('role_selection'); }}
-                  className="w-full bg-white p-5 rounded-2xl shadow-sm border border-gray-100 hover:border-brand-cyan hover:shadow-md transition-all text-right font-bold text-gray-700 hover:text-brand-cyan flex justify-between items-center group">
-                  <span className="text-lg">{dept}</span>
-                  <ArrowLeft size={18} className="text-gray-300 group-hover:text-brand-cyan transition-colors" />
-                </button>
-            ))}
+          <div className="grid grid-cols-1 gap-3">
+            {Object.keys(DEPARTMENTS_CONFIG).map((dept) => {
+                const config = DEPARTMENTS_CONFIG[dept];
+                return (
+                    <button 
+                        key={dept} 
+                        onClick={() => { setSelectedDept(dept); setView('role_selection'); }}
+                        className={`p-4 rounded-2xl border-2 transition-all flex flex-row items-center justify-between gap-4 relative bg-white
+                        ${config.color} hover:shadow-md group`}
+                    >
+                        <div className="flex items-center gap-4">
+                            <div className="relative w-12 h-12 shrink-0">
+                                <Image 
+                                    src={config.logo} 
+                                    alt={dept} 
+                                    fill 
+                                    className="object-contain"
+                                    onError={(e) => {
+                                        (e.target as HTMLImageElement).src = '/logo.png'; 
+                                    }}
+                                />
+                            </div>
+                            <span className="font-bold text-lg">{dept}</span>
+                        </div>
+                        <ArrowLeft size={20} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </button>
+                )
+            })}
           </div>
 
           <div className="mt-10 border-t border-gray-200 pt-6">
-             <Button variant="dark" onClick={() => { setSelectedDept('בטיחות ומפעלים'); setSelectedRoleType('safety_admin'); setView('register_form'); }} className="w-full" icon={<ShieldCheck size={20} className="text-brand-green" />}>
+             <Button variant="dark" onClick={() => { setSelectedDept('בטיחות ומפעלים'); setSelectedRoleType('safety_admin'); setView('register_form'); }} className="w-full justify-center" icon={<ShieldCheck size={20} className="text-[#8BC34A]" />}>
                 הרשמה למחלקת בטיחות ומפעלים
              </Button>
           </div>
@@ -265,36 +316,36 @@ export default function Home() {
   // --- View: Role Selection ---
   if (view === 'role_selection') {
     return (
-      <div className="min-h-screen bg-bg-light p-6 flex flex-col items-center">
-        <header className="w-full max-w-md flex justify-between items-center mb-10 mt-4">
-            <button onClick={() => setView('dept_selection')} className="text-gray-400 hover:text-brand-cyan"><ArrowLeft className="rotate-180"/></button>
+      <div className="min-h-screen bg-[#F8F9FA] p-6 flex flex-col items-center">
+        <header className="w-full max-w-md flex justify-between items-center mb-8 mt-4">
+            <button onClick={() => setView('dept_selection')} className="text-gray-400 hover:text-[#00BCD4]"><ArrowLeft className="rotate-180"/></button>
             <div className="text-xs font-bold text-gray-300">שלב 2 מתוך 3</div>
         </header>
 
         <main className="w-full max-w-md animate-fadeIn">
-          <h2 className="text-2xl font-black text-brand-dark mb-2 text-center">הגדרת תפקיד</h2>
-          <p className="text-center text-gray-400 mb-8">מחלקה נבחרת: <span className="font-bold text-brand-cyan">{selectedDept}</span></p>
+          <h2 className="text-2xl font-black text-gray-800 mb-2 text-center">הגדרת תפקיד</h2>
+          <p className="text-center text-gray-400 mb-8">מחלקה נבחרת: <span className="font-bold text-[#00BCD4]">{selectedDept}</span></p>
           
           <div className="space-y-4">
             <button onClick={() => { setSelectedRoleType('coordinator'); setView('register_form'); }}
-              className="w-full bg-white p-6 rounded-2xl shadow-sm border border-transparent hover:border-brand-cyan text-right group relative overflow-hidden transition-all">
+              className="w-full bg-white p-6 rounded-2xl shadow-sm border-2 border-transparent hover:border-pink-400 hover:bg-pink-50 text-right group relative overflow-hidden transition-all">
               <div className="flex items-center justify-between relative z-10">
                   <div>
-                    <h3 className="font-bold text-lg text-gray-900 group-hover:text-brand-cyan">רכז/ת סניף</h3>
+                    <h3 className="font-black text-lg text-gray-800 group-hover:text-pink-600">{getRoleLabel('coordinator')}</h3>
                     <p className="text-sm text-gray-400 mt-1">ניהול פעילות סניפית והגשת טיולים</p>
                   </div>
-                  <Users className="text-gray-200 group-hover:text-brand-cyan transition-colors" size={32} />
+                  <Users className="text-gray-200 group-hover:text-pink-300 transition-colors" size={32} />
               </div>
             </button>
 
             <button onClick={() => { setSelectedRoleType('dept_staff'); setView('register_form'); }}
-              className="w-full bg-white p-6 rounded-2xl shadow-sm border border-transparent hover:border-brand-pink text-right group relative overflow-hidden transition-all">
+              className="w-full bg-white p-6 rounded-2xl shadow-sm border-2 border-transparent hover:border-blue-400 hover:bg-blue-50 text-right group relative overflow-hidden transition-all">
               <div className="flex items-center justify-between relative z-10">
                   <div>
-                    <h3 className="font-bold text-lg text-gray-900 group-hover:text-brand-pink">צוות מטה</h3>
-                    <p className="text-sm text-gray-400 mt-1">מטה {selectedDept} (ללא הרשאות בטיחות)</p>
+                    <h3 className="font-black text-lg text-gray-800 group-hover:text-blue-600">{getRoleLabel('hq')}</h3>
+                    <p className="text-sm text-gray-400 mt-1">מטה {selectedDept}</p>
                   </div>
-                  <Briefcase className="text-gray-200 group-hover:text-brand-pink transition-colors" size={32} />
+                  <Briefcase className="text-gray-200 group-hover:text-blue-300 transition-colors" size={32} />
               </div>
             </button>
           </div>
@@ -308,19 +359,20 @@ export default function Home() {
     const isSafety = selectedRoleType === 'safety_admin';
 
     return (
-      <div className="min-h-screen bg-bg-light p-6 flex flex-col items-center">
+      <div className="min-h-screen bg-[#F8F9FA] p-6 flex flex-col items-center">
         <header className="w-full max-w-md flex justify-between items-center mb-6 mt-4">
-            <button onClick={() => isSafety ? setView('dept_selection') : setView('role_selection')} className="text-gray-400 hover:text-brand-cyan"><ArrowLeft className="rotate-180"/></button>
+            <button onClick={() => isSafety ? setView('dept_selection') : setView('role_selection')} className="text-gray-400 hover:text-[#00BCD4]"><ArrowLeft className="rotate-180"/></button>
             <div className="text-xs font-bold text-gray-300">שלב 3 מתוך 3</div>
         </header>
 
-        <main className="w-full max-w-md bg-white p-8 rounded-3xl shadow-sm border border-gray-100 animate-fadeIn">
+        {/* תיקון מובייל: הוספנו p-5 למובייל ו-p-8 לדסקטופ */}
+        <main className="w-full max-w-md bg-white p-5 md:p-8 rounded-[32px] shadow-sm border border-gray-100 animate-fadeIn">
             
-            <h2 className="text-2xl font-black text-brand-dark mb-2">יצירת חשבון</h2>
+            <h2 className="text-2xl font-black text-gray-800 mb-2">יצירת חשבון</h2>
             <div className="flex items-center gap-2 mb-6">
-                <span className={`h-2 w-2 rounded-full ${isSafety ? 'bg-brand-green' : 'bg-brand-cyan'}`}></span>
+                <span className={`h-2 w-2 rounded-full ${isSafety ? 'bg-[#8BC34A]' : 'bg-[#00BCD4]'}`}></span>
                 <p className="text-sm text-gray-500 font-bold">
-                    {isSafety ? 'מחלקת בטיחות ומפעלים' : `${selectedDept} - ${selectedRoleType === 'coordinator' ? 'רכז סניף' : 'צוות מטה'}`}
+                    {isSafety ? 'מחלקת בטיחות ומפעלים' : `${selectedDept} - ${getRoleLabel(selectedRoleType === 'coordinator' ? 'coordinator' : 'hq')}`}
                 </p>
             </div>
 
@@ -330,14 +382,16 @@ export default function Home() {
                 <Input label="שם הסניף" name="branch" required onChange={handleInputChange} />
               )}
 
-              <div className="grid grid-cols-2 gap-4">
+              {/* תיקון מובייל: בטלפון שורה אחת (grid-cols-1), במחשב שתיים (md:grid-cols-2) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Input label="שם מלא" name="fullName" required onChange={handleInputChange} />
                 <Input label="טלפון נייד" name="phone" type="tel" required onChange={handleInputChange} />
               </div>
 
               <Input label="תעודת זהות" name="idNumber" required maxLength={9} onChange={handleInputChange} />
 
-              <div className="grid grid-cols-2 gap-4">
+              {/* תיקון מובייל: בטלפון שורה אחת, במחשב שתיים */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                  <Input label="אימייל" name="email" type="email" required onChange={handleInputChange} />
                  <Input label="תאריך לידה" name="birthDate" type="date" required onChange={handleInputChange} />
               </div>
@@ -347,7 +401,7 @@ export default function Home() {
               {errorMsg && <p className="text-red-600 text-sm bg-red-50 p-2 rounded-lg font-bold border border-red-100 text-center">{errorMsg}</p>}
               {successMsg && <div className="text-green-700 text-sm bg-green-50 p-4 rounded-lg font-bold border border-green-200 text-center">{successMsg}</div>}
 
-              <Button type="submit" isLoading={loading} variant={isSafety ? 'dark' : 'primary'} className="w-full mt-6">
+              <Button type="submit" isLoading={loading} variant={isSafety ? 'dark' : 'primary'} className="w-full mt-6 bg-[#4CAF50] hover:bg-green-600">
                 סיום הרשמה
               </Button>
             </form>

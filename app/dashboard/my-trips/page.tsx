@@ -3,172 +3,365 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { Header } from '@/components/layout/Header'
-import { Button } from '@/components/ui/Button'
-import { Input } from '@/components/ui/Input'
 import { 
-  Loader2, Search, MapPin, Calendar, CheckCircle, Clock, XCircle, ChevronLeft, FileText, Eye
+  Loader2, Clock, CheckCircle, Search, 
+  MapPin, ShieldAlert, Sun, ArrowRight, Calendar,
+  Tent, Ticket, Layers, Timer, AlertTriangle, FileEdit, Trash2, XCircle, History
 } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+
+// ייבוא מתיקיות העזר
+import { 
+    formatHebrewDate, formatFullGregorianDate, 
+    getMonthNameHebrew 
+} from '@/lib/dateUtils'
+
+// פונקציות מקומיות
+const getRibbonColor = (type: string) => {
+    if (!type) return 'bg-gray-500';
+    if (type.includes('סמינר')) return 'bg-purple-600';
+    if (type.includes('מחנה')) return 'bg-green-600';
+    if (type.includes('טיול')) return 'bg-[#00BCD4]';
+    return 'bg-blue-600';
+};
+
+const getStatusStyles = (status: string) => {
+    const config: any = {
+        approved: { text: 'מאושר', bg: 'bg-green-100', textCol: 'text-green-700', icon: CheckCircle },
+        pending: { text: 'ממתין לבדיקה', bg: 'bg-amber-100', textCol: 'text-amber-700', icon: Clock },
+        rejected: { text: 'לא אושר', bg: 'bg-red-100', textCol: 'text-red-700', icon: AlertTriangle },
+        draft: { text: 'טיוטה', bg: 'bg-gray-100', textCol: 'text-gray-600', icon: FileEdit },
+        cancelled: { text: 'בוטל', bg: 'bg-stone-100', textCol: 'text-stone-500', icon: XCircle }
+    };
+    return config[status] || config.pending;
+};
 
 export default function MyTripsPage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [trips, setTrips] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeFilter, setActiveFilter] = useState('all');
+  
+  // מודלים
+  const [cancelModal, setCancelModal] = useState<{show: boolean, tripId: string | null}>({show: false, tripId: null});
+  const [deleteDraftModal, setDeleteDraftModal] = useState<{show: boolean, tripId: string | null}>({show: false, tripId: null});
+  const [cancelReason, setCancelReason] = useState('');
+
+  const fetchTrips = async () => {
+      setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { window.location.href = '/'; return; }
+      
+      try {
+          const { data, error } = await supabase
+              .from('trips')
+              .select('*')
+              .eq('user_id', user.id)
+              .order('start_date', { ascending: false });
+          if (error) throw error;
+          setTrips(data || []);
+      } catch (e) { console.error('Error fetching trips:', e); } 
+      finally { setLoading(false); }
+  };
 
   useEffect(() => {
-    const fetchTrips = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data } = await supabase
-        .from('trips')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-      
-      setTrips(data || []);
-      setLoading(false);
-    };
     fetchTrips();
   }, []);
 
-  const getStatusBadge = (status: string) => {
-      const styles: any = {
-          approved: "bg-green-50 text-green-700 border-green-200",
-          pending: "bg-orange-50 text-orange-700 border-orange-200",
-          rejected: "bg-red-50 text-red-700 border-red-200"
-      };
-      const labels: any = { approved: 'אושר', pending: 'בבדיקה', rejected: 'לא אושר' };
-      const icons: any = { approved: <CheckCircle size={14}/>, pending: <Clock size={14}/>, rejected: <XCircle size={14}/> };
-
-      return (
-          <span className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 border w-fit ${styles[status] || styles.pending}`}>
-              {icons[status] || icons.pending} {labels[status] || 'בבדיקה'}
-          </span>
-      );
+  const confirmDeleteDraft = async () => {
+      if (!deleteDraftModal.tripId) return;
+      const id = deleteDraftModal.tripId;
+      
+      const { error } = await supabase.from('trips').delete().eq('id', id);
+      if (!error) {
+          setTrips(prev => prev.filter(t => t.id !== id));
+          setDeleteDraftModal({show: false, tripId: null});
+      } else {
+          alert('שגיאה במחיקה: ' + error.message);
+      }
   };
 
-  const filteredTrips = trips.filter(t => t.name.includes(searchTerm) || t.branch?.includes(searchTerm));
+  const handleEditDraft = (id: string, e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      router.push(`/dashboard/new-trip?id=${id}`);
+  };
+
+  const handleCancelTrip = async () => {
+      if (!cancelModal.tripId || !cancelReason.trim()) return;
+      
+      try {
+          const trip = trips.find(t => t.id === cancelModal.tripId);
+          const updatedDetails = { 
+              ...trip.details, 
+              cancellationReason: cancelReason 
+          };
+
+          const { error } = await supabase.from('trips').update({
+              status: 'cancelled',
+              cancellation_reason: cancelReason, 
+              details: updatedDetails
+          }).eq('id', cancelModal.tripId);
+          
+          if (error) throw error;
+          
+          setTrips(prev => prev.map(t => t.id === cancelModal.tripId ? {...t, status: 'cancelled', cancellation_reason: cancelReason, details: updatedDetails} : t));
+          setCancelModal({show: false, tripId: null});
+          setCancelReason('');
+      } catch (e: any) {
+          alert('שגיאה בביטול: ' + e.message);
+      }
+  };
 
   if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
+
+  const displayTrips = trips.filter(t => {
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      const tripDate = new Date(t.start_date);
+      
+      // לוגיקת פילטור
+      let matchesFilter = true;
+      if (activeFilter === 'future') matchesFilter = tripDate >= today;
+      else if (activeFilter === 'past') matchesFilter = tripDate < today;
+      else if (activeFilter !== 'all') matchesFilter = t.status === activeFilter;
+
+      const matchesSearch = t.name.toLowerCase().includes(searchTerm.toLowerCase());
+      return matchesFilter && matchesSearch;
+  });
 
   return (
     <>
       <Header title="הטיולים שלי" />
 
-      {/* תיקון הגלילה והריווח: p-4 במובייל */}
-      <div className="p-4 md:p-8 animate-fadeIn pb-32 max-w-[100vw] overflow-x-hidden">
-        
-        {/* סרגל כלים */}
-        <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-[24px] border border-gray-200 shadow-sm mb-6">
-            <div className="relative w-full md:w-96">
-                <Input 
-                    placeholder="חיפוש לפי שם טיול..." 
-                    value={searchTerm} 
-                    onChange={e => setSearchTerm(e.target.value)}
-                    icon={<Search size={20}/>}
-                    className="bg-gray-50 border-transparent focus:bg-white"
-                />
-            </div>
-            <div className="text-gray-500 text-sm font-bold w-full md:w-auto text-center md:text-right">
-                סה"כ {filteredTrips.length} טיולים
-            </div>
-        </div>
+      {/* מודל ביטול טיול */}
+      {cancelModal.show && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fadeIn">
+              <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm text-center">
+                  <div className="w-14 h-14 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Trash2 size={28}/>
+                  </div>
+                  <h3 className="text-lg font-black text-gray-800 mb-2">ביטול פעילות</h3>
+                  <p className="text-sm text-gray-500 mb-4 font-medium leading-relaxed">
+                      האם את/ה בטוח/ה שברצונך לבטל את הפעילות? <br/>
+                      פעולה זו תעדכן את מחלקת המפעלים והבטיחות.
+                  </p>
+                  <textarea 
+                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm mb-4 outline-none focus:border-red-400 min-h-[80px]"
+                      placeholder="נא לפרט את סיבת הביטול..."
+                      value={cancelReason}
+                      onChange={e => setCancelReason(e.target.value)}
+                  ></textarea>
+                  <div className="flex gap-2">
+                      <button onClick={() => setCancelModal({show: false, tripId: null})} className="flex-1 py-2 bg-gray-100 text-gray-700 font-bold rounded-xl text-sm">חזרה</button>
+                      <button onClick={handleCancelTrip} className="flex-1 py-2 bg-red-500 text-white font-bold rounded-xl text-sm hover:bg-red-600 transition-colors">אשר ביטול</button>
+                  </div>
+              </div>
+          </div>
+      )}
 
-        {/* --- תצוגה 1: טבלה (רק למחשב) --- */}
-        <div className="hidden md:block bg-white rounded-[32px] border border-gray-200 overflow-hidden shadow-sm">
-            {filteredTrips.length === 0 ? (
-                <div className="p-16 text-center text-gray-400">
-                    <FileText size={48} className="mx-auto mb-4 opacity-20"/>
-                    <p className="font-bold text-lg">לא נמצאו טיולים</p>
-                </div>
-            ) : (
-                <div className="overflow-x-auto">
-                    <table className="w-full text-right">
-                        <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 text-xs font-bold uppercase">
-                            <tr>
-                                <th className="p-6">שם הפעילות</th>
-                                <th className="p-6">תאריכים</th>
-                                <th className="p-6">מיקום</th>
-                                <th className="p-6">סטטוס</th>
-                                <th className="p-6 text-left">פעולות</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-50">
-                            {filteredTrips.map((trip) => (
-                                <tr key={trip.id} className="hover:bg-cyan-50/30 transition-colors group">
-                                    <td className="p-6 font-bold text-gray-800 text-base">{trip.name}</td>
-                                    <td className="p-6">
-                                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                                            <Calendar size={16} className="text-[#00BCD4]"/>
-                                            {new Date(trip.start_date).toLocaleDateString('he-IL')}
-                                        </div>
-                                    </td>
-                                    <td className="p-6">
-                                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                                            <MapPin size={16} className="text-[#E91E63]"/>
-                                            {trip.details?.timeline?.[0]?.finalLocation || '-'}
-                                        </div>
-                                    </td>
-                                    <td className="p-6">{getStatusBadge(trip.status)}</td>
-                                    <td className="p-6 text-left">
-                                        <Link href={`/dashboard/trip/${trip.id}`}>
-                                            <button className="text-[#00BCD4] hover:bg-cyan-50 p-2 rounded-xl transition-all">
-                                                <ChevronLeft size={20}/>
+      {/* מודל מחיקת טיוטה */}
+      {deleteDraftModal.show && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fadeIn">
+              <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm text-center border-t-4 border-[#E91E63]">
+                  <div className="w-14 h-14 bg-red-50 text-[#E91E63] rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Trash2 size={28}/>
+                  </div>
+                  <h3 className="text-lg font-black text-gray-800 mb-2">מחיקת טיוטה</h3>
+                  <p className="text-sm text-gray-500 mb-4 font-medium">האם למחוק את הטיוטה לצמיתות? לא ניתן לשחזר פעולה זו.</p>
+                  <div className="flex gap-2">
+                      <button onClick={() => setDeleteDraftModal({show: false, tripId: null})} className="flex-1 py-2 bg-gray-100 text-gray-700 font-bold rounded-xl text-sm">ביטול</button>
+                      <button onClick={confirmDeleteDraft} className="flex-1 py-2 bg-[#E91E63] text-white font-bold rounded-xl text-sm hover:bg-pink-600 transition-colors">מחק</button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      <div className="p-4 md:p-8 space-y-6 animate-fadeIn pb-32 max-w-[100vw] overflow-x-hidden md:max-w-7xl md:mx-auto">
+          
+          <div className="space-y-4 pt-2">
+              <div className="flex flex-col md:flex-row justify-between items-end gap-4">
+                  
+                  {/* פילטרים מורחבים */}
+                  <div className="flex gap-2 bg-white p-1.5 rounded-2xl border border-gray-100 w-full md:w-auto overflow-x-auto no-scrollbar shadow-sm">
+                      {[
+                          { id: 'all', label: 'כל הטיולים' },
+                          { id: 'future', label: 'עתידיים' },
+                          { id: 'past', label: 'היסטוריה' },
+                          { id: 'draft', label: 'טיוטות' },
+                          { id: 'approved', label: 'אושר' },
+                          { id: 'pending', label: 'בבדיקה' },
+                          { id: 'rejected', label: 'נדחה' }, 
+                          { id: 'cancelled', label: 'בוטל' },
+                      ].map(f => {
+                          const isActive = activeFilter === f.id;
+                          return (
+                            <button key={f.id} onClick={() => setActiveFilter(f.id)} 
+                                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex-1 md:flex-none
+                                ${isActive ? 'bg-[#00BCD4] text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>
+                                {f.label}
+                            </button>
+                          )
+                      })}
+                  </div>
+
+                  <div className="relative w-full md:w-72">
+                      <input 
+                        type="text" 
+                        placeholder="חיפוש לפי שם טיול..." 
+                        value={searchTerm} 
+                        onChange={e => setSearchTerm(e.target.value)} 
+                        className="w-full pl-4 pr-10 py-3 bg-white border border-gray-200 rounded-2xl text-sm font-bold focus:border-[#00BCD4] outline-none transition-all shadow-sm focus:ring-4 focus:ring-cyan-50"
+                      />
+                      <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={18}/>
+                  </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3">
+                  {displayTrips.length === 0 ? (
+                      <div className="py-20 text-center bg-white rounded-3xl border border-dashed border-gray-200 flex flex-col items-center">
+                          <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-3">
+                              <History size={24} className="text-gray-300"/>
+                          </div>
+                          <span className="text-gray-400 font-bold">לא נמצאו טיולים</span>
+                      </div>
+                  ) : displayTrips.map(trip => {
+                      const timeline = trip.details.timeline || [];
+                      const statusStyle = getStatusStyles(trip.status);
+                      const StatusIcon = statusStyle.icon;
+                      const isDraft = trip.status === 'draft';
+                      const isPast = new Date(trip.start_date) < new Date(new Date().setHours(0,0,0,0));
+                      
+                      const start = new Date(trip.start_date);
+                      const diffTime = Math.abs((new Date(trip.details.endDate || trip.start_date)).getTime() - start.getTime());
+                      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+                      const isMultiDay = diffDays > 1;
+
+                      const attractions = timeline.filter((t: any) => t.category === 'attraction').map((t: any) => t.finalSubCategory || t.details).filter(Boolean);
+                      const uniqueAttractions = Array.from(new Set(attractions));
+
+                      const sleeping = timeline.filter((t: any) => t.category === 'sleeping').map((t: any) => t.finalLocation || t.otherDetail).filter(Boolean);
+                      const uniqueSleeping = Array.from(new Set(sleeping));
+
+                      const allLocations = timeline.map((t: any) => t.finalLocation).filter(Boolean);
+                      const uniqueLocations = Array.from(new Set(allLocations));
+                      const locationsString = uniqueLocations.length > 0 ? uniqueLocations.join(' / ') : 'מיקום לא הוגדר';
+
+                      const stepsCount = timeline.length;
+                      const tripLink = isDraft ? '#' : `/dashboard/trip/${trip.id}`;
+
+                      return (
+                      <Link key={trip.id} href={tripLink} className={isDraft ? 'cursor-default' : ''}>
+                          <div className={`bg-white border ${isDraft ? 'border-dashed border-gray-300 bg-gray-50/30' : 'border-gray-100'} ${isPast ? 'opacity-80 grayscale-[0.3]' : ''} rounded-3xl p-5 hover:border-[#00BCD4] transition-all group flex flex-col md:flex-row items-stretch gap-5 shadow-sm hover:shadow-md relative overflow-hidden`}>
+                              
+                              <div className={`absolute top-0 right-0 px-6 py-1.5 text-white font-bold text-xs rounded-bl-2xl shadow-sm ${getRibbonColor(trip.details.tripType)}`}>
+                                  {trip.details.tripType} {trip.details.tripType === 'אחר' && trip.details.tripTypeOther ? `- ${trip.details.tripTypeOther}` : ''}
+                              </div>
+
+                              <div className={`absolute top-0 left-0 px-4 py-1.5 rounded-br-2xl shadow-sm flex items-center gap-1.5 font-bold text-xs ${statusStyle.bg} ${statusStyle.textCol}`}>
+                                  <StatusIcon size={14}/>
+                                  {statusStyle.text}
+                              </div>
+
+                              <div className={`flex flex-row md:flex-col items-center justify-center rounded-2xl px-6 py-4 w-full md:w-24 shrink-0 gap-3 md:gap-1 border group-hover:bg-cyan-50 group-hover:text-[#00BCD4] transition-colors mt-6 md:mt-0 ${isPast ? 'bg-gray-100 border-gray-200 text-gray-500' : 'bg-gray-50 border-gray-100 text-gray-800'}`}>
+                                  <span className="text-3xl font-black leading-none">
+                                      {start.getDate()}
+                                  </span>
+                                  <span className="text-[11px] font-bold uppercase tracking-wider opacity-70">
+                                      {getMonthNameHebrew(trip.start_date)}
+                                  </span>
+                              </div>
+
+                              <div className="flex-1 flex flex-col justify-center mt-2 md:mt-0 pt-4 md:pt-0">
+                                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 mb-2 pt-2">
+                                      <h3 className="text-xl font-black text-gray-800 group-hover:text-[#00BCD4] transition-colors leading-tight max-w-[70%]">
+                                          {trip.name || 'ללא שם'}
+                                      </h3>
+                                      <div className="flex flex-wrap gap-2 pl-2">
+                                          {uniqueAttractions.length > 0 && (
+                                              <div className="flex items-center gap-1 bg-pink-50 text-pink-600 px-2 py-1 rounded-lg text-[10px] font-bold border border-pink-100 max-w-[150px]" title={uniqueAttractions.join(' / ')}>
+                                                  <Ticket size={12} className="shrink-0"/>
+                                                  <span className="truncate">{uniqueAttractions.join(' / ')}</span>
+                                              </div>
+                                          )}
+                                          {uniqueSleeping.length > 0 && (
+                                              <div className="flex items-center gap-1 bg-purple-50 text-purple-600 px-2 py-1 rounded-lg text-[10px] font-bold border border-purple-100 max-w-[150px]" title={uniqueSleeping.join(' / ')}>
+                                                  <Tent size={12} className="shrink-0"/>
+                                                  <span className="truncate">{uniqueSleeping.join(' / ')}</span>
+                                              </div>
+                                          )}
+                                      </div>
+                                  </div>
+                                  
+                                  <div className="flex flex-wrap items-center gap-3 text-xs font-medium text-gray-500">
+                                      <div className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded-lg border border-gray-100">
+                                          <Calendar size={14} className="text-[#E91E63]"/>
+                                          <span className="font-bold">{formatHebrewDate(trip.start_date)}</span>
+                                          <span className="text-gray-300">|</span>
+                                          <span>{formatFullGregorianDate(trip.start_date)}</span>
+                                          {isMultiDay && <span>- {formatFullGregorianDate(trip.details.endDate)}</span>}
+                                      </div>
+                                      <div className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded-lg border border-gray-100 max-w-[200px]" title={locationsString}>
+                                          <MapPin size={14} className="text-[#00BCD4] shrink-0"/>
+                                          <span className="truncate">{locationsString}</span>
+                                      </div>
+                                      {isMultiDay && (
+                                          <div className="flex items-center gap-1.5 bg-blue-50 text-blue-600 px-2 py-1 rounded-lg border border-blue-100 font-bold">
+                                              <Timer size={14}/> {diffDays} ימים
+                                          </div>
+                                      )}
+                                      <div className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded-lg border border-gray-100">
+                                          <Layers size={14} className="text-gray-400"/>
+                                          <span>{stepsCount} שלבים</span>
+                                      </div>
+                                  </div>
+                              </div>
+
+                              <div className="w-full md:w-auto flex items-center justify-end md:justify-center mt-4 md:mt-0 gap-3">
+                                    {isDraft ? (
+                                        <>
+                                            <button 
+                                                onClick={(e) => handleEditDraft(trip.id, e)} 
+                                                className="flex items-center gap-1.5 bg-blue-50 text-blue-600 px-3 py-1.5 rounded-xl hover:bg-blue-100 transition-colors text-xs font-bold border border-blue-100 shadow-sm" 
+                                                title="המשך עריכה"
+                                            >
+                                                <FileEdit size={16}/>
+                                                <span>ערוך טיוטה</span>
                                             </button>
-                                        </Link>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            )}
-        </div>
-
-        {/* --- תצוגה 2: כרטיסים (רק לטלפון) --- */}
-        <div className="md:hidden space-y-4">
-            {filteredTrips.length === 0 ? (
-                 <div className="p-10 text-center text-gray-400 bg-white rounded-3xl border border-gray-200">
-                    <FileText size={40} className="mx-auto mb-4 opacity-20"/>
-                    <p className="font-bold">לא נמצאו טיולים</p>
-                </div>
-            ) : (
-                filteredTrips.map((trip) => (
-                    <div key={trip.id} className="bg-white p-5 rounded-3xl border border-gray-200 shadow-sm relative overflow-hidden">
-                        
-                        {/* פס צבע צדדי לפי סטטוס */}
-                        <div className={`absolute top-0 right-0 bottom-0 w-1.5 
-                            ${trip.status === 'approved' ? 'bg-green-500' : trip.status === 'rejected' ? 'bg-red-500' : 'bg-orange-400'}`}>
-                        </div>
-
-                        <div className="pr-4"> {/* ריווח בגלל הפס הצדדי */}
-                            <div className="flex justify-between items-start mb-3">
-                                <h3 className="font-black text-gray-800 text-lg leading-tight">{trip.name}</h3>
-                                {getStatusBadge(trip.status)}
-                            </div>
-
-                            <div className="space-y-2 mb-4">
-                                <div className="flex items-center gap-2 text-sm text-gray-600">
-                                    <Calendar size={14} className="text-[#00BCD4]"/>
-                                    <span>{new Date(trip.start_date).toLocaleDateString('he-IL')}</span>
-                                </div>
-                                <div className="flex items-center gap-2 text-sm text-gray-600">
-                                    <MapPin size={14} className="text-[#E91E63]"/>
-                                    <span className="truncate max-w-[200px]">{trip.details?.timeline?.[0]?.finalLocation || 'לא צוין מיקום'}</span>
-                                </div>
-                            </div>
-
-                            <Link href={`/dashboard/trip/${trip.id}`}>
-                                <button className="w-full bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold py-3 rounded-xl border border-gray-200 flex items-center justify-center gap-2 transition-all active:scale-95">
-                                    <Eye size={18}/> צפייה בפרטים מלאים
-                                </button>
-                            </Link>
-                        </div>
-                    </div>
-                ))
-            )}
-        </div>
+                                            <button 
+                                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDeleteDraftModal({show: true, tripId: trip.id}); }} 
+                                                className="flex items-center gap-1.5 bg-red-50 text-red-600 px-3 py-1.5 rounded-xl hover:bg-red-100 transition-colors text-xs font-bold border border-red-100 shadow-sm" 
+                                                title="מחק טיוטה"
+                                            >
+                                                <Trash2 size={16}/>
+                                                <span>מחק</span>
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            {!isPast && trip.status !== 'cancelled' && (
+                                                <button 
+                                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setCancelModal({show: true, tripId: trip.id}); }} 
+                                                    className="flex items-center gap-1.5 bg-red-50 text-red-500 px-3 py-1.5 rounded-xl hover:bg-red-100 transition-colors text-xs font-bold border border-red-100 shadow-sm" 
+                                                    title="ביטול פעילות"
+                                                >
+                                                    <Trash2 size={16}/>
+                                                    <span>ביטול פעילות</span>
+                                                </button>
+                                            )}
+                                            <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 group-hover:bg-[#00BCD4] group-hover:text-white transition-all shadow-sm">
+                                                <ArrowRight size={20}/>
+                                            </div>
+                                        </>
+                                    )}
+                              </div>
+                          </div>
+                      </Link>
+                  )})}
+              </div>
+          </div>
 
       </div>
     </>

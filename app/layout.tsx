@@ -9,7 +9,7 @@ const rubik = Rubik({
 });
 
 export const metadata: Metadata = {
-  title: 'מערכת הטיולים | ארגון נוער חב"ד',
+  title: 'בטיחות ומפעלים | נוער חב"ד',
   description: 'מערכת לניהול, תכנון ואישור טיולים ואירועים',
   manifest: '/manifest.json', // הוספנו את זה
   icons: {
