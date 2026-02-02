@@ -5,6 +5,37 @@ export const ISRAEL_CITIES = ["ירושלים", "תל אביב", "חיפה", "ר
 export const GRADES = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ז׳', 'ח׳', 'ט׳', 'י׳', 'י״א', 'י״ב'];
 export const STAFF_AGES = ['גיל 13-18 (מד"צים)', 'מעל גיל 18', 'הורים מלווים', 'אחר'];
 
+// --- הגדרות מחלקות (כאן התיקון!) ---
+export const DEPARTMENTS_CONFIG: Record<string, { color: string; gender: 'male' | 'female' | 'mixed'; logo: string }> = {
+  "בת מלך": { 
+      color: "border-pink-400 text-pink-600 bg-pink-50 hover:bg-pink-100", 
+      gender: "female", 
+      logo: "/logos/bat-melech.png" 
+  },
+  "בנות חב\"ד": { 
+      color: "border-pink-400 text-pink-600 bg-pink-50 hover:bg-pink-100", 
+      gender: "female", 
+      logo: "/logos/bnos-chabad.png" 
+  },
+  // --- תיקון צבעים כאן: הפכנו מכחול לתכלת מותג ---
+  "הפנסאים": { 
+      color: "border-[#00BCD4] text-[#00BCD4] bg-cyan-50 hover:bg-cyan-100", 
+      gender: "male", 
+      logo: "/logos/hapanasim.png" 
+  },
+  "תמים": { 
+      color: "border-[#00BCD4] text-[#00BCD4] bg-cyan-50 hover:bg-cyan-100", 
+      gender: "male", 
+      logo: "/logos/temimim.png" 
+  },
+  // ------------------------------------------------
+  "מועדוני המעשים הטובים": { 
+      color: "border-green-400 text-green-600 bg-green-50 hover:bg-green-100", 
+      gender: "mixed", 
+      logo: "/logos/clubs.png" 
+  }
+};
+
 // --- לוגיקה והגדרות סוגי טיולים ---
 export const TRIP_LOGIC: any = {
     "טיול מחוץ לסניף": { nameLabel: "שם הטיול", namePlaceholder: "לדוגמה: טיול לצפון", timelineTitle: "פירוט הטיול", staffLabel: "צוות משתתף בטיול", minRows: 2 },

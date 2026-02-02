@@ -2,40 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { ArrowLeft, UserPlus, ShieldCheck, Users, Briefcase, ArrowRight, Check } from 'lucide-react';
+import { ArrowLeft, UserPlus, ShieldCheck, Users, Briefcase, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image'; 
 
-// --- הגדרות עיצוב ומגדר לכל מחלקה ---
-const DEPARTMENTS_CONFIG: Record<string, { color: string; gender: 'male' | 'female' | 'mixed'; logo: string }> = {
-  "בת מלך": { 
-      color: "border-pink-400 text-pink-600 bg-pink-50 hover:bg-pink-100", 
-      gender: "female", 
-      logo: "/logos/bat-melech.png" 
-  },
-  "בנות חב\"ד": { 
-      color: "border-pink-400 text-pink-600 bg-pink-50 hover:bg-pink-100", 
-      gender: "female", 
-      logo: "/logos/bnos-chabad.png" 
-  },
-  "הפנסאים": { 
-      color: "border-blue-400 text-blue-600 bg-blue-50 hover:bg-blue-100", 
-      gender: "male", 
-      logo: "/logos/hapanasim.png" 
-  },
-  "תמים": { 
-      color: "border-blue-400 text-blue-600 bg-blue-50 hover:bg-blue-100", 
-      gender: "male", 
-      logo: "/logos/temimim.png" 
-  },
-  "מועדוני המעשים הטובים": { 
-      color: "border-green-400 text-green-600 bg-green-50 hover:bg-green-100", 
-      gender: "mixed", 
-      logo: "/logos/clubs.png" 
-  }
-};
+// ייבוא מתיקיות העזר
+import { DEPARTMENTS_CONFIG } from '@/lib/constants'; 
 
 const SUPER_ADMIN_EMAIL = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL;
 
@@ -54,8 +28,9 @@ export default function Home() {
   });
 
   const getRoleLabel = (roleType: 'coordinator' | 'hq') => {
-    const config = DEPARTMENTS_CONFIG[selectedDept];
-    const gender = config?.gender || 'mixed';
+    // הגנה מפני קריסה אם המחלקה לא נבחרה עדיין
+    const config = DEPARTMENTS_CONFIG[selectedDept] || { gender: 'mixed' };
+    const gender = config.gender;
 
     if (roleType === 'coordinator') {
         if (gender === 'female') return 'רכזת סניף';
@@ -172,10 +147,12 @@ export default function Home() {
   if (view === 'landing') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#F8F9FA] p-4 relative overflow-hidden">
+        {/* רקע דקורטיבי */}
         <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-[#00BCD4] via-[#4CAF50] to-[#E91E63]"></div>
         
         <main className="max-w-md w-full text-center space-y-8 relative z-10 animate-fadeIn">
           
+          {/* לוגו במלבן מאוזן מוקטן */}
           <div className="relative mx-auto w-32 h-20 bg-white p-3 rounded-2xl shadow-lg flex items-center justify-center mb-6 border border-gray-50 transform hover:scale-105 transition-transform duration-500">
             <Image 
                 src="/logo.png" 
@@ -199,13 +176,15 @@ export default function Home() {
 
           <div className="space-y-4 pt-4 px-6">
             
+            {/* כפתור כניסה - עיצוב ירוק מותאם אישית (השתמשתי ב-! כדי לדרוס את התכלת) */}
             <Button 
                 onClick={() => setView('login')} 
-                className="w-full bg-[#4DD0E1] border-2 border-[#00BCD4] text-white text-lg py-6 rounded-2xl shadow-lg transition-all font-bold justify-center hover:bg-[#00BCD4]"
+                className="w-full !bg-[#F1F8E9] border-2 !border-[#8BC34A] !text-[#558B2F] text-lg py-6 rounded-2xl shadow-lg transition-all font-bold justify-center hover:!bg-[#8BC34A] hover:!text-white"
             >
               כניסה למערכת
             </Button>
 
+            {/* כפתור הרשמה */}
             <div className="pt-2 space-y-3">
                 <div className="relative flex py-2 items-center">
                     <div className="flex-grow border-t border-gray-200"></div>
@@ -327,6 +306,7 @@ export default function Home() {
           <p className="text-center text-gray-400 mb-8">מחלקה נבחרת: <span className="font-bold text-[#00BCD4]">{selectedDept}</span></p>
           
           <div className="space-y-4">
+            {/* כפתור רכז - ורוד */}
             <button onClick={() => { setSelectedRoleType('coordinator'); setView('register_form'); }}
               className="w-full bg-white p-6 rounded-2xl shadow-sm border-2 border-transparent hover:border-pink-400 hover:bg-pink-50 text-right group relative overflow-hidden transition-all">
               <div className="flex items-center justify-between relative z-10">
@@ -338,14 +318,15 @@ export default function Home() {
               </div>
             </button>
 
+            {/* כפתור מטה - תכלת מותג (כמו שרצית) */}
             <button onClick={() => { setSelectedRoleType('dept_staff'); setView('register_form'); }}
-              className="w-full bg-white p-6 rounded-2xl shadow-sm border-2 border-transparent hover:border-blue-400 hover:bg-blue-50 text-right group relative overflow-hidden transition-all">
+              className="w-full bg-white p-6 rounded-2xl shadow-sm border-2 border-transparent hover:border-[#00BCD4] hover:bg-cyan-50 text-right group relative overflow-hidden transition-all">
               <div className="flex items-center justify-between relative z-10">
                   <div>
-                    <h3 className="font-black text-lg text-gray-800 group-hover:text-blue-600">{getRoleLabel('hq')}</h3>
+                    <h3 className="font-black text-lg text-gray-800 group-hover:text-[#00BCD4]">{getRoleLabel('hq')}</h3>
                     <p className="text-sm text-gray-400 mt-1">מטה {selectedDept}</p>
                   </div>
-                  <Briefcase className="text-gray-200 group-hover:text-blue-300 transition-colors" size={32} />
+                  <Briefcase className="text-gray-200 group-hover:text-[#00BCD4] transition-colors" size={32} />
               </div>
             </button>
           </div>
@@ -365,7 +346,6 @@ export default function Home() {
             <div className="text-xs font-bold text-gray-300">שלב 3 מתוך 3</div>
         </header>
 
-        {/* תיקון מובייל: הוספנו p-5 למובייל ו-p-8 לדסקטופ */}
         <main className="w-full max-w-md bg-white p-5 md:p-8 rounded-[32px] shadow-sm border border-gray-100 animate-fadeIn">
             
             <h2 className="text-2xl font-black text-gray-800 mb-2">יצירת חשבון</h2>
@@ -382,7 +362,6 @@ export default function Home() {
                 <Input label="שם הסניף" name="branch" required onChange={handleInputChange} />
               )}
 
-              {/* תיקון מובייל: בטלפון שורה אחת (grid-cols-1), במחשב שתיים (md:grid-cols-2) */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Input label="שם מלא" name="fullName" required onChange={handleInputChange} />
                 <Input label="טלפון נייד" name="phone" type="tel" required onChange={handleInputChange} />
@@ -390,10 +369,9 @@ export default function Home() {
 
               <Input label="תעודת זהות" name="idNumber" required maxLength={9} onChange={handleInputChange} />
 
-              {/* תיקון מובייל: בטלפון שורה אחת, במחשב שתיים */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 <Input label="אימייל" name="email" type="email" required onChange={handleInputChange} />
-                 <Input label="תאריך לידה" name="birthDate" type="date" required onChange={handleInputChange} />
+                  <Input label="אימייל" name="email" type="email" required onChange={handleInputChange} />
+                  <Input label="תאריך לידה" name="birthDate" type="date" required onChange={handleInputChange} />
               </div>
 
               <Input label="סיסמה" name="password" type="password" required minLength={6} placeholder="לפחות 6 תווים" onChange={handleInputChange} />
