@@ -32,7 +32,7 @@ const CustomInput = ({ label, icon, error, readOnly, ...props }: any) => (
                 className={`w-full h-[48px] rounded-lg border outline-none font-bold text-xs transition-all
                 ${icon ? 'pr-9' : 'pr-3'} pl-3
                 ${readOnly 
-                    ? 'bg-gray-100 text-gray-500 border-transparent cursor-not-allowed' 
+                    ? 'bg-gray-50 text-gray-500 border-transparent cursor-not-allowed' 
                     : error 
                         ? 'border-red-200 bg-red-50 text-red-600 placeholder-red-300' 
                         : 'bg-white border-gray-200 focus:border-[#E91E63] focus:ring-1 focus:ring-[#E91E63] text-[#263238]'
@@ -72,7 +72,6 @@ function NewTripContent() {
       if (modalState.type === 'success' && modalState.message.includes('הצלחה')) {
           window.location.href = '/dashboard';
       }
-      // אם זה info (המעבר לפרופיל), נבצע את המעבר בסגירה
       if (modalState.type === 'info' && modalState.onConfirm) {
           modalState.onConfirm();
       }
@@ -395,7 +394,7 @@ function NewTripContent() {
         };
 
         let error;
-        let newTripId = editId;
+        let newId = editId;
 
         if (editId) {
             const { error: err } = await supabase.from('trips').update(tripData).eq('id', editId);
@@ -403,12 +402,12 @@ function NewTripContent() {
         } else {
             const { data, error: err } = await supabase.from('trips').insert([tripData]).select().single();
             error = err;
-            if (data) newTripId = data.id;
+            if (data) newId = data.id;
         }
 
         if (error) throw error;
         
-        if (status === 'draft') return newTripId; // מחזיר ID לשימוש במעבר לפרופיל
+        if (status === 'draft') return newId;
         else showModal('success', 'הטיול נשלח בהצלחה! תוך 48 שעות תתקבל תשובה.');
 
     } catch(e: any) { 
@@ -448,12 +447,8 @@ function NewTripContent() {
       if (res) showModal('success', 'הטיוטה נשמרה בהצלחה!');
   };
 
-  // --- פונקציה חדשה: מעבר לעריכת פרופיל ---
   const handleGoToProfile = async () => {
-      if (!generalInfo.tripType) {
-          return showModal('error', 'כדי לשמור טיוטה ולעבור לפרופיל, בחר קודם סוג פעילות.');
-      }
-      
+      if (!generalInfo.tripType) return showModal('error', 'כדי לשמור טיוטה ולעבור לפרופיל, בחר קודם סוג פעילות.');
       const newId = await executeSubmission('draft');
       if (newId) {
           showModal('info', 'הטיול נשמר כטיוטה.\nמעביר אותך לעדכון פרטים בפרופיל...', () => {
@@ -471,7 +466,7 @@ function NewTripContent() {
       const isFemale = userGender === 'female';
 
       if (type === 'title') {
-          if (isTrip) return 'אחראי/ת הטיול'; 
+          if (isTrip) return isFemale ? 'אחראית הטיול' : 'אחראי הטיול'; 
           return isFemale ? 'אחראית הפעילות' : 'אחראי הפעילות';
       }
       
@@ -661,7 +656,7 @@ function NewTripContent() {
 
                         <div className="md:col-span-2 w-full">
                             <CustomInput 
-                                label="ס'ה כמות חניכים"
+                                label='ס"ה כמות חניכים' // תיקון לגרשיים
                                 type="number" 
                                 value={generalInfo.chanichimCount} 
                                 onChange={(e: any) => setGeneralInfo({...generalInfo, chanichimCount: e.target.value})} 
@@ -669,41 +664,41 @@ function NewTripContent() {
                         </div>
 
                         <div className="md:col-span-5 w-full bg-white rounded-xl border border-gray-200 p-2 flex flex-col justify-center group hover:border-[#E91E63] transition-all min-h-[74px]">
-    <div className="flex items-center gap-2 px-1 mb-1">
-        <label className="text-xs font-bold text-gray-500 group-hover:text-[#E91E63] transition-colors">
-            {currentLogic.staffLabel}
-        </label>
-        <span className="text-[10px] text-gray-400 font-normal">(ניתן לבחור מס' אפשרויות)</span>
-    </div>
-    
-    <div className="flex flex-wrap gap-1 items-center">
-        {STAFF_AGES.map(age => (
-            <button key={age} onClick={() => toggleStaffAge(age)} 
-                className={`px-2 py-1 rounded-full text-[10px] font-bold border transition-all flex items-center gap-1
-                ${generalInfo.staffAges.includes(age) ? 'bg-[#E91E63] text-white border-[#E91E63] shadow-sm' : 'bg-white text-gray-500 border-gray-100 hover:bg-gray-100'}`}>
-                {generalInfo.staffAges.includes(age) && <Check size={8}/>}
-                {age}
-            </button>
-        ))} 
-    </div>
+                            <div className="flex items-center gap-2 px-1 mb-1">
+                                <label className="text-xs font-bold text-gray-500 group-hover:text-[#E91E63] transition-colors">
+                                    {currentLogic.staffLabel}
+                                </label>
+                                <span className="text-[10px] text-gray-400 font-normal">(ניתן לבחור מס' אפשרויות)</span>
+                            </div>
+                            
+                            <div className="flex flex-wrap gap-1 items-center">
+                                {STAFF_AGES.map(age => (
+                                    <button key={age} onClick={() => toggleStaffAge(age)} 
+                                        className={`px-2 py-1 rounded-full text-[10px] font-bold border transition-all flex items-center gap-1
+                                        ${generalInfo.staffAges.includes(age) ? 'bg-[#E91E63] text-white border-[#E91E63] shadow-sm' : 'bg-white text-gray-500 border-gray-100 hover:bg-gray-100'}`}>
+                                        {generalInfo.staffAges.includes(age) && <Check size={8}/>}
+                                        {age}
+                                    </button>
+                                ))} 
+                            </div>
 
-    {generalInfo.staffAges.includes('אחר') && (
-        <div className="mt-2 w-full animate-fadeIn border-t border-gray-100 pt-2">
-            <input 
-                type="text" 
-                placeholder="נא לפרט כאן..." 
-                className="w-full p-2 text-xs border border-gray-200 focus:border-[#E91E63] outline-none bg-gray-50 rounded-lg" 
-                value={generalInfo.staffOther} 
-                onChange={(e) => setGeneralInfo({...generalInfo, staffOther: e.target.value})} 
-                autoFocus 
-            />
-        </div>
-    )}
-</div>
+                            {generalInfo.staffAges.includes('אחר') && (
+                                <div className="mt-2 w-full animate-fadeIn border-t border-gray-100 pt-2">
+                                    <input 
+                                        type="text" 
+                                        placeholder="נא לפרט כאן..." 
+                                        className="w-full p-2 text-xs border border-gray-200 focus:border-[#E91E63] outline-none bg-gray-50 rounded-lg" 
+                                        value={generalInfo.staffOther} 
+                                        onChange={(e) => setGeneralInfo({...generalInfo, staffOther: e.target.value})} 
+                                        autoFocus 
+                                    />
+                                </div>
+                            )}
+                        </div>
 
                         <div className="md:col-span-2 w-full">
                             <CustomInput 
-                                label="ס'ה משתתפים"
+                                label='ס"ה משתתפים' // תיקון לגרשיים
                                 type="number" 
                                 className="bg-[#E0F7FA] font-bold text-[#00BCD4]"
                                 placeholder="חניכים + צוות" 
@@ -715,8 +710,7 @@ function NewTripContent() {
                   </div>
                 </section>
 
-                <section className="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-visible relative z-10 mb-8 animate-fadeIn">
-                   {/* ... Timeline (Schedule) Section ... */}
+                <section className="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-visible relative z-30 mb-8 animate-fadeIn">
                    <div className="bg-[#00BCD4] text-white h-12 flex items-center px-6 font-bold text-lg shadow-sm justify-between rounded-t-3xl">
                        <div className="flex items-center gap-2"><MapPin size={20}/> <span>{currentLogic.timelineTitle}</span></div>
                        <span className="text-xs bg-white/20 px-3 py-1 rounded-full">{timeline.length} שורות</span>
@@ -733,7 +727,6 @@ function NewTripContent() {
                           return (
                             <div key={item.id} className={`border rounded-xl overflow-hidden bg-white transition-all group shadow-sm hover:shadow-md ${isMissingLicense ? 'border-red-300 ring-1 ring-red-100' : 'border-gray-200 hover:border-[#E91E63]'}`}>
                                 <div className="flex flex-col md:flex-row items-start md:items-center gap-4 p-4 cursor-pointer" onClick={() => setExpandedItem(isExpanded ? null : item.id)}>
-                                    {/* ... Timeline Item Header ... */}
                                     <div className="flex items-center gap-4 w-full md:w-auto">
                                         <div className={`p-3 rounded-xl text-white shadow-sm`} style={{backgroundColor: colorClass}}><CatIcon size={20} /></div>
                                         <div className="text-xs font-bold w-24 text-gray-500 bg-gray-50 border px-2 py-1.5 rounded-lg text-center flex flex-col justify-center">
@@ -807,12 +800,12 @@ function NewTripContent() {
                       })}
 
                       {!isRowsLocked && (
-                        <div className="bg-white p-5 rounded-2xl border-2 border-[#E91E63] border-dashed shadow-sm animate-fadeIn mt-4 relative">
+                        <div className="bg-white p-5 rounded-2xl border-2 border-[#E91E63] border-dashed shadow-sm animate-fadeIn mt-4 relative z-20">
                             <div className="absolute -top-3 right-4 bg-white px-2 text-xs font-bold text-[#E91E63]">הוספת שורה חדשה</div>
                             <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
                                 <div className="md:col-span-1 w-full">
                                     <label className="text-[10px] font-bold text-gray-400 mb-1 block">תאריך</label>
-                                    <div className="w-full text-xs p-2 rounded-xl border border-gray-100 bg-gray-100 text-gray-500 h-[48px] flex items-center justify-center font-bold select-none cursor-default whitespace-nowrap overflow-hidden text-ellipsis">
+                                    <div className="w-full text-xs p-2 rounded-lg border border-gray-200 bg-gray-50 text-gray-500 h-[48px] flex items-center justify-center font-bold select-none cursor-default whitespace-nowrap overflow-hidden text-ellipsis">
                                         {currentLine.date ? `${currentLine.date.split('-')[2]}/${currentLine.date.split('-')[1]}/${currentLine.date.split('-')[0]}` : '-'}
                                     </div>
                                 </div>
@@ -839,7 +832,7 @@ function NewTripContent() {
                                 <div className="md:col-span-5 flex flex-col md:flex-row gap-2 w-full">
                                     <div className="flex-1 relative">
                                         <label className="text-[10px] font-bold text-gray-400 mb-1.5 block">התרחשות</label>
-                                        <div className="w-full text-xs p-2 rounded-lg border border-gray-200 hover:border-[#E91E63] bg-white cursor-pointer h-[60px] flex items-center justify-between px-3 transition-all" onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}>
+                                        <div className="w-full text-xs p-2 rounded-lg border border-gray-200 hover:border-[#E91E63] bg-white cursor-pointer h-[48px] flex items-center justify-between px-3 transition-all" onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}>
                                             <span className={`font-bold ${currentLine.category ? 'text-gray-800' : 'text-gray-400'}`}>{CATEGORIES[currentLine.category]?.label || 'בחר...'}</span><ChevronDown size={16} className="text-gray-400" />
                                         </div>
                                         {showCategoryDropdown && (
@@ -857,7 +850,7 @@ function NewTripContent() {
                                         {currentLine.subCategory === 'אחר' ? (
                                             <div className="relative"><CustomInput placeholder="פרט..." autoFocus value={currentLine.otherDetail} onChange={(e: any) => setCurrentLine({...currentLine, otherDetail: e.target.value})} /><div className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 cursor-pointer font-bold" onClick={() => setCurrentLine({...currentLine, subCategory: ''})}>X</div></div>
                                         ) : (
-                                            <><div className={`w-full text-xs p-2 rounded-lg border border-gray-200 h-[60px] flex items-center justify-between px-3 transition-all ${!currentLine.category ? 'bg-gray-100 cursor-not-allowed opacity-50' : 'hover:border-[#E91E63] bg-white cursor-pointer'}`} onClick={() => { if(currentLine.category) setShowSubCategoryDropdown(!showSubCategoryDropdown) }}><span className={`font-bold ${currentLine.subCategory ? 'text-gray-800' : 'text-gray-400'}`}>{currentLine.subCategory || (currentLine.category ? 'בחר פירוט...' : '-')}</span><ChevronDown size={16} className="text-gray-400" /></div>
+                                            <><div className={`w-full text-xs p-2 rounded-lg border border-gray-200 h-[48px] flex items-center justify-between px-3 transition-all ${!currentLine.category ? 'bg-gray-100 cursor-not-allowed opacity-50' : 'hover:border-[#E91E63] bg-white cursor-pointer'}`} onClick={() => { if(currentLine.category) setShowSubCategoryDropdown(!showSubCategoryDropdown) }}><span className={`font-bold ${currentLine.subCategory ? 'text-gray-800' : 'text-gray-400'}`}>{currentLine.subCategory || (currentLine.category ? 'בחר פירוט...' : '-')}</span><ChevronDown size={16} className="text-gray-400" /></div>
                                             {showSubCategoryDropdown && currentLine.category && (
                                                 <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-2xl z-[100] overflow-hidden max-h-48 overflow-y-auto">{CATEGORIES[currentLine.category]?.options.map((opt: any) => (<div key={opt.label} className="p-3 text-xs text-gray-700 hover:bg-pink-50 hover:text-[#E91E63] cursor-pointer border-b border-gray-50 font-bold transition-colors" onClick={() => { setCurrentLine({...currentLine, subCategory: opt.label}); setShowSubCategoryDropdown(false); }}>{opt.label}</div>))}</div>
                                             )}
@@ -878,7 +871,7 @@ function NewTripContent() {
                                         </div>
                                     )}
                                     <div className="w-full md:w-auto mt-2 md:mt-0">
-                                        <button onClick={handleAddLine} className="bg-[#8BC34A] hover:bg-[#7CB342] text-white h-[60px] w-full md:w-[60px] rounded-lg flex items-center justify-center shadow-lg transition-all active:scale-95 flex-shrink-0 mb-[1px]" title="לאישור השורה ופתיחת שורה חדשה">
+                                        <button onClick={handleAddLine} className="bg-[#8BC34A] hover:bg-[#7CB342] text-white h-[48px] w-full md:w-[48px] rounded-lg flex items-center justify-center shadow-lg transition-all active:scale-95 flex-shrink-0 mb-[1px]" title="לאישור השורה ופתיחת שורה חדשה">
                                             <Check size={28} strokeWidth={3} />
                                             <span className="md:hidden mr-2 font-bold">הוסף שורה ללו"ז</span>
                                         </button>
@@ -908,7 +901,7 @@ function NewTripContent() {
                         </div>
                       )}
                       
-                      <div className="flex justify-center pt-4 pb-20">
+                      <div className="flex justify-center pt-4 pb-6">
                           <button onClick={handleLockToggle} className={`text-xs flex items-center gap-2 px-6 py-2 rounded-full border transition-all font-bold ${isRowsLocked ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-[#E91E63] border-[#E91E63] hover:bg-[#E91E63] hover:text-white'}`}>
                               {isRowsLocked ? <><Lock size={14}/> מצב צפייה (לחץ לעריכה)</> : <><Unlock size={14}/> סיום הוספת שורות</>}
                           </button>
@@ -917,7 +910,7 @@ function NewTripContent() {
                 </section>
 
                 {/* --- אזור הוספת אחראי (הוזז לפה) --- */}
-                <section className="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-visible relative z-10 mb-8 animate-fadeIn">
+                <section className="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-visible relative z-20 mb-8 animate-fadeIn">
                     <div className="bg-[#00BCD4] text-white h-12 flex items-center px-6 font-bold text-lg shadow-sm gap-2 rounded-t-3xl">
                        <UserPlus size={20} />
                        <span>{getStaffTitle('title')}</span>
@@ -937,7 +930,7 @@ function NewTripContent() {
                                 </button>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-                                <CustomInput label="שם מלא (כפי שמופיע בת.ז)" value={generalInfo.coordName} readOnly icon={<User size={14}/>} />
+                                <CustomInput label="שם מלא (כפי שמופיע בת.ז.)" value={generalInfo.coordName} readOnly icon={<User size={14}/>} />
                                 <CustomInput label="תעודת זהות" value={generalInfo.coordId} readOnly icon={<CreditCard size={14}/>} />
                                 <CustomInput label="תאריך לידה" type="date" value={generalInfo.coordDob} readOnly />
                                 <CustomInput label="טלפון" type="tel" value={generalInfo.coordPhone} readOnly icon={<Phone size={14}/>} />
@@ -999,7 +992,7 @@ function NewTripContent() {
                     </div>
                 </section>
 
-                <section className="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-hidden mb-24 animate-fadeIn">
+                <section className="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-hidden mb-24 animate-fadeIn relative z-10">
                     <div className="bg-[#00BCD4] text-white h-12 flex items-center px-6 font-bold text-lg shadow-sm gap-2">
                        <MessageSquare size={20} />
                        <span>הערות</span>
