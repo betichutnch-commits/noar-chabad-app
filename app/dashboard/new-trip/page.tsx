@@ -6,19 +6,45 @@ import { Header } from '@/components/layout/Header'
 import { 
   Calendar, MapPin, AlertTriangle, Save, CheckCircle, FileUp, 
   Flag, ChevronDown, ChevronUp, Lock, Unlock, Check, Trash2, Loader2, Link as LinkIcon,
-  Home, Info, ArrowRight, FileEdit, HelpCircle, MessageSquare 
+  Home, Info, ArrowRight, FileEdit, HelpCircle, MessageSquare, User, Phone, CreditCard, Mail, Hash, Plus, X, Briefcase, UserPlus, Settings, Edit2
 } from 'lucide-react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 
-// ייבוא הקבועים והפונקציות מתיקיית ה-lib
 import { 
     ISRAEL_CITIES, GRADES, STAFF_AGES, TRIP_LOGIC, 
     TRIP_TYPES_CONFIG, CATEGORIES, getColorHex 
 } from '@/lib/constants'
-import { getHebrewDateString, toHebrewDay } from '@/lib/dateUtils'
+import { getHebrewDateString } from '@/lib/dateUtils'
 
-// --- חלק 1: הקומפוננטה הפנימית עם כל הלוגיקה ---
+// --- קומפוננטת Input פנימית ---
+const CustomInput = ({ label, icon, error, readOnly, ...props }: any) => (
+    <div className="w-full">
+        {label && <label className="block text-[10px] font-bold text-gray-400 mb-1 mr-1">{label}</label>}
+        <div className="relative">
+            {icon && (
+                <div className="absolute top-1/2 right-3 -translate-y-1/2 text-gray-400 pointer-events-none">
+                    {React.cloneElement(icon, { size: 14 })}
+                </div>
+            )}
+            <input 
+                readOnly={readOnly}
+                {...props}
+                className={`w-full h-[48px] rounded-lg border outline-none font-bold text-xs transition-all
+                ${icon ? 'pr-9' : 'pr-3'} pl-3
+                ${readOnly 
+                    ? 'bg-gray-100 text-gray-500 border-transparent cursor-not-allowed' 
+                    : error 
+                        ? 'border-red-200 bg-red-50 text-red-600 placeholder-red-300' 
+                        : 'bg-white border-gray-200 focus:border-[#E91E63] focus:ring-1 focus:ring-[#E91E63] text-[#263238]'
+                } ${props.className || ''}`}
+            />
+        </div>
+        {error && <p className="text-[10px] text-red-500 font-bold mt-1 mr-1">{error}</p>}
+    </div>
+);
+
 function NewTripContent() {
+  const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(0); 
@@ -29,7 +55,7 @@ function NewTripContent() {
   const [isOtherSelected, setIsOtherSelected] = useState(false);
   const [tempOtherType, setTempOtherType] = useState('');
 
-  // --- ניהול מודל מתקדם ---
+  // --- ניהול מודל ---
   const [modalState, setModalState] = useState<{
       show: boolean;
       message: string;
@@ -46,31 +72,36 @@ function NewTripContent() {
       if (modalState.type === 'success' && modalState.message.includes('הצלחה')) {
           window.location.href = '/dashboard';
       }
+      // אם זה info (המעבר לפרופיל), נבצע את המעבר בסגירה
+      if (modalState.type === 'info' && modalState.onConfirm) {
+          modalState.onConfirm();
+      }
   };
 
   const handleModalConfirm = () => {
-      if (modalState.onConfirm) {
-          modalState.onConfirm();
-      }
+      if (modalState.onConfirm) modalState.onConfirm();
       setModalState(prev => ({ ...prev, show: false }));
   };
 
+  // --- State לקבצים ונעילת שורות ---
   const [uploadingFileId, setUploadingFileId] = useState<string | null>(null); 
   const [isUploadingLicense, setIsUploadingLicense] = useState(false);
   const [isUploadingInsurance, setIsUploadingInsurance] = useState(false);
-  
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
   const [isRowsLocked, setIsRowsLocked] = useState(false);
   
+  // --- State להצעות מיקום וקטגוריות ---
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [showSubCategoryDropdown, setShowSubCategoryDropdown] = useState(false);
 
+  // Refs לתאריכים
   const startDateRef = useRef<HTMLInputElement>(null);
   const startTimeRef = useRef<HTMLInputElement>(null);
   const endDateRef = useRef<HTMLInputElement>(null);
   const endTimeRef = useRef<HTMLInputElement>(null);
 
+  // --- State ראשי של הטיול ---
   const [generalInfo, setGeneralInfo] = useState({ 
       name: '', 
       tripType: '', 
@@ -85,11 +116,30 @@ function NewTripContent() {
       totalTravelers: '', 
       staffAges: [] as string[], 
       staffOther: '', 
-      generalComments: '' 
+      generalComments: '',
+      
+      coordName: '',
+      coordId: '',
+      coordPhone: '',
+      coordEmail: '',
+      coordDob: '',
+
+      secondaryStaffObj: null as any 
+  });
+
+  // --- State לטופס הוספת אחראי נוסף ---
+  const [showAddStaffForm, setShowAddStaffForm] = useState(false);
+  const [isVerifyingStaff, setIsVerifyingStaff] = useState(false);
+  const [newStaffData, setNewStaffData] = useState({
+      name: '',
+      role: '',
+      idNumber: '',
+      dob: '',
+      phone: '',
+      email: ''
   });
 
   const [timeline, setTimeline] = useState<any[]>([]);
-  
   const [currentLine, setCurrentLine] = useState({ 
     date: '', locationType: 'custom', locationValue: '', category: '', subCategory: '', 
     otherDetail: '', details: '', 
@@ -123,12 +173,26 @@ function NewTripContent() {
         if (data?.user) {
             setUser(data.user);
             setUserGender(checkGender(data.user.user_metadata?.department));
+            
+            if (!editId) {
+                const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
+                if (profile) {
+                    setGeneralInfo(prev => ({
+                        ...prev,
+                        coordName: `${profile.official_name} ${profile.last_name}`,
+                        coordId: profile.identity_number || '',
+                        coordPhone: profile.phone || '',
+                        coordEmail: profile.email || '',
+                        coordDob: profile.birth_date || ''
+                    }));
+                }
+            }
         } else {
             window.location.href = '/';
         }
     };
     checkUser();
-  }, []);
+  }, [editId]);
 
   useEffect(() => {
       const fetchTrip = async () => {
@@ -151,7 +215,13 @@ function NewTripContent() {
                   totalTravelers: d.totalTravelers,
                   staffAges: d.staffAges || [],
                   staffOther: d.staffOther,
-                  generalComments: d.generalComments
+                  generalComments: d.generalComments,
+                  coordName: d.coordName || '',
+                  coordId: d.coordId || '',
+                  coordPhone: d.coordPhone || '',
+                  coordEmail: d.coordEmail || '',
+                  coordDob: d.coordDob || '',
+                  secondaryStaffObj: d.secondaryStaffObj || null
               });
               setTimeline(d.timeline || []);
               setStep(1); 
@@ -164,25 +234,16 @@ function NewTripContent() {
   useEffect(() => { 
     setStartHebrewDate(getHebrewDateString(generalInfo.startDate));
     setEndHebrewDate(getHebrewDateString(generalInfo.endDate));
-
-    if (generalInfo.startDate && !currentLine.date) {
-        setCurrentLine(prev => ({ ...prev, date: generalInfo.startDate }));
-    }
-
+    if (generalInfo.startDate && !currentLine.date) setCurrentLine(prev => ({ ...prev, date: generalInfo.startDate }));
+    
     if (generalInfo.startDate) {
         const dateObj = new Date(generalInfo.startDate);
         const now = new Date();
         const diffTime = dateObj.getTime() - now.getTime();
         const diffHours = diffTime / (1000 * 3600);
-
-        if (diffHours < 48 && diffTime > -86400000) {
-            setIsUrgentError(true);
-        } else {
-            setIsUrgentError(false);
-        }
-    } else {
-        setIsUrgentError(false);
-    }
+        if (diffHours < 48 && diffTime > -86400000) setIsUrgentError(true);
+        else setIsUrgentError(false);
+    } else setIsUrgentError(false);
   }, [generalInfo.startDate, generalInfo.endDate]);
 
   const getNextDate = (d: string) => { if(!d) return ''; const x=new Date(d); x.setDate(x.getDate()+1); return x.toISOString().split('T')[0]; };
@@ -190,20 +251,14 @@ function NewTripContent() {
   const isLicenseRequired = (cat: string, sub: string) => CATEGORIES[cat]?.options.find((o: any) => o.label === sub)?.license || false;
 
   const handleTypeSelect = (typeId: string) => {
-      if (typeId === "אחר") {
-          setIsOtherSelected(true);
-      } else {
-          setGeneralInfo(prev => ({ ...prev, tripType: typeId, tripTypeOther: '' }));
-          setStep(1); 
-          window.scrollTo(0,0);
-      }
+      if (typeId === "אחר") setIsOtherSelected(true);
+      else { setGeneralInfo(prev => ({ ...prev, tripType: typeId, tripTypeOther: '' })); setStep(1); window.scrollTo(0,0); }
   };
 
   const submitOtherType = () => {
       if (!tempOtherType.trim()) return showModal('error', 'נא לפרט את סוג הפעילות');
       setGeneralInfo(prev => ({ ...prev, tripType: 'אחר', tripTypeOther: tempOtherType }));
-      setStep(1);
-      window.scrollTo(0,0);
+      setStep(1); window.scrollTo(0,0);
   };
 
   const handleEndDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -211,9 +266,39 @@ function NewTripContent() {
       if (generalInfo.startDate && newEnd < generalInfo.startDate) {
           showModal('error', 'תאריך הסיום לא יכול להיות לפני תאריך ההתחלה.');
           setGeneralInfo(prev => ({ ...prev, endDate: '' }));
-      } else {
-          setGeneralInfo(prev => ({ ...prev, endDate: newEnd }));
+      } else setGeneralInfo(prev => ({ ...prev, endDate: newEnd }));
+  };
+
+  const handleSaveStaff = async () => {
+      if (!newStaffData.name || !newStaffData.role || !newStaffData.idNumber || !newStaffData.dob || !newStaffData.phone || !newStaffData.email) {
+          return showModal('error', 'יש למלא את כל השדות של האחראי.');
       }
+      setIsVerifyingStaff(true);
+      try {
+          const { data: existingUser, error } = await supabase.from('profiles').select('id, official_name, last_name').eq('identity_number', newStaffData.idNumber).single();
+          if (error || !existingUser) {
+              setIsVerifyingStaff(false);
+              return showModal('error', 'שגיאה: תעודת הזהות אינה קיימת במערכת.\nניתן להוסיף כאחראי רק משתמש רשום.');
+          }
+          setGeneralInfo(prev => ({
+              ...prev,
+              secondaryStaffObj: {
+                  ...newStaffData,
+                  userId: existingUser.id,
+                  verifiedName: `${existingUser.official_name} ${existingUser.last_name}`
+              }
+          }));
+          setShowAddStaffForm(false);
+          setNewStaffData({ name: '', role: '', idNumber: '', dob: '', phone: '', email: '' });
+      } catch (err) {
+          showModal('error', 'אירעה שגיאה באימות הנתונים.');
+      } finally {
+          setIsVerifyingStaff(false);
+      }
+  };
+
+  const handleRemoveStaff = () => {
+      setGeneralInfo(prev => ({ ...prev, secondaryStaffObj: null }));
   };
 
   const handleAddLine = () => {
@@ -228,11 +313,9 @@ function NewTripContent() {
 
     if (currentLine.category === 'sleeping') {
         const calculatedNextDate = getNextDate(currentLine.date);
-        
         if (new Date(calculatedNextDate) > new Date(generalInfo.endDate)) {
             return showModal('error', `לא ניתן להוסיף לינה בתאריך זה.\nהטיול מוגדר להסתיים ב-${generalInfo.endDate.split('-').reverse().join('/')}.\nיש לעדכן את תאריכי הטיול בפרטים הכלליים למעלה.`);
         }
-        
         nextDate = calculatedNextDate;
         didDateChange = true;
     }
@@ -251,10 +334,7 @@ function NewTripContent() {
     
     setTimeline([...timeline, newLine]);
     setExpandedItem(null);
-
-    if (didDateChange) {
-        showModal('info', 'הוספת לינה: התאריך בשורה הבאה עודכן אוטומטית ליום המחרת.');
-    }
+    if (didDateChange) showModal('info', 'הוספת לינה: התאריך בשורה הבאה עודכן אוטומטית ליום המחרת.');
     
     setCurrentLine({ 
         date: nextDate, locationType: 'custom', locationValue: '', category: '', subCategory: '', 
@@ -266,13 +346,8 @@ function NewTripContent() {
 
   const handleUpload = async (file: File, type: 'license' | 'insurance', itemId?: string) => {
     if(!file) return;
-    
-    if (itemId) {
-        setUploadingFileId(`${itemId}_${type}`);
-    } else {
-        if(type === 'license') setIsUploadingLicense(true);
-        else setIsUploadingInsurance(true);
-    }
+    if (itemId) setUploadingFileId(`${itemId}_${type}`);
+    else { if(type === 'license') setIsUploadingLicense(true); else setIsUploadingInsurance(true); }
 
     try {
         const fileExt = file.name.split('.').pop();
@@ -280,23 +355,14 @@ function NewTripContent() {
         const { error } = await supabase.storage.from('trip-files').upload(storageName, file);
         if (error) throw error;
         const { data: { publicUrl } } = supabase.storage.from('trip-files').getPublicUrl(storageName);
-        
         const fileObj = { url: publicUrl, name: file.name };
         
-        if (itemId) {
-            setTimeline(prev => prev.map(item => item.id === itemId ? { ...item, [type === 'license' ? 'licenseFile' : 'insuranceFile']: fileObj } : item));
-        } else {
-            setCurrentLine(prev => ({ ...prev, [type === 'license' ? 'licenseFile' : 'insuranceFile']: fileObj }));
-        }
-    } catch (e: any) { 
-        showModal('error', 'שגיאה בהעלאה: ' + e.message); 
-    } finally { 
-        if (itemId) {
-            setUploadingFileId(null); 
-        } else { 
-            if(type === 'license') setIsUploadingLicense(false); 
-            else setIsUploadingInsurance(false); 
-        } 
+        if (itemId) setTimeline(prev => prev.map(item => item.id === itemId ? { ...item, [type === 'license' ? 'licenseFile' : 'insuranceFile']: fileObj } : item));
+        else setCurrentLine(prev => ({ ...prev, [type === 'license' ? 'licenseFile' : 'insuranceFile']: fileObj }));
+    } catch (e: any) { showModal('error', 'שגיאה בהעלאה: ' + e.message); } 
+    finally { 
+        if (itemId) setUploadingFileId(null); 
+        else { if(type === 'license') setIsUploadingLicense(false); else setIsUploadingInsurance(false); } 
     }
   };
 
@@ -310,12 +376,7 @@ function NewTripContent() {
   const handleLockToggle = () => {
       const config = TRIP_LOGIC[generalInfo.tripType] || TRIP_LOGIC['אחר'];
       const minRows = config.minRows || 2;
-
-      if (!isRowsLocked) {
-          if (timeline.length < minRows) {
-              return showModal('error', `לא ניתן לסיים הוספת שורות. בסוג פעילות זה נדרשות לפחות ${minRows} שורות בלו"ז.`);
-          }
-      }
+      if (!isRowsLocked && timeline.length < minRows) return showModal('error', `לא ניתן לסיים הוספת שורות. בסוג פעילות זה נדרשות לפחות ${minRows} שורות בלו"ז.`);
       setIsRowsLocked(!isRowsLocked);
   };
 
@@ -323,8 +384,8 @@ function NewTripContent() {
     setLoading(true);
     try {
         const tripData = {
-            user_id: user.id, 
-            coordinator_name: user.user_metadata.full_name, 
+            user_id: user.id,
+            coordinator_name: generalInfo.coordName,
             branch: user.user_metadata.branch, 
             department: user.user_metadata.department,
             name: generalInfo.name || (status === 'draft' ? 'טיוטה ללא שם' : ''), 
@@ -334,28 +395,40 @@ function NewTripContent() {
         };
 
         let error;
+        let newTripId = editId;
+
         if (editId) {
             const { error: err } = await supabase.from('trips').update(tripData).eq('id', editId);
             error = err;
         } else {
-            const { error: err } = await supabase.from('trips').insert([tripData]);
+            const { data, error: err } = await supabase.from('trips').insert([tripData]).select().single();
             error = err;
+            if (data) newTripId = data.id;
         }
 
         if (error) throw error;
         
-        if (status === 'draft') {
-            showModal('success', 'הטיוטה נשמרה בהצלחה!');
-        } else {
-            showModal('success', 'הטיול נשלח בהצלחה! תוך 48 שעות תתקבל תשובה.');
-        }
-    } catch(e: any) { showModal('error', 'שגיאה: ' + e.message); } 
-    finally { setLoading(false); }
+        if (status === 'draft') return newTripId; // מחזיר ID לשימוש במעבר לפרופיל
+        else showModal('success', 'הטיול נשלח בהצלחה! תוך 48 שעות תתקבל תשובה.');
+
+    } catch(e: any) { 
+        showModal('error', 'שגיאה: ' + e.message); 
+        throw e;
+    } finally { 
+        setLoading(false); 
+    }
   };
 
   const handleSubmit = async () => {
     if (isUrgentError) return;
-    if (!generalInfo.tripType || !generalInfo.name || !generalInfo.startDate || !generalInfo.endDate || !generalInfo.chanichimCount || !generalInfo.totalTravelers) return showModal('error', 'נא למלא את כל שדות החובה בפרטים הכלליים');
+    
+    if (!generalInfo.coordName || !generalInfo.coordId) {
+        return showModal('error', 'חסרים פרטי אחראי טיול (יש לוודא שהפרופיל האישי מעודכן).');
+    }
+
+    if (!generalInfo.tripType || !generalInfo.name || !generalInfo.startDate || !generalInfo.endDate || !generalInfo.chanichimCount || !generalInfo.totalTravelers) {
+        return showModal('error', 'נא למלא את כל שדות החובה בפרטים הכלליים');
+    }
     if (timeline.length === 0) return showModal('error', 'יש להוסיף לפחות שורה אחת בפירוט הטיול');
     
     const config = TRIP_LOGIC[generalInfo.tripType] || TRIP_LOGIC['אחר'];
@@ -371,11 +444,42 @@ function NewTripContent() {
 
   const handleSaveDraft = async () => {
       if (!generalInfo.tripType) return showModal('error', 'כדי לשמור טיוטה חובה לבחור לפחות את סוג הטיול');
-      executeSubmission('draft');
+      const res = await executeSubmission('draft');
+      if (res) showModal('success', 'הטיוטה נשמרה בהצלחה!');
+  };
+
+  // --- פונקציה חדשה: מעבר לעריכת פרופיל ---
+  const handleGoToProfile = async () => {
+      if (!generalInfo.tripType) {
+          return showModal('error', 'כדי לשמור טיוטה ולעבור לפרופיל, בחר קודם סוג פעילות.');
+      }
+      
+      const newId = await executeSubmission('draft');
+      if (newId) {
+          showModal('info', 'הטיול נשמר כטיוטה.\nמעביר אותך לעדכון פרטים בפרופיל...', () => {
+              router.push(`/dashboard/profile?returnUrl=/dashboard/new-trip?id=${newId}`);
+          });
+      }
   };
 
   const currentLineNeedsLicense = isLicenseRequired(currentLine.category, currentLine.subCategory);
   const currentLogic = TRIP_LOGIC[generalInfo.tripType] || TRIP_LOGIC['אחר'];
+
+  const getStaffTitle = (type: 'title' | 'additional') => {
+      const isTrip = generalInfo.tripType === 'טיול מחוץ לסניף';
+      const base = isTrip ? 'טיול' : 'הפעילות';
+      const isFemale = userGender === 'female';
+
+      if (type === 'title') {
+          if (isTrip) return 'אחראי/ת הטיול'; 
+          return isFemale ? 'אחראית הפעילות' : 'אחראי הפעילות';
+      }
+      
+      if (type === 'additional') {
+          return isFemale ? 'אחראית נוספת' : 'אחראי נוסף';
+      }
+      return '';
+  };
 
   return (
     <>
@@ -430,7 +534,6 @@ function NewTripContent() {
                     <h2 className="text-2xl font-black text-gray-800 mb-2">איזו פעילות מתכננים?</h2>
                     <p className="text-gray-500">בחרו את סוג הפעילות להתחלת התהליך</p>
                 </div>
-                
                 <div className="flex flex-col gap-3">
                     {TRIP_TYPES_CONFIG.map(type => {
                         const Icon = type.icon;
@@ -438,28 +541,20 @@ function NewTripContent() {
                             return (
                                 <div key="other-input" className="bg-gray-50 p-4 rounded-2xl border border-gray-200 animate-fadeIn shadow-inner">
                                     <div className="flex gap-2">
-                                        <input 
-                                            type="text" 
-                                            className="flex-1 px-3 py-2 rounded-xl border border-gray-300 text-sm focus:border-[#E91E63] outline-none"
+                                        <CustomInput 
                                             value={tempOtherType}
-                                            onChange={e => setTempOtherType(e.target.value)}
+                                            onChange={(e: any) => setTempOtherType(e.target.value)}
                                             placeholder="נא לפרט..." 
                                             autoFocus
                                         />
-                                        <button onClick={submitOtherType} className="bg-[#E91E63] text-white px-4 rounded-xl font-bold text-sm shadow-sm hover:bg-pink-600 transition-colors">
-                                            המשך
-                                        </button>
+                                        <button onClick={submitOtherType} className="bg-[#E91E63] text-white px-4 rounded-xl font-bold text-sm shadow-sm hover:bg-pink-600 transition-colors">המשך</button>
                                     </div>
                                     <button onClick={() => setIsOtherSelected(false)} className="text-xs text-gray-400 mt-2 hover:text-gray-600 underline">ביטול וחזרה</button>
                                 </div>
                             );
                         }
                         return (
-                            <button 
-                                key={type.id} 
-                                onClick={() => handleTypeSelect(type.id)}
-                                className={`w-full p-4 rounded-2xl border ${type.border} ${type.bg} shadow-sm hover:shadow-md transition-all group flex flex-col items-center justify-center gap-2 hover:scale-[1.02]`}
-                            >
+                            <button key={type.id} onClick={() => handleTypeSelect(type.id)} className={`w-full p-4 rounded-2xl border ${type.border} ${type.bg} shadow-sm hover:shadow-md transition-all group flex flex-col items-center justify-center gap-2 hover:scale-[1.02]`}>
                                 <Icon size={24} className={type.text} />
                                 <div className={`text-base font-black ${type.text}`}>{type.label}</div>
                             </button>
@@ -482,14 +577,13 @@ function NewTripContent() {
                         </div>
                         <div>
                             <div className="text-xs text-gray-400 font-bold">סוג פעילות נבחר</div>
-                            <div className="font-black text-gray-800 text-lg leading-tight">
-                                {generalInfo.tripType === 'אחר' ? generalInfo.tripTypeOther : generalInfo.tripType}
-                            </div>
+                            <div className="font-black text-gray-800 text-lg leading-tight">{generalInfo.tripType === 'אחר' ? generalInfo.tripTypeOther : generalInfo.tripType}</div>
                         </div>
                     </div>
                     <button onClick={() => setStep(0)} className="text-xs font-bold text-[#00BCD4] bg-cyan-50 px-3 py-1.5 rounded-lg hover:bg-cyan-100 transition-colors">שנה</button>
                 </div>
 
+                {/* --- פרטים כלליים --- */}
                 <section className="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-visible relative z-20 mb-8 animate-fadeIn">
                   <div className="bg-[#00BCD4] text-white h-12 flex items-center px-6 font-bold text-lg shadow-sm gap-2 rounded-t-3xl">
                         <Flag size={20} />
@@ -498,39 +592,42 @@ function NewTripContent() {
                   
                   <div className="p-6 space-y-8">
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
-                        
                         <div className="md:col-span-12 flex flex-col md:flex-row gap-4 w-full">
                             <div className="flex-1 w-full">
-                                  <label className="text-xs font-bold text-gray-500 block mb-1">{currentLogic.nameLabel}</label>
-                                  <input type="text" className="w-full px-3 rounded-xl border border-gray-200 focus:border-[#E91E63] focus:ring-1 focus:ring-[#E91E63] outline-none transition-all text-sm h-[60px]" 
-                                      value={generalInfo.name} onChange={(e) => setGeneralInfo({...generalInfo, name: e.target.value})} placeholder={currentLogic.namePlaceholder} autoFocus />
+                                  <CustomInput 
+                                      label={currentLogic.nameLabel}
+                                      value={generalInfo.name} 
+                                      onChange={(e: any) => setGeneralInfo({...generalInfo, name: e.target.value})} 
+                                      placeholder={currentLogic.namePlaceholder} 
+                                      autoFocus 
+                                  />
                             </div>
 
                             <div className="flex-1 grid grid-cols-2 gap-4 w-full">
                                 <div>
-                                    <label className="text-xs font-bold text-gray-500 block mb-1">התחלה</label>
-                                    <div className="bg-gray-50 rounded-xl border border-gray-200 flex items-center h-[60px] focus-within:border-[#E91E63] focus-within:bg-white transition-colors overflow-hidden cursor-pointer" onClick={() => startDateRef.current?.showPicker()}>
-                                         <div className="flex-1 px-3 border-r border-gray-200 relative h-full flex flex-col justify-center">
-                                             <input ref={startDateRef} type="date" className="w-full bg-transparent text-sm font-bold text-gray-800 outline-none z-10 relative" 
+                                    <label className="block text-[10px] font-bold text-gray-400 mb-1 mr-1">התחלה</label>
+                                    <div className="bg-white rounded-lg border border-gray-200 flex items-center h-[48px] focus-within:border-[#E91E63] focus-within:ring-1 focus-within:ring-[#E91E63] transition-colors overflow-hidden cursor-pointer" onClick={() => startDateRef.current?.showPicker()}>
+                                         <div className="flex-1 px-3 border-l border-gray-100 relative h-full flex flex-col justify-center">
+                                             <input ref={startDateRef} type="date" className="w-full bg-transparent text-xs font-bold text-gray-800 outline-none z-10 relative" 
                                                  value={generalInfo.startDate} onChange={(e) => setGeneralInfo({...generalInfo, startDate: e.target.value})} onClick={(e) => e.stopPropagation()} />
-                                             <div className="text-[10px] text-[#00BCD4] font-bold leading-none mt-0.5 truncate">{startHebrewDate || '-'}</div>
+                                             <div className="text-[9px] text-[#00BCD4] font-bold leading-none mt-0.5 truncate">{startHebrewDate || '-'}</div>
                                          </div>
-                                         <div className="w-24 h-full flex items-center justify-center bg-gray-50/50 relative z-20 hover:bg-gray-100 transition-colors" onClick={(e) => { e.stopPropagation(); startTimeRef.current?.showPicker(); }}>
-                                             <input ref={startTimeRef} type="time" step="900" className="w-full h-full bg-transparent text-sm font-bold text-gray-800 outline-none text-center cursor-pointer" 
+                                         <div className="w-20 h-full flex items-center justify-center bg-gray-50 relative z-20 hover:bg-gray-100 transition-colors" onClick={(e) => { e.stopPropagation(); startTimeRef.current?.showPicker(); }}>
+                                             <input ref={startTimeRef} type="time" step="900" className="w-full h-full bg-transparent text-xs font-bold text-gray-800 outline-none text-center cursor-pointer" 
                                                  value={generalInfo.startTime} onChange={(e) => setGeneralInfo({...generalInfo, startTime: e.target.value})} />
                                          </div>
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="text-xs font-bold text-gray-500 block mb-1">סיום</label>
-                                    <div className="bg-gray-50 rounded-xl border border-gray-200 flex items-center h-[60px] focus-within:border-[#E91E63] focus-within:bg-white transition-colors overflow-hidden cursor-pointer" onClick={() => endDateRef.current?.showPicker()}>
-                                         <div className="flex-1 px-3 border-r border-gray-200 relative h-full flex flex-col justify-center">
-                                             <input ref={endDateRef} type="date" className="w-full bg-transparent text-sm font-bold text-gray-800 outline-none z-10 relative" 
+                                    <label className="block text-[10px] font-bold text-gray-400 mb-1 mr-1">סיום</label>
+                                    <div className="bg-white rounded-lg border border-gray-200 flex items-center h-[48px] focus-within:border-[#E91E63] focus-within:ring-1 focus-within:ring-[#E91E63] transition-colors overflow-hidden cursor-pointer" onClick={() => endDateRef.current?.showPicker()}>
+                                         <div className="flex-1 px-3 border-l border-gray-100 relative h-full flex flex-col justify-center">
+                                             <input ref={endDateRef} type="date" className="w-full bg-transparent text-xs font-bold text-gray-800 outline-none z-10 relative" 
                                                  value={generalInfo.endDate} onChange={handleEndDateChange} onClick={(e) => e.stopPropagation()}/>
-                                             <div className="text-[10px] text-[#00BCD4] font-bold leading-none mt-0.5 truncate">{endHebrewDate || '-'}</div>
+                                             <div className="text-[9px] text-[#00BCD4] font-bold leading-none mt-0.5 truncate">{endHebrewDate || '-'}</div>
                                          </div>
-                                         <div className="w-24 h-full flex items-center justify-center bg-gray-50/50 relative z-20 hover:bg-gray-100 transition-colors" onClick={(e) => { e.stopPropagation(); endTimeRef.current?.showPicker(); }}>
-                                             <input ref={endTimeRef} type="time" step="900" className="w-full h-full bg-transparent text-sm font-bold text-gray-800 outline-none text-center cursor-pointer" 
+                                         <div className="w-20 h-full flex items-center justify-center bg-gray-50 relative z-20 hover:bg-gray-100 transition-colors" onClick={(e) => { e.stopPropagation(); endTimeRef.current?.showPicker(); }}>
+                                             <input ref={endTimeRef} type="time" step="900" className="w-full h-full bg-transparent text-xs font-bold text-gray-800 outline-none text-center cursor-pointer" 
                                                  value={generalInfo.endTime} onChange={(e) => setGeneralInfo({...generalInfo, endTime: e.target.value})} />
                                          </div>
                                     </div>
@@ -550,24 +647,28 @@ function NewTripContent() {
 
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
                         <div className="md:col-span-3 w-full">
-                            <label className="text-xs font-bold text-gray-500 block mb-1">שכבות גיל</label>
-                            <div className="flex items-center gap-2 bg-gray-50 p-1 rounded-xl border border-gray-200 h-[60px] focus-within:border-[#E91E63] focus-within:bg-white transition-colors">
-                                <select className="bg-transparent text-sm p-1 outline-none font-bold w-full cursor-pointer h-full text-gray-700" value={generalInfo.gradeFrom} onChange={(e) => setGeneralInfo({...generalInfo, gradeFrom: e.target.value})}>
+                            <label className="text-xs font-bold text-gray-500 block mb-1.5">שכבות גיל</label>
+                            <div className="flex items-center gap-2 bg-white p-1 rounded-lg border border-gray-200 h-[48px] focus-within:border-[#E91E63] focus-within:ring-1 focus-within:ring-[#E91E63] transition-colors">
+                                <select className="bg-transparent text-xs p-1 outline-none font-bold w-full cursor-pointer h-full text-gray-700" value={generalInfo.gradeFrom} onChange={(e) => setGeneralInfo({...generalInfo, gradeFrom: e.target.value})}>
                                     <option value="">מכיתה...</option>{GRADES.map(g => <option key={g} value={g}>כיתה {g}</option>)}
                                 </select>
                                 <span className="text-gray-300">-</span>
-                                <select className="bg-transparent text-sm p-1 outline-none font-bold w-full cursor-pointer h-full text-gray-700" value={generalInfo.gradeTo} onChange={(e) => setGeneralInfo({...generalInfo, gradeTo: e.target.value})}>
+                                <select className="bg-transparent text-xs p-1 outline-none font-bold w-full cursor-pointer h-full text-gray-700" value={generalInfo.gradeTo} onChange={(e) => setGeneralInfo({...generalInfo, gradeTo: e.target.value})}>
                                     <option value="">עד כיתה...</option>{GRADES.map(g => <option key={g} value={g}>כיתה {g}</option>)}
                                 </select>
                             </div>
                         </div>
 
                         <div className="md:col-span-2 w-full">
-                            <label className="text-xs font-bold text-gray-500 block mb-1">ס"ה כמות חניכים</label>
-                            <input type="number" className="w-full px-3 rounded-xl border border-gray-200 text-sm outline-none focus:border-[#E91E63] focus:bg-white h-[60px] transition-colors" value={generalInfo.chanichimCount} onChange={(e) => setGeneralInfo({...generalInfo, chanichimCount: e.target.value})} />
+                            <CustomInput 
+                                label="ס'ה כמות חניכים"
+                                type="number" 
+                                value={generalInfo.chanichimCount} 
+                                onChange={(e: any) => setGeneralInfo({...generalInfo, chanichimCount: e.target.value})} 
+                            />
                         </div>
 
-                        <div className="md:col-span-5 w-full relative bg-white rounded-xl border border-gray-100 p-2 min-h-[74px] flex flex-col justify-center group hover:border-pink-200 transition-colors">
+                        <div className="md:col-span-5 w-full relative bg-white rounded-xl border border-gray-200 p-2 min-h-[74px] flex flex-col justify-center group hover:border-[#E91E63] transition-colors">
                             <div className="flex items-center gap-2 px-1 mb-1">
                                 <label className="text-xs font-bold text-gray-500 group-hover:text-[#E91E63] transition-colors">
                                     {currentLogic.staffLabel}
@@ -594,14 +695,21 @@ function NewTripContent() {
                         </div>
 
                         <div className="md:col-span-2 w-full">
-                            <label className="text-xs font-bold text-gray-500 block mb-1">ס"ה משתתפים</label>
-                            <input type="number" className="w-full px-3 rounded-xl border border-gray-200 text-sm outline-none focus:border-[#E91E63] bg-[#E0F7FA] font-bold text-[#00BCD4] h-[60px] transition-colors" placeholder="חניכים + צוות" value={generalInfo.totalTravelers} onChange={(e) => setGeneralInfo({...generalInfo, totalTravelers: e.target.value})} />
+                            <CustomInput 
+                                label="ס'ה משתתפים"
+                                type="number" 
+                                className="bg-[#E0F7FA] font-bold text-[#00BCD4]"
+                                placeholder="חניכים + צוות" 
+                                value={generalInfo.totalTravelers} 
+                                onChange={(e: any) => setGeneralInfo({...generalInfo, totalTravelers: e.target.value})} 
+                            />
                         </div>
                     </div>
                   </div>
                 </section>
 
                 <section className="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-visible relative z-10 mb-8 animate-fadeIn">
+                   {/* ... Timeline (Schedule) Section ... */}
                    <div className="bg-[#00BCD4] text-white h-12 flex items-center px-6 font-bold text-lg shadow-sm justify-between rounded-t-3xl">
                        <div className="flex items-center gap-2"><MapPin size={20}/> <span>{currentLogic.timelineTitle}</span></div>
                        <span className="text-xs bg-white/20 px-3 py-1 rounded-full">{timeline.length} שורות</span>
@@ -618,6 +726,7 @@ function NewTripContent() {
                           return (
                             <div key={item.id} className={`border rounded-xl overflow-hidden bg-white transition-all group shadow-sm hover:shadow-md ${isMissingLicense ? 'border-red-300 ring-1 ring-red-100' : 'border-gray-200 hover:border-[#E91E63]'}`}>
                                 <div className="flex flex-col md:flex-row items-start md:items-center gap-4 p-4 cursor-pointer" onClick={() => setExpandedItem(isExpanded ? null : item.id)}>
+                                    {/* ... Timeline Item Header ... */}
                                     <div className="flex items-center gap-4 w-full md:w-auto">
                                         <div className={`p-3 rounded-xl text-white shadow-sm`} style={{backgroundColor: colorClass}}><CatIcon size={20} /></div>
                                         <div className="text-xs font-bold w-24 text-gray-500 bg-gray-50 border px-2 py-1.5 rounded-lg text-center flex flex-col justify-center">
@@ -676,7 +785,7 @@ function NewTripContent() {
                                                          {item.insuranceFile ? <a href={item.insuranceFile.url} target="_blank" rel="noreferrer" className="text-green-700 font-bold hover:underline flex items-center gap-1"><LinkIcon size={12}/> {item.insuranceFile.name}</a> : <span className="text-red-500 font-bold">חסר קובץ!</span>}
                                                      </div>
                                                      <label className="cursor-pointer p-2 bg-white border border-gray-200 rounded-lg hover:border-[#E91E63] text-gray-400 hover:text-[#E91E63] transition-colors shadow-sm">
-                                                         {uploadingFileId === `${item.id}_insurance` ? <Loader2 size={16} className="animate-spin"/> : <FileUp size={16}/>}
+                                                         {isUploadingInsurance ? <Loader2 size={16} className="animate-spin" /> : <FileUp size={16}/>}
                                                          <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => handleExistingLineDualUpload(e, item.id, 'insurance')} disabled={!!uploadingFileId} />
                                                      </label>
                                                  </div>
@@ -701,28 +810,29 @@ function NewTripContent() {
                                     </div>
                                 </div>
                                 <div className="md:col-span-2 relative w-full">
-                                    <label className="text-[10px] font-bold text-gray-400 mb-1 block">מיקום</label>
-                                    <div className="relative">
-                                        <input type="text" className={`w-full text-sm p-3 rounded-xl border outline-none h-[48px] transition-colors ${currentLine.locationType === 'branch' ? 'bg-pink-50 border-pink-200 text-[#E91E63] font-bold cursor-not-allowed' : 'bg-gray-50 border-gray-200 focus:border-[#E91E63] focus:bg-white'}`} placeholder="הזן מיקום" value={currentLine.locationValue} readOnly={currentLine.locationType === 'branch'} 
-                                            onFocus={() => { if (currentLine.locationType !== 'branch') setShowLocationSuggestions(true); }}
-                                            onChange={e => { setCurrentLine({...currentLine, locationValue: e.target.value, locationType: 'custom'}); setShowLocationSuggestions(true); }}
-                                            onBlur={() => setTimeout(() => setShowLocationSuggestions(false), 200)}
-                                        />
-                                        {currentLine.locationType === 'branch' && (
-                                            <div onClick={() => setCurrentLine({...currentLine, locationValue: '', locationType: 'custom'})} className="absolute top-full right-0 mt-1 text-[10px] text-red-400 font-bold cursor-pointer hover:text-red-600 hover:underline z-10 w-full text-center">לחץ להזנת מיקום אחר</div>
-                                        )}
-                                        {showLocationSuggestions && currentLine.locationType !== 'branch' && (
-                                            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto">
-                                                <div className="p-2 text-xs font-bold text-[#E91E63] hover:bg-pink-50 cursor-pointer border-b border-gray-100 flex items-center gap-2" onClick={() => setCurrentLine({...currentLine, locationValue: 'בסניף הקבוע', locationType: 'branch'})}><Home size={14} />הסניף הקבוע</div>
-                                                {currentLine.locationValue.length >= 1 && ISRAEL_CITIES.filter(city => city.includes(currentLine.locationValue) && city !== currentLine.locationValue).map(city => (<div key={city} className="p-2 text-xs text-gray-700 hover:bg-gray-50 cursor-pointer border-b border-gray-50" onClick={() => setCurrentLine({...currentLine, locationValue: city, locationType: 'city'})}>{city}</div>))}
-                                            </div>
-                                        )}
-                                    </div>
+                                    <CustomInput 
+                                        label="מיקום"
+                                        placeholder="הזן מיקום"
+                                        value={currentLine.locationValue}
+                                        readOnly={currentLine.locationType === 'branch'}
+                                        onFocus={() => { if (currentLine.locationType !== 'branch') setShowLocationSuggestions(true); }}
+                                        onChange={(e: any) => { setCurrentLine({...currentLine, locationValue: e.target.value, locationType: 'custom'}); setShowLocationSuggestions(true); }}
+                                        onBlur={() => setTimeout(() => setShowLocationSuggestions(false), 200)}
+                                    />
+                                    {currentLine.locationType === 'branch' && (
+                                        <div onClick={() => setCurrentLine({...currentLine, locationValue: '', locationType: 'custom'})} className="absolute top-full right-0 mt-1 text-[10px] text-red-400 font-bold cursor-pointer hover:text-red-600 hover:underline z-10 w-full text-center">לחץ להזנת מיקום אחר</div>
+                                    )}
+                                    {showLocationSuggestions && currentLine.locationType !== 'branch' && (
+                                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto">
+                                            <div className="p-2 text-xs font-bold text-[#E91E63] hover:bg-pink-50 cursor-pointer border-b border-gray-100 flex items-center gap-2" onClick={() => setCurrentLine({...currentLine, locationValue: 'בסניף הקבוע', locationType: 'branch'})}><Home size={14} />הסניף הקבוע</div>
+                                            {currentLine.locationValue.length >= 1 && ISRAEL_CITIES.filter(city => city.includes(currentLine.locationValue) && city !== currentLine.locationValue).map(city => (<div key={city} className="p-2 text-xs text-gray-700 hover:bg-gray-50 cursor-pointer border-b border-gray-50" onClick={() => setCurrentLine({...currentLine, locationValue: city, locationType: 'city'})}>{city}</div>))}
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="md:col-span-5 flex flex-col md:flex-row gap-2 w-full">
                                     <div className="flex-1 relative">
-                                        <label className="text-[10px] font-bold text-gray-400 mb-1 block">התרחשות</label>
-                                        <div className="w-full text-xs p-2 rounded-xl border border-gray-200 hover:border-[#E91E63] bg-gray-50 hover:bg-white cursor-pointer h-[48px] flex items-center justify-between px-3 transition-all" onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}>
+                                        <label className="text-[10px] font-bold text-gray-400 mb-1.5 block">התרחשות</label>
+                                        <div className="w-full text-xs p-2 rounded-lg border border-gray-200 hover:border-[#E91E63] bg-white cursor-pointer h-[60px] flex items-center justify-between px-3 transition-all" onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}>
                                             <span className={`font-bold ${currentLine.category ? 'text-gray-800' : 'text-gray-400'}`}>{CATEGORIES[currentLine.category]?.label || 'בחר...'}</span><ChevronDown size={16} className="text-gray-400" />
                                         </div>
                                         {showCategoryDropdown && (
@@ -736,11 +846,11 @@ function NewTripContent() {
                                         {showCategoryDropdown && <div className="fixed inset-0 z-[90] cursor-default" onClick={() => setShowCategoryDropdown(false)}></div>}
                                     </div>
                                     <div className="flex-[1.5] relative">
-                                        <label className="text-[10px] font-bold text-gray-400 mb-1 block">פירוט ההתרחשות</label>
+                                        <label className="text-[10px] font-bold text-gray-400 mb-1.5 block">פירוט ההתרחשות</label>
                                         {currentLine.subCategory === 'אחר' ? (
-                                            <div className="relative"><input type="text" className="w-full text-xs p-2 rounded-xl border border-gray-200 focus:border-[#E91E63] outline-none bg-white h-[48px]" placeholder="פרט..." autoFocus value={currentLine.otherDetail} onChange={e => setCurrentLine({...currentLine, otherDetail: e.target.value})} /><div className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 cursor-pointer font-bold" onClick={() => setCurrentLine({...currentLine, subCategory: ''})}>X</div></div>
+                                            <div className="relative"><CustomInput placeholder="פרט..." autoFocus value={currentLine.otherDetail} onChange={(e: any) => setCurrentLine({...currentLine, otherDetail: e.target.value})} /><div className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 cursor-pointer font-bold" onClick={() => setCurrentLine({...currentLine, subCategory: ''})}>X</div></div>
                                         ) : (
-                                            <><div className={`w-full text-xs p-2 rounded-xl border border-gray-200 h-[48px] flex items-center justify-between px-3 transition-all ${!currentLine.category ? 'bg-gray-100 cursor-not-allowed opacity-50' : 'hover:border-[#E91E63] bg-gray-50 hover:bg-white cursor-pointer'}`} onClick={() => { if(currentLine.category) setShowSubCategoryDropdown(!showSubCategoryDropdown) }}><span className={`font-bold ${currentLine.subCategory ? 'text-gray-800' : 'text-gray-400'}`}>{currentLine.subCategory || (currentLine.category ? 'בחר פירוט...' : '-')}</span><ChevronDown size={16} className="text-gray-400" /></div>
+                                            <><div className={`w-full text-xs p-2 rounded-lg border border-gray-200 h-[60px] flex items-center justify-between px-3 transition-all ${!currentLine.category ? 'bg-gray-100 cursor-not-allowed opacity-50' : 'hover:border-[#E91E63] bg-white cursor-pointer'}`} onClick={() => { if(currentLine.category) setShowSubCategoryDropdown(!showSubCategoryDropdown) }}><span className={`font-bold ${currentLine.subCategory ? 'text-gray-800' : 'text-gray-400'}`}>{currentLine.subCategory || (currentLine.category ? 'בחר פירוט...' : '-')}</span><ChevronDown size={16} className="text-gray-400" /></div>
                                             {showSubCategoryDropdown && currentLine.category && (
                                                 <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-2xl z-[100] overflow-hidden max-h-48 overflow-y-auto">{CATEGORIES[currentLine.category]?.options.map((opt: any) => (<div key={opt.label} className="p-3 text-xs text-gray-700 hover:bg-pink-50 hover:text-[#E91E63] cursor-pointer border-b border-gray-50 font-bold transition-colors" onClick={() => { setCurrentLine({...currentLine, subCategory: opt.label}); setShowSubCategoryDropdown(false); }}>{opt.label}</div>))}</div>
                                             )}
@@ -751,17 +861,17 @@ function NewTripContent() {
                                 <div className="md:col-span-4 flex gap-2 items-end w-full">
                                     {currentLine.subCategory === 'לינת מבנה' ? (
                                         <div className="flex-grow flex flex-col md:flex-row gap-2">
-                                            <div className="flex-1"><label className="text-[10px] font-bold text-red-400 mb-1 block">שם המקום/כתובת (חובה)</label><input type="text" className="w-full text-xs p-3 rounded-xl border border-red-200 bg-red-50 focus:border-red-400 focus:bg-white outline-none h-[48px]" placeholder="שם המקום/כתובת" value={currentLine.otherDetail} onChange={e => setCurrentLine({...currentLine, otherDetail: e.target.value})} /></div>
-                                            <div className="flex-1"><label className="text-[10px] font-bold text-gray-400 mb-1 block">פרטים נוספים</label><input type="text" className="w-full text-xs p-3 rounded-xl border border-gray-200 focus:border-[#E91E63] outline-none bg-gray-50 focus:bg-white h-[48px]" placeholder="הערות..." value={currentLine.details} onChange={e => setCurrentLine({...currentLine, details: e.target.value})} /></div>
+                                            <div className="flex-1"><CustomInput label="שם המקום/כתובת (חובה)" placeholder="שם המקום/כתובת" value={currentLine.otherDetail} onChange={(e: any) => setCurrentLine({...currentLine, otherDetail: e.target.value})} /></div>
+                                            <div className="flex-1"><CustomInput label="פרטים נוספים" placeholder="הערות..." value={currentLine.details} onChange={(e: any) => setCurrentLine({...currentLine, details: e.target.value})} /></div>
                                         </div>
                                     ) : (
                                         <div className="flex-grow relative w-full">
-                                            <div className="flex justify-between items-end mb-1"><label className="text-[10px] font-bold text-gray-400 block">{currentLine.category === 'hiking' ? 'פירוט המסלול' : 'פרטים נוספים'}</label>{currentLine.category === 'hiking' && (<a href="https://mokedteva.co.il/InfoCenter/TrackWizard" target="_blank" rel="noreferrer" className="text-[10px] font-bold text-[#E91E63] flex items-center gap-1 hover:underline"><LinkIcon size={10} />לכניסה לאשף המסלולים של מוקד טבע</a>)}</div>
-                                            <input type="text" className="w-full text-xs p-3 rounded-xl border border-gray-200 focus:border-[#E91E63] outline-none bg-gray-50 focus:bg-white h-[48px]" placeholder={currentLine.category === 'hiking' ? 'מס\' המסלול וכו\'' : 'פרטים נוספים...'} value={currentLine.details} onChange={e => setCurrentLine({...currentLine, details: e.target.value})} />
+                                            <div className="flex justify-between items-end mb-1.5"><label className="text-[10px] font-bold text-gray-400 block">{currentLine.category === 'hiking' ? 'פירוט המסלול' : 'פרטים נוספים'}</label>{currentLine.category === 'hiking' && (<a href="https://mokedteva.co.il/InfoCenter/TrackWizard" target="_blank" rel="noreferrer" className="text-[10px] font-bold text-[#E91E63] flex items-center gap-1 hover:underline"><LinkIcon size={10} />לכניסה לאשף המסלולים של מוקד טבע</a>)}</div>
+                                            <CustomInput placeholder={currentLine.category === 'hiking' ? 'מס\' המסלול וכו\'' : 'פרטים נוספים...'} value={currentLine.details} onChange={(e: any) => setCurrentLine({...currentLine, details: e.target.value})} />
                                         </div>
                                     )}
                                     <div className="w-full md:w-auto mt-2 md:mt-0">
-                                        <button onClick={handleAddLine} className="bg-[#8BC34A] hover:bg-[#7CB342] text-white h-[48px] w-full md:w-[48px] rounded-xl flex items-center justify-center shadow-lg transition-all active:scale-95 flex-shrink-0 mb-[1px]" title="לאישור השורה ופתיחת שורה חדשה">
+                                        <button onClick={handleAddLine} className="bg-[#8BC34A] hover:bg-[#7CB342] text-white h-[60px] w-full md:w-[60px] rounded-lg flex items-center justify-center shadow-lg transition-all active:scale-95 flex-shrink-0 mb-[1px]" title="לאישור השורה ופתיחת שורה חדשה">
                                             <Check size={28} strokeWidth={3} />
                                             <span className="md:hidden mr-2 font-bold">הוסף שורה ללו"ז</span>
                                         </button>
@@ -799,6 +909,89 @@ function NewTripContent() {
                    </div>
                 </section>
 
+                {/* --- אזור הוספת אחראי (הוזז לפה) --- */}
+                <section className="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-visible relative z-10 mb-8 animate-fadeIn">
+                    <div className="bg-[#00BCD4] text-white h-12 flex items-center px-6 font-bold text-lg shadow-sm gap-2 rounded-t-3xl">
+                       <UserPlus size={20} />
+                       <span>{getStaffTitle('title')}</span>
+                    </div>
+                    <div className="p-6">
+                        
+                        {/* פרטי האחראי הראשי (קריאה בלבד + לינק לעריכה) */}
+                        <div className="mb-6">
+                            <div className="flex items-center justify-between mb-3">
+                                {/* בוטל הכיתוב "אחראי ראשי" לבקשתך */}
+                                <div className="text-xs text-gray-400 font-bold">הפרטים נשאבים מהפרופיל האישי</div>
+                                <button 
+                                    onClick={handleGoToProfile} 
+                                    className="text-[10px] font-bold text-[#E91E63] hover:underline flex items-center gap-1"
+                                >
+                                    <Edit2 size={12}/> לעדכון פרטים בפרופיל
+                                </button>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                                <CustomInput label="שם מלא (כפי שמופיע בת.ז)" value={generalInfo.coordName} readOnly icon={<User size={14}/>} />
+                                <CustomInput label="תעודת זהות" value={generalInfo.coordId} readOnly icon={<CreditCard size={14}/>} />
+                                <CustomInput label="תאריך לידה" type="date" value={generalInfo.coordDob} readOnly />
+                                <CustomInput label="טלפון" type="tel" value={generalInfo.coordPhone} readOnly icon={<Phone size={14}/>} />
+                                <CustomInput label="אימייל" type="email" value={generalInfo.coordEmail} readOnly icon={<Mail size={14}/>} className="text-left" dir="ltr" />
+                            </div>
+                        </div>
+
+                        {/* קו מפריד */}
+                        <div className="h-px bg-gray-100 my-6"></div>
+
+                        {/* אחראי נוסף */}
+                        {generalInfo.secondaryStaffObj ? (
+                            <div className="bg-green-50 p-4 rounded-xl border border-green-100 flex items-center justify-between">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-10 h-10 rounded-full bg-green-200 text-green-700 flex items-center justify-center font-bold text-lg">
+                                        {generalInfo.secondaryStaffObj.name.charAt(0)}
+                                    </div>
+                                    <div>
+                                        <div className="font-bold text-gray-800 text-sm">{generalInfo.secondaryStaffObj.name} <span className="text-xs font-normal text-gray-500">({generalInfo.secondaryStaffObj.role})</span></div>
+                                        <div className="text-xs text-gray-400 mt-0.5 flex gap-2">
+                                            <span>{generalInfo.secondaryStaffObj.phone}</span> • 
+                                            <span>{generalInfo.secondaryStaffObj.idNumber}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button onClick={handleRemoveStaff} className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors" title="הסר אחראי">
+                                    <Trash2 size={18}/>
+                                </button>
+                            </div>
+                        ) : (
+                            !showAddStaffForm ? (
+                                <button onClick={() => setShowAddStaffForm(true)} className="w-full py-4 border border-dashed border-gray-300 rounded-xl text-gray-400 font-bold hover:border-[#E91E63] hover:text-[#E91E63] hover:bg-pink-50 transition-all flex items-center justify-center gap-2 group text-sm">
+                                    <Plus size={18}/> {getStaffTitle('additional')} (אופציונלי)
+                                </button>
+                            ) : (
+                                <div className="bg-gray-50 p-5 rounded-xl border border-gray-200 animate-fadeIn">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <span className="text-xs font-bold text-gray-500">פרטי {getStaffTitle('additional')} (כל השדות חובה)</span>
+                                        <button onClick={() => setShowAddStaffForm(false)}><X size={18} className="text-gray-400"/></button>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
+                                        <CustomInput label="שם מלא" icon={<User size={14}/>} value={newStaffData.name} onChange={(e: any) => setNewStaffData({...newStaffData, name: e.target.value})} />
+                                        <CustomInput label="תפקיד בארגון" icon={<Briefcase size={14}/>} value={newStaffData.role} onChange={(e: any) => setNewStaffData({...newStaffData, role: e.target.value})} />
+                                        <CustomInput label="תעודת זהות" icon={<CreditCard size={14}/>} value={newStaffData.idNumber} onChange={(e: any) => setNewStaffData({...newStaffData, idNumber: e.target.value})} />
+                                        <CustomInput label="תאריך לידה" type="date" value={newStaffData.dob} onChange={(e: any) => setNewStaffData({...newStaffData, dob: e.target.value})} />
+                                        <CustomInput label="טלפון" icon={<Phone size={14}/>} type="tel" value={newStaffData.phone} onChange={(e: any) => setNewStaffData({...newStaffData, phone: e.target.value})} />
+                                        <CustomInput label="אימייל" icon={<Mail size={14}/>} type="email" value={newStaffData.email} onChange={(e: any) => setNewStaffData({...newStaffData, email: e.target.value})} className="text-left" dir="ltr"/>
+                                    </div>
+                                    <div className="flex justify-end">
+                                        <button onClick={handleSaveStaff} disabled={isVerifyingStaff} className="bg-[#E91E63] text-white px-6 py-3 rounded-lg font-bold hover:bg-pink-600 transition-colors shadow-md text-xs flex items-center gap-2 h-[48px]">
+                                            {isVerifyingStaff ? <Loader2 size={16} className="animate-spin"/> : <CheckCircle size={16}/>}
+                                            {isVerifyingStaff ? 'בודק...' : 'שמור אחראי'}
+                                        </button>
+                                    </div>
+                                </div>
+                            )
+                        )}
+                    </div>
+                </section>
+
                 <section className="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-hidden mb-24 animate-fadeIn">
                     <div className="bg-[#00BCD4] text-white h-12 flex items-center px-6 font-bold text-lg shadow-sm gap-2">
                        <MessageSquare size={20} />
@@ -806,11 +999,11 @@ function NewTripContent() {
                     </div>
                     <div className="p-6">
                          <label className="block text-sm font-bold text-gray-700 mb-2">משהו שחשוב לך שנדע</label>
-                         <textarea className="w-full p-4 rounded-xl bg-gray-50 border border-gray-200 outline-none focus:border-[#E91E63] focus:ring-1 focus:ring-[#E91E63] min-h-[100px] resize-y" placeholder="דגשים מיוחדים, בקשות וכו'..." value={generalInfo.generalComments} onChange={(e) => setGeneralInfo({...generalInfo, generalComments: e.target.value})}></textarea>
+                         <textarea className="w-full p-4 rounded-xl bg-white border border-gray-200 outline-none focus:border-[#E91E63] focus:ring-1 focus:ring-[#E91E63] min-h-[100px] resize-y" placeholder="דגשים מיוחדים, בקשות וכו'..." value={generalInfo.generalComments} onChange={(e) => setGeneralInfo({...generalInfo, generalComments: e.target.value})}></textarea>
                     </div>
                 </section>
                 
-                {/* Footer Actions - דביק למטה במובייל, ובמחשב מתחיל משמאל לסרגל */}
+                {/* Footer Actions */}
                 <div className="fixed bottom-0 left-0 right-0 md:right-56 bg-white/90 backdrop-blur-md border-t border-gray-100 p-4 z-40 transition-all">
                     <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-end gap-3">
                         {isUrgentError && <div className="bg-red-50 text-red-600 px-4 py-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-2"><AlertTriangle size={16}/> תאריך היציאה קרוב מדי!</div>}
