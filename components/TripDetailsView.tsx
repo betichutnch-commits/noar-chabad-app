@@ -57,21 +57,16 @@ const DateBox = ({ dateStr }: { dateStr: string }) => {
     );
 };
 
-// --- הגדרת ה-Props שהרכיב מקבל ---
 interface TripDetailsViewProps {
     trip: any;
-    profile?: any; // אופציונלי (לא קיים בציבורי)
-    isEditable: boolean; // האם להציג כפתורי עריכה?
-    isPublic: boolean; // האם זה דף ציבורי?
-    
-    // פעולות (Callbacks)
+    profile?: any;
+    isEditable: boolean;
+    isPublic: boolean;
     onBack?: () => void;
     onEditTrip?: () => void;
     onEditStaff?: () => void;
     onDeleteStaff?: () => void;
     onSaveStaff?: () => void;
-    
-    // State עבור הוספת צוות (רלוונטי רק לדף פנימי)
     isAddingStaff?: boolean;
     setIsAddingStaff?: (val: boolean) => void;
     newStaffData?: any;
@@ -89,7 +84,6 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
     const timeline = d.timeline || [];
     const typeConfig = TRIP_TYPES_CONFIG.find(t => t.id === d.tripType) || TRIP_TYPES_CONFIG[4];
     
-    // זיהוי מגדר לפי מחלקה
     const deptName = trip.department || '';
     const isFemale = deptName.includes('בת מלך') || deptName.includes('בנות חב"ד') || deptName.includes('בנות חב״ד');
     
@@ -100,7 +94,6 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
     const secondStaffTitle = isFemale ? 'אחראית נוספת' : 'אחראי נוסף';
     const namePlaceholder = "שם מלא כפי שמופיע בתעודת זהות";
 
-    // תצוגת תפקיד
     let subRoleDisplay = '';
     if (trip.branch === 'מטה') {
         subRoleDisplay = `צוות מטה • ${trip.department || ''}`;
@@ -112,11 +105,9 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
     const missingDocsCount = timeline.filter((t: any) => t.requiresLicense && (!t.licenseFile || !t.insuranceFile)).length;
     const durationDays = calculateDuration(trip.start_date, d.endDate);
 
-    // לוגיקה להצגת כרטיס/טופס צוות משני
     const showSecondaryStaffCard = d.secondaryStaffObj && (!isAddingStaff);
     const showAddStaffForm = isEditable && !isPublic && (isAddingStaff || (!d.secondaryStaffObj && setIsAddingStaff));
 
-    // Badge סטטוס
     const getStatusBadge = (status: string) => {
         const styles: any = {
             approved: { text: 'מאושר', bg: 'bg-green-100', textCol: 'text-green-700', icon: CheckCircle },
@@ -135,12 +126,24 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
     };
 
     const handlePrint = () => window.print();
+
+    // --- תיקון: יצירת קישור ציבורי תמיד ---
     const handleShare = async () => {
+        // בניית הקישור הציבורי באופן יזום
+        const origin = typeof window !== 'undefined' && window.location.origin ? window.location.origin : '';
+        const publicUrl = `${origin}/share/trip/${trip.id}`;
+
         if (navigator.share) {
-            try { await navigator.share({ title: trip.name, text: trip.name, url: window.location.href }); } catch (err) {}
+            try { 
+                await navigator.share({ 
+                    title: trip.name, 
+                    text: `פרטי טיול: ${trip.name}`, 
+                    url: publicUrl // משתף את הקישור הציבורי
+                }); 
+            } catch (err) {}
         } else {
-            navigator.clipboard.writeText(window.location.href);
-            alert('הקישור הועתק');
+            navigator.clipboard.writeText(publicUrl); // מעתיק את הקישור הציבורי
+            alert('הקישור הציבורי הועתק ללוח!');
         }
     };
 
@@ -270,13 +273,11 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                                 <div><span className="block font-black text-[#00BCD4] text-lg">{trip.coordinator_name}</span><span className="text-xs font-bold text-gray-500">{subRoleDisplay}</span></div>
                             </div>
                             
-                            {/* מידע רגיש מוצג רק אם זה לא ציבורי */}
                             {(!isPublic && profile?.official_name) && (<div className="flex items-center gap-3 p-3 bg-gray-50 border-b border-white"><CreditCard size={16} className="text-gray-400"/><div><span className="text-[10px] text-gray-400 block font-bold">שם מלא (ת.ז)</span><span className="block font-bold text-gray-700">{profile.official_name} {profile.last_name}</span></div></div>)}
                             {(!isPublic && profile?.identity_number) && (<div className="flex items-center gap-3 p-3 bg-gray-50 border-b border-white"><Hash size={16} className="text-gray-400"/><div><span className="text-[10px] text-gray-400 block font-bold">תעודת זהות</span><span className="block font-bold text-gray-800">{profile.identity_number}</span></div></div>)}
                             
                             <div className="flex items-center gap-3 p-3 bg-gray-50 border-b border-white"><Phone size={16} className="text-gray-400"/><div><span className="text-[10px] text-gray-400 block font-bold">טלפון</span><span className="block font-bold text-gray-800">{d.phone || '-'}</span></div></div>
                             
-                            {/* אימייל רק אם לא ציבורי */}
                             {!isPublic && (
                                 <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-b-xl overflow-hidden"><Mail size={16} className="text-gray-400 shrink-0"/><div className="overflow-hidden"><span className="text-[10px] text-gray-400 block font-bold">אימייל</span><span className="block font-bold text-gray-800 truncate">{profile?.email || '-'}</span></div></div>
                             )}
@@ -296,7 +297,6 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                                 <div className="bg-purple-50 p-3 rounded-xl border border-purple-100 text-sm">
                                     <div className="font-bold text-purple-900 mb-1 flex justify-between">{d.secondaryStaffObj.name}<span className="text-[10px] bg-white/50 px-2 py-0.5 rounded text-purple-500">{d.secondaryStaffObj.role}</span></div>
                                     <div className="mt-2 text-xs text-purple-600 flex flex-col gap-1">
-                                        {/* מסתיר ת"ז בציבורי */}
                                         {!isPublic && <div className="flex items-center gap-1"><Hash size={10}/> {d.secondaryStaffObj.idNumber}</div>}
                                         <div className="flex items-center gap-1"><Phone size={10}/> {d.secondaryStaffObj.phone}</div>
                                         {!isPublic && <div className="flex items-center gap-1"><Mail size={10}/> {d.secondaryStaffObj.email}</div>}
@@ -305,7 +305,6 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                             </div>
                         )}
 
-                        {/* טופס הוספה (רק בפנימי) */}
                         {showAddStaffForm && setNewStaffData && setIsAddingStaff && (
                             <div className="mt-4 pt-4 border-t border-gray-100">
                                 <div className="animate-fadeIn bg-gray-50 p-3 rounded-xl border border-gray-200">
@@ -322,7 +321,6 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                             </div>
                         )}
                         
-                        {/* כפתור הפתיחה לטופס אם הוא סגור */}
                         {isEditable && !isPublic && !isAddingStaff && !d.secondaryStaffObj && setIsAddingStaff && (
                              <div className="mt-4 pt-4 border-t border-gray-100">
                                 <button onClick={() => setIsAddingStaff(true)} className="w-full py-2 border border-dashed border-gray-300 rounded-xl text-xs font-bold text-gray-500 hover:text-[#00BCD4] flex items-center justify-center gap-1"><Plus size={14}/> {addStaffBtnLabel}</button>
