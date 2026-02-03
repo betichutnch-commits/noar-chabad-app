@@ -5,19 +5,18 @@ export const ISRAEL_CITIES = ["ירושלים", "תל אביב", "חיפה", "ר
 export const GRADES = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ז׳', 'ח׳', 'ט׳', 'י׳', 'י״א', 'י״ב'];
 export const STAFF_AGES = ['גיל 13-18 (מד"צים)', 'מעל גיל 18', 'הורים מלווים', 'אחר'];
 
-// --- הגדרות מחלקות (כאן התיקון!) ---
+// --- הגדרות מחלקות ---
 export const DEPARTMENTS_CONFIG: Record<string, { color: string; gender: 'male' | 'female' | 'mixed'; logo: string }> = {
   "בת מלך": { 
-      color: "border-pink-400 text-pink-600 bg-pink-50 hover:bg-pink-100", 
+      color: "border-[#E91E63] text-[#E91E63] bg-pink-50 hover:bg-pink-100", 
       gender: "female", 
       logo: "/logos/bat-melech.png" 
   },
   "בנות חב\"ד": { 
-      color: "border-pink-400 text-pink-600 bg-pink-50 hover:bg-pink-100", 
+      color: "border-[#E91E63] text-[#E91E63] bg-pink-50 hover:bg-pink-100", 
       gender: "female", 
       logo: "/logos/bnos-chabad.png" 
   },
-  // --- תיקון צבעים כאן: הפכנו מכחול לתכלת מותג ---
   "הפנסאים": { 
       color: "border-[#00BCD4] text-[#00BCD4] bg-cyan-50 hover:bg-cyan-100", 
       gender: "male", 
@@ -28,9 +27,8 @@ export const DEPARTMENTS_CONFIG: Record<string, { color: string; gender: 'male' 
       gender: "male", 
       logo: "/logos/temimim.png" 
   },
-  // ------------------------------------------------
   "מועדוני המעשים הטובים": { 
-      color: "border-green-400 text-green-600 bg-green-50 hover:bg-green-100", 
+      color: "border-[#8BC34A] text-[#558B2F] bg-[#F1F8E9] hover:bg-[#DCEDC8]", 
       gender: "mixed", 
       logo: "/logos/clubs.png" 
   }
@@ -55,29 +53,45 @@ export const TRIP_TYPES_CONFIG = [
 
 // --- קטגוריות לפעילויות ---
 export const CATEGORIES: any = { 
-  transport: { label: 'התניידות', icon: Bus, color: 'blue', options: [{ label: 'הליכה ביום', license: false }, { label: 'הליכה בלילה', license: false }, { label: 'נסיעה מאורגנת', license: false }, { label: 'תחבורה ציבורית', license: false }, { label: 'רכבת', license: false }, { label: 'רכבים פרטיים', license: false }, { label: 'אופניים', license: true }, { label: 'ג׳יפים', license: true }, { label: 'אחר', license: false }] }, 
-  hiking: { label: 'מסלול בטבע', icon: Navigation, color: 'emerald', options: [{ label: 'מסלול יום', license: false }, { label: 'מסלול לילה', license: false }, { label: 'טיול ג׳יפים', license: true }, { label: 'אחר', license: false }] }, 
-  attraction: { label: 'אטרקציה', icon: Ticket, color: 'pink', options: [{ label: 'פארק מים', license: true }, { label: 'קיאקים/רפטינג', license: true }, { label: 'שייט', license: true }, { label: 'בריכה', license: true }, { label: 'גלישה/סאפ', license: true }, { label: 'פארק חבלים', license: true }, { label: 'קיר טיפוס', license: true }, { label: 'טרקטורונים', license: true }, { label: 'פיינטבול', license: true }, { label: 'לונה פארק', license: true }, { label: 'קארטינג', license: true }, { label: 'מתקנים מתנפחים', license: true }, { label: 'איי ג\'אמפ', license: true }, { label: 'לייזר טאג', license: true }, { label: 'שייט טורנדו', license: true }, { label: 'מוזיאון', license: false }, { label: 'מרכז מבקרים', license: false }, { label: 'אתר מורשת', license: false }, { label: 'קבר צדיק', license: false }, { label: 'אחר', license: false }] }, 
-  food: { label: 'אוכל', icon: Utensils, color: 'yellow', options: [{ label: 'הכנה עצמית', license: false }, { label: 'אוכל קנוי', license: false }, { label: 'מארזים סגורים קנויים', license: false }, { label: 'אוכל ביתי מבושל', license: false }, { label: 'קייטרינג', license: false }, { label: 'על האש', license: false }, { label: 'אחר', license: false }] }, 
-  settlement: { label: 'פעילות ביישוב/מבנה', icon: Home, color: 'indigo', options: [{ label: 'פעילות בסניף', license: false }, { label: 'אירוע באולם', license: false }, { label: 'פעילות בבית כנסת', license: false }, { label: 'פעילות בבית חב״ד', license: false }, { label: 'פעילות במתנ״ס', license: false }, { label: 'פעילות בבית פרטי', license: false }, { label: 'פעילות בשטח פתוח', license: false }, { label: 'פעילות בשטח מגודר תחת כיפת השמיים', license: false }, { label: 'פארק/גינה', license: false }, { label: 'כנס', license: false }, { label: 'אחר', license: false }] },
-  sleeping: { label: 'לינה', icon: Tent, color: 'purple', options: [{ label: 'לינת מבנה', license: false }, { label: 'לינת שטח', license: true }, { label: 'אחר', license: false }] }, 
-  other: { label: 'אחר', icon: HelpCircle, color: 'gray', options: [{ label: 'פעילות כללית', license: false }, { label: 'טקס / התכנסות', license: false }, { label: 'זמן חופשי', license: false }, { label: 'אחר', license: false }] } 
+  transport: { label: 'התניידות', icon: Bus, options: [{ label: 'הליכה ביום', license: false }, { label: 'הליכה בלילה', license: false }, { label: 'נסיעה מאורגנת', license: false }, { label: 'תחבורה ציבורית', license: false }, { label: 'רכבת', license: false }, { label: 'רכבים פרטיים', license: false }, { label: 'אופניים', license: true }, { label: 'ג׳יפים', license: true }, { label: 'אחר', license: false }] }, 
+  hiking: { label: 'מסלול בטבע', icon: Navigation, options: [{ label: 'מסלול יום', license: false }, { label: 'מסלול לילה', license: false }, { label: 'טיול ג׳יפים', license: true }, { label: 'אחר', license: false }] }, 
+  attraction: { label: 'אטרקציה', icon: Ticket, options: [{ label: 'פארק מים', license: true }, { label: 'קיאקים/רפטינג', license: true }, { label: 'שייט', license: true }, { label: 'בריכה', license: true }, { label: 'גלישה/סאפ', license: true }, { label: 'פארק חבלים', license: true }, { label: 'קיר טיפוס', license: true }, { label: 'טרקטורונים', license: true }, { label: 'פיינטבול', license: true }, { label: 'לונה פארק', license: true }, { label: 'קארטינג', license: true }, { label: 'מתקנים מתנפחים', license: true }, { label: 'איי ג\'אמפ', license: true }, { label: 'לייזר טאג', license: true }, { label: 'שייט טורנדו', license: true }, { label: 'מוזיאון', license: false }, { label: 'מרכז מבקרים', license: false }, { label: 'אתר מורשת', license: false }, { label: 'קבר צדיק', license: false }, { label: 'אחר', license: false }] }, 
+  food: { label: 'אוכל', icon: Utensils, options: [{ label: 'הכנה עצמית', license: false }, { label: 'אוכל קנוי', license: false }, { label: 'מארזים סגורים קנויים', license: false }, { label: 'אוכל ביתי מבושל', license: false }, { label: 'קייטרינג', license: false }, { label: 'על האש', license: false }, { label: 'אחר', license: false }] }, 
+  settlement: { label: 'פעילות ביישוב/מבנה', icon: Home, options: [{ label: 'פעילות בסניף', license: false }, { label: 'אירוע באולם', license: false }, { label: 'פעילות בבית כנסת', license: false }, { label: 'פעילות בבית חב״ד', license: false }, { label: 'פעילות במתנ״ס', license: false }, { label: 'פעילות בבית פרטי', license: false }, { label: 'פעילות בשטח פתוח', license: false }, { label: 'פעילות בשטח מגודר תחת כיפת השמיים', license: false }, { label: 'פארק/גינה', license: false }, { label: 'כנס', license: false }, { label: 'אחר', license: false }] },
+  sleeping: { label: 'לינה', icon: Tent, options: [{ label: 'לינת מבנה', license: false }, { label: 'לינת שטח', license: true }, { label: 'אחר', license: false }] }, 
+  other: { label: 'אחר', icon: HelpCircle, options: [{ label: 'פעילות כללית', license: false }, { label: 'טקס / התכנסות', license: false }, { label: 'זמן חופשי', license: false }, { label: 'אחר', license: false }] } 
 };
 
-// --- הגדרות עיצוב לקטגוריות (לשימוש בדף פרטי הטיול) ---
-export const DEFAULT_STYLE = { icon: HelpCircle, label: 'כללי', bg: 'bg-gray-500', text: 'text-gray-600', light: 'bg-gray-50', border: 'border-gray-100' };
+export const DEFAULT_STYLE = { icon: HelpCircle, label: 'כללי', pastelBg: 'bg-gray-100', darkText: 'text-gray-600', border: 'border-gray-200' };
+
 export const CATEGORY_STYLES: any = { 
-    transport: { icon: Bus, color: 'blue', label: 'התניידות', bg: 'bg-blue-500', text: 'text-blue-600', light: 'bg-blue-50', border: 'border-blue-100' }, 
-    hiking: { icon: Navigation, color: 'emerald', label: 'מסלול בטבע', bg: 'bg-emerald-500', text: 'text-emerald-600', light: 'bg-emerald-50', border: 'border-emerald-100' }, 
-    attraction: { icon: Ticket, color: 'pink', label: 'אטרקציה', bg: 'bg-pink-500', text: 'text-pink-600', light: 'bg-pink-50', border: 'border-pink-100' }, 
-    food: { icon: Utensils, color: 'yellow', label: 'אוכל', bg: 'bg-yellow-500', text: 'text-yellow-600', light: 'bg-yellow-50', border: 'border-yellow-100' }, 
-    settlement: { icon: Home, color: 'indigo', label: 'פעילות במבנה / יישוב', bg: 'bg-indigo-500', text: 'text-indigo-600', light: 'bg-indigo-50', border: 'border-indigo-100' }, 
-    sleeping: { icon: Tent, color: 'purple', label: 'לינה', bg: 'bg-purple-500', text: 'text-purple-600', light: 'bg-purple-50', border: 'border-purple-100' }, 
+    transport: { icon: Bus, label: 'התניידות', pastelBg: 'bg-[#E3F2FD]', darkText: 'text-[#1565C0]', border: 'border-[#BBDEFB]' }, 
+    hiking: { icon: Navigation, label: 'מסלול בטבע', pastelBg: 'bg-[#E8F5E9]', darkText: 'text-[#2E7D32]', border: 'border-[#C8E6C9]' }, 
+    attraction: { icon: Ticket, label: 'אטרקציה', pastelBg: 'bg-[#FCE4EC]', darkText: 'text-[#C2185B]', border: 'border-[#F8BBD0]' }, 
+    food: { icon: Utensils, label: 'אוכל', pastelBg: 'bg-[#FFF3E0]', darkText: 'text-[#EF6C00]', border: 'border-[#FFE0B2]' }, 
+    settlement: { icon: Home, label: 'פעילות במבנה', pastelBg: 'bg-[#E8EAF6]', darkText: 'text-[#283593]', border: 'border-[#C5CAE9]' }, 
+    sleeping: { icon: Tent, label: 'לינה', pastelBg: 'bg-[#F3E5F5]', darkText: 'text-[#6A1B9A]', border: 'border-[#E1BEE7]' }, 
     other: DEFAULT_STYLE 
 };
 
-// --- צבעים כלליים ---
+// הפונקציה שהייתה חסרה והוחזרה
 export const getColorHex = (colorName: string) => {
-    const map: any = { blue: '#00BCD4', emerald: '#8BC34A', pink: '#E91E63', yellow: '#FFC107', indigo: '#3F51B5', purple: '#9C27B0', gray: '#9E9E9E', cyan: '#00BCD4', green: '#8BC34A' };
+    // מיפוי צבעים (לשימוש בדף הזנת טיול)
+    if (!colorName) return '#00BCD4';
+    
+    // אם כבר קיבלנו קוד צבע
+    if (colorName.startsWith('#')) return colorName;
+
+    const map: any = { 
+        blue: '#00BCD4', 
+        emerald: '#8BC34A', 
+        pink: '#E91E63', 
+        yellow: '#FFC107', 
+        indigo: '#3F51B5', 
+        purple: '#9C27B0', 
+        gray: '#9E9E9E', 
+        cyan: '#00BCD4', 
+        green: '#8BC34A' 
+    };
     return map[colorName] || '#00BCD4';
 };
