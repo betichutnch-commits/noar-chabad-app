@@ -2,18 +2,16 @@
 
 import React from 'react'
 import { 
-  Loader2, Calendar, Users, Clock, ArrowRight, 
-  FileText, ShieldCheck, AlertTriangle, CheckCircle, 
-  Share2, Printer, Phone, User, Paperclip, MapPin, 
-  Mail, CreditCard, Plus, Briefcase, 
-  Hash, Tent, Info, X, Edit2, Trash2
+  CheckCircle, Clock, AlertTriangle, FileText, 
+  Printer, Share2, Users, MapPin, Tent, Info, 
+  User, CreditCard, Hash, Phone, Mail, 
+  Briefcase, Edit2, Trash2, Plus, X, Paperclip, ShieldCheck,
+  ArrowRight // <-- הוספתי את זה
 } from 'lucide-react'
-import { CATEGORY_STYLES, TRIP_TYPES_CONFIG } from '@/lib/constants'
+import { TRIP_TYPES_CONFIG } from '@/lib/constants'
 import { formatHebrewDateRange, formatHebrewDate } from '@/lib/dateUtils'
 
-// --- פונקציות עזר פנימיות ---
-
-// פורמט תאריך: 23.02.26
+// --- פונקציות עזר ---
 const formatDateShortYear = (dateStr: string) => {
     if (!dateStr) return '';
     const date = new Date(dateStr);
@@ -59,21 +57,17 @@ const DateBox = ({ dateStr }: { dateStr: string }) => {
     );
 };
 
-// --- הגדרת ה-Props שהרכיב מקבל ---
+// --- Props ---
 interface TripDetailsViewProps {
     trip: any;
-    profile?: any; // אופציונלי (לא קיים בציבורי)
-    isEditable: boolean; // האם להציג כפתורי עריכה?
-    isPublic: boolean; // האם זה דף ציבורי?
-    
-    // פעולות (Callbacks)
+    profile?: any;
+    isEditable: boolean;
+    isPublic: boolean;
     onBack?: () => void;
     onEditTrip?: () => void;
     onEditStaff?: () => void;
     onDeleteStaff?: () => void;
     onSaveStaff?: () => void;
-    
-    // State עבור הוספת צוות (רלוונטי רק לדף פנימי)
     isAddingStaff?: boolean;
     setIsAddingStaff?: (val: boolean) => void;
     newStaffData?: any;
@@ -91,7 +85,7 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
     const timeline = d.timeline || [];
     const typeConfig = TRIP_TYPES_CONFIG.find(t => t.id === d.tripType) || TRIP_TYPES_CONFIG[4];
     
-    // זיהוי מגדר לפי מחלקה
+    // זיהוי מגדר
     const deptName = trip.department || '';
     const isFemale = deptName.includes('בת מלך') || deptName.includes('בנות חב"ד') || deptName.includes('בנות חב״ד');
     
@@ -102,19 +96,26 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
     const secondStaffTitle = isFemale ? 'אחראית נוספת' : 'אחראי נוסף';
     const namePlaceholder = "שם מלא כפי שמופיע בתעודת זהות";
 
-    // תצוגת תפקיד
+    // --- לוגיקה משופרת לתצוגת תפקיד (HQ Fix) ---
     let subRoleDisplay = '';
-    if (trip.branch === 'מטה') {
+    
+    // בדיקה 1: האם הסניף מוגדר כ"מטה" או דומה לזה
+    const isBranchHQ = trip.branch === 'מטה' || (trip.branch || '').includes('הנהלה');
+    
+    // בדיקה 2: האם הפרופיל (אם קיים) הוא של איש צוות מטה
+    const isProfileHQ = profile?.role === 'admin' || profile?.role === 'dept_staff' || profile?.role === 'safety_admin';
+
+    if (isBranchHQ || isProfileHQ) {
         subRoleDisplay = `צוות מטה • ${trip.department || ''}`;
     } else {
         const roleBase = isFemale ? 'רכזת סניף' : 'רכז סניף';
-        subRoleDisplay = `${roleBase} • ${trip.branch || ''}`;
+        const branchName = trip.branch || '';
+        subRoleDisplay = `${roleBase} • ${branchName}`;
     }
 
     const missingDocsCount = timeline.filter((t: any) => t.requiresLicense && (!t.licenseFile || !t.insuranceFile)).length;
     const durationDays = calculateDuration(trip.start_date, d.endDate);
 
-    // Badge סטטוס
     const getStatusBadge = (status: string) => {
         const styles: any = {
             approved: { text: 'מאושר', bg: 'bg-green-100', textCol: 'text-green-700', icon: CheckCircle },
@@ -133,51 +134,32 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
     };
 
     const handlePrint = () => window.print();
-    
-    // שיתוף: תמיד יוצר קישור ציבורי
     const handleShare = async () => {
         const origin = typeof window !== 'undefined' && window.location.origin ? window.location.origin : '';
         const publicUrl = `${origin}/share/trip/${trip.id}`;
-
         if (navigator.share) {
-            try { 
-                await navigator.share({ 
-                    title: trip.name, 
-                    text: `פרטי טיול: ${trip.name}`, 
-                    url: publicUrl 
-                }); 
-            } catch (err) {}
+            try { await navigator.share({ title: trip.name, text: trip.name, url: publicUrl }); } catch (err) {}
         } else {
             navigator.clipboard.writeText(publicUrl);
             alert('הקישור הציבורי הועתק ללוח!');
         }
     };
 
-    // --- לוגיקה מתוקנת להצגת רכיבי צוות נוסף ---
-    
-    // 1. כרטיס קיים: מוצג אם יש נתונים ואנחנו לא במצב הוספה
+    // לוגיקה להצגת רכיבים
     const showSecondaryStaffCard = d.secondaryStaffObj && !isAddingStaff;
-
-    // 2. טופס הוספה: מוצג רק אם אנחנו במצב הוספה (isAddingStaff = true) ויש לנו את הפונקציות
     const showAddStaffForm = isEditable && !isPublic && isAddingStaff && setNewStaffData && setIsAddingStaff;
-    
-    // 3. כפתור הוספה (+): מוצג רק אם אין כרטיס ואין טופס פתוח
     const showAddButton = isEditable && !isPublic && !isAddingStaff && !d.secondaryStaffObj && setIsAddingStaff;
-
 
     return (
         <div className="animate-fadeIn pb-32 max-w-[1600px] mx-auto print:p-0">
             
             {!isPublic && onBack && (
-                <button 
-                    onClick={onBack} 
-                    className="inline-flex items-center gap-2 text-gray-400 hover:text-gray-600 mb-6 transition-colors font-bold text-sm print:hidden"
-                >
+                <button onClick={onBack} className="inline-flex items-center gap-2 text-gray-400 hover:text-gray-600 mb-6 transition-colors font-bold text-sm print:hidden">
                     <ArrowRight size={18}/> חזרה
                 </button>
             )}
 
-            {/* --- Hero Card --- */}
+            {/* --- Hero --- */}
             <div className="bg-white rounded-[32px] border border-gray-200 shadow-sm overflow-hidden mb-8 print:shadow-none print:border-none">
                 <div className={`h-auto py-6 md:h-32 ${typeConfig.bg} relative overflow-hidden flex items-center px-4 md:px-8`}>
                     <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
@@ -187,9 +169,7 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                                 {React.createElement(typeConfig.icon, { size: 36, className: typeConfig.text })}
                             </div>
                             <div>
-                                <div className={`text-sm md:text-xl font-black uppercase tracking-wider mb-1 ${typeConfig.text} opacity-90 drop-shadow-sm`}>
-                                    {d.tripType}
-                                </div>
+                                <div className={`text-sm md:text-xl font-black uppercase tracking-wider mb-1 ${typeConfig.text} opacity-90 drop-shadow-sm`}>{d.tripType}</div>
                                 <h1 className="text-xl md:text-4xl font-black text-gray-900 leading-none">{trip.name}</h1>
                             </div>
                         </div>
@@ -198,7 +178,6 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                 </div>
 
                 <div className="p-4 md:p-6 grid grid-cols-2 md:grid-cols-7 gap-4 md:gap-6 divide-y md:divide-y-0 md:divide-x divide-x-reverse divide-gray-100">
-                    {/* Dates */}
                     <div className="col-span-2 md:col-span-2 text-center md:text-right pl-0 md:pl-2 flex flex-col justify-center">
                         <div className="bg-gray-50 border border-gray-200 rounded-2xl p-3 flex flex-col gap-3">
                             <div className="flex justify-between items-center w-full gap-1">
@@ -220,14 +199,11 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                             </div>
                         </div>
                     </div>
-
-                    {/* Stats */}
                     <div className="text-center md:text-right px-2 flex flex-col justify-center pt-2 md:pt-0"><span className="text-xs font-bold text-gray-400 block mb-1">שכבות</span><div className="font-black text-gray-800 text-lg md:text-xl">כיתות {d.gradeFrom}-{d.gradeTo}</div></div>
                     <div className="text-center md:text-right px-2 flex flex-col justify-center pt-2 md:pt-0"><span className="text-xs font-bold text-gray-400 block mb-1">סה"כ {traineesLabel}</span><div className="font-black text-gray-800 text-lg md:text-xl flex items-center gap-2 justify-center md:justify-start"><Users size={18} className="text-[#00BCD4] shrink-0"/>{d.chanichimCount || '0'}</div></div>
                     <div className="text-center md:text-right px-2 md:col-span-1 flex flex-col justify-center pt-2 md:pt-0"><span className="text-xs font-bold text-gray-400 block mb-1">הרכב צוות</span><div className="flex flex-wrap gap-1 justify-center md:justify-start">{d.staffAges?.map((s: string, i: number) => (<span key={i} className="text-[10px] font-bold bg-gray-50 text-gray-500 px-1.5 py-0.5 rounded border border-gray-100 truncate max-w-full">{s}</span>))}</div></div>
                     <div className="text-center md:text-right px-2 flex flex-col justify-center pt-2 md:pt-0"><span className="text-xs font-bold text-gray-400 block mb-1">{participantsTitle}</span><div className="font-black text-gray-800 text-lg md:text-xl flex items-center gap-2 justify-center md:justify-start"><Users size={18} className="text-[#00BCD4] shrink-0"/>{d.totalTravelers}</div><div className="text-[10px] text-gray-400 mt-0.5">כולל צוות</div></div>
                     
-                    {/* Actions */}
                     <div className="col-span-2 md:col-span-1 text-center md:text-right pr-0 md:pr-4 flex flex-row md:flex-col justify-center gap-2 print:hidden pt-2 md:pt-0">
                          <button onClick={handlePrint} className="flex-1 md:w-full bg-gray-50 hover:bg-gray-100 text-gray-600 py-2 md:py-1.5 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-2"><Printer size={14}/> הדפסה</button>
                          <button onClick={handleShare} className="flex-1 md:w-full bg-gray-50 hover:bg-gray-100 text-gray-600 py-2 md:py-1.5 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-2"><Share2 size={14}/> שיתוף</button>
@@ -243,7 +219,8 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                         <div className="absolute top-4 bottom-4 right-[27px] w-[2px] bg-gray-200 z-0"></div>
                         <div className="space-y-4 relative z-10">
                             {timeline.map((item: any, i: number) => {
-                                const catStyle = CATEGORY_STYLES[item.category] || CATEGORY_STYLES.other;
+                                // תיקון קטן: שימוש ב-require כדי למנוע בעיות רינדור דינמיות בצד שרת/לקוח
+                                const catStyle = require('@/lib/constants').CATEGORY_STYLES[item.category] || require('@/lib/constants').CATEGORY_STYLES.other;
                                 const Icon = catStyle.icon;
                                 const borderClass = getCategoryBorder(item.category);
                                 return (
@@ -294,14 +271,13 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                             {(!isPublic && profile?.official_name) && (<div className="flex items-center gap-3 p-3 bg-gray-50 border-b border-white"><CreditCard size={16} className="text-gray-400"/><div><span className="text-[10px] text-gray-400 block font-bold">שם מלא (ת.ז)</span><span className="block font-bold text-gray-700">{profile.official_name} {profile.last_name}</span></div></div>)}
                             {(!isPublic && profile?.identity_number) && (<div className="flex items-center gap-3 p-3 bg-gray-50 border-b border-white"><Hash size={16} className="text-gray-400"/><div><span className="text-[10px] text-gray-400 block font-bold">תעודת זהות</span><span className="block font-bold text-gray-800">{profile.identity_number}</span></div></div>)}
                             
-                            <div className="flex items-center gap-3 p-3 bg-gray-50 border-b border-white"><Phone size={16} className="text-gray-400"/><div><span className="text-[10px] text-gray-400 block font-bold">טלפון</span><span className="block font-bold text-gray-800">{d.phone || '-'}</span></div></div>
+                            <div className="flex items-center gap-3 p-3 bg-gray-50 border-b border-white"><Phone size={16} className="text-gray-400"/><div><span className="text-[10px] text-gray-400 block font-bold">טלפון</span><span className="block font-bold text-gray-800">{d.phone || profile?.phone || '-'}</span></div></div>
                             
                             {!isPublic && (
                                 <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-b-xl overflow-hidden"><Mail size={16} className="text-gray-400 shrink-0"/><div className="overflow-hidden"><span className="text-[10px] text-gray-400 block font-bold">אימייל</span><span className="block font-bold text-gray-800 truncate">{profile?.email || '-'}</span></div></div>
                             )}
                         </div>
 
-                        {/* כרטיס רכז נוסף (אם קיים) */}
                         {showSecondaryStaffCard && (
                             <div className="mt-4 pt-4 border-t border-gray-100 group">
                                 <div className="flex justify-between items-center mb-2">
@@ -324,15 +300,10 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                             </div>
                         )}
 
-                        {/* טופס הוספה - מופיע רק בלחיצה */}
                         {showAddStaffForm && (
                             <div className="mt-4 pt-4 border-t border-gray-100">
                                 <div className="animate-fadeIn bg-gray-50 p-3 rounded-xl border border-gray-200">
-                                    <div className="flex justify-between items-center mb-2">
-                                        <span className="text-xs font-bold text-gray-500">{addStaffBtnLabel}</span>
-                                        {/* כפתור סגירה */}
-                                        <button onClick={() => setIsAddingStaff && setIsAddingStaff(false)}><X size={14} className="text-gray-400"/></button>
-                                    </div>
+                                    <div className="flex justify-between items-center mb-2"><span className="text-xs font-bold text-gray-500">{addStaffBtnLabel}</span><button onClick={() => setIsAddingStaff && setIsAddingStaff(false)}><X size={14} className="text-gray-400"/></button></div>
                                     <div className="space-y-2">
                                         <input type="text" className="w-full p-2 text-xs border rounded-lg bg-white" placeholder={namePlaceholder} value={newStaffData.name} onChange={e => setNewStaffData && setNewStaffData({...newStaffData, name: e.target.value})}/>
                                         <input type="text" className="w-full p-2 text-xs border rounded-lg bg-white" placeholder="תפקיד בארגון" value={newStaffData.role} onChange={e => setNewStaffData && setNewStaffData({...newStaffData, role: e.target.value})}/>
@@ -345,7 +316,6 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                             </div>
                         )}
                         
-                        {/* כפתור הפתיחה לטופס - נעלם כשהטופס פתוח */}
                         {showAddButton && (
                              <div className="mt-4 pt-4 border-t border-gray-100">
                                 <button onClick={() => setIsAddingStaff && setIsAddingStaff(true)} className="w-full py-2 border border-dashed border-gray-300 rounded-xl text-xs font-bold text-gray-500 hover:text-[#00BCD4] flex items-center justify-center gap-1"><Plus size={14}/> {addStaffBtnLabel}</button>
