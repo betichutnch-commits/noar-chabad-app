@@ -1,26 +1,24 @@
 "use client"
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, Suspense } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { Header } from '@/components/layout/Header'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { 
   User, Mail, Building2, Save, CheckCircle, Loader2, Camera, 
-  ShieldCheck, Lock, Trash2, Calendar, AlertTriangle, ArrowRight, Info // <-- הוספתי את Info כאן
+  ShieldCheck, Lock, Trash2, Calendar, AlertTriangle, ArrowRight, Info
 } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
-// פונקציית עזר לפרמוט תאריך לתצוגה עם סלאשים
 const formatDisplayDate = (dateStr: string) => {
     if (!dateStr) return '-';
     return dateStr.split('-').reverse().join('/');
 };
 
-export default function ProfilePage() {
+function ProfileContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  // אם הגענו מטופס טיול, הפרמטר הזה יהיה קיים
   const returnUrl = searchParams.get('returnUrl');
 
   const [loading, setLoading] = useState(true);
@@ -51,29 +49,38 @@ export default function ProfilePage() {
 
   useEffect(() => {
     const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        setUser(user);
-        const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-        const meta = user.user_metadata || {};
-        
-        setFormData({
-          officialName: profile?.official_name || meta.official_name || '',
-          lastName: profile?.last_name || meta.last_name || '',
-          idNumber: profile?.identity_number || meta.identity_number || '', 
-          birthDate: profile?.birth_date || meta.birth_date || '',
-          nickname: meta.nickname || '', 
-          fullNameAndMother: meta.full_name_mother || '',
-          contactEmail: profile?.email || meta.contact_email || user.email || '', 
-          phone: profile?.phone || meta.phone || '',
-          branchAddress: meta.branch_address || '',
-          startYear: profile?.start_year || meta.start_year || '', 
-          studentCount: meta.student_count || '',
-          staffCount: meta.staff_count || '',
-          additionalStaff: meta.additional_staff || '',
-          profileImage: profile?.avatar_url || meta.avatar_url || null
-        });
+      // בדיקה יסודית למניעת לופ טעינה
+      const { data, error } = await supabase.auth.getUser();
+      
+      if (error || !data?.user) {
+          // אם אין משתמש, נקה הכל ושלח להתחברות
+          await supabase.auth.signOut();
+          window.location.href = '/'; 
+          return;
       }
+
+      const currentUser = data.user;
+      setUser(currentUser);
+
+      const { data: profile } = await supabase.from('profiles').select('*').eq('id', currentUser.id).single();
+      const meta = currentUser.user_metadata || {};
+      
+      setFormData({
+        officialName: profile?.official_name || meta.official_name || '',
+        lastName: profile?.last_name || meta.last_name || '',
+        idNumber: profile?.identity_number || meta.identity_number || '', 
+        birthDate: profile?.birth_date || meta.birth_date || '',
+        nickname: meta.nickname || '', 
+        fullNameAndMother: meta.full_name_mother || '',
+        contactEmail: profile?.email || meta.contact_email || currentUser.email || '', 
+        phone: profile?.phone || meta.phone || '',
+        branchAddress: meta.branch_address || '',
+        startYear: profile?.start_year || meta.start_year || '', 
+        studentCount: meta.student_count || '',
+        staffCount: meta.staff_count || '',
+        additionalStaff: meta.additional_staff || '',
+        profileImage: profile?.avatar_url || meta.avatar_url || null
+      });
       setLoading(false);
     };
     getUser();
@@ -102,6 +109,7 @@ export default function ProfilePage() {
     setSaving(true);
     setSuccessMsg('');
     try {
+      // עדכון Metadata (לשימוש מיידי)
       await supabase.auth.updateUser({
         data: {
           official_name: formData.officialName,
@@ -121,6 +129,7 @@ export default function ProfilePage() {
         }
       });
       
+      // עדכון טבלת Profiles (לחיפושים וקישורים)
       if (user) {
           const updates = {
               id: user.id,
@@ -135,13 +144,12 @@ export default function ProfilePage() {
               start_year: formData.startYear, 
               updated_at: new Date()
           };
-          const { error } = await supabase.from('profiles').upsert(updates);
-          if (error) throw error;
+          await supabase.from('profiles').upsert(updates);
       }
 
       setSuccessMsg('הפרטים נשמרו בהצלחה!');
       
-      // אם הגענו מטיול - נחזור לשם, אחרת נרענן
+      // אם הגענו מטופס - נחזור לשם
       if (returnUrl) {
           setTimeout(() => { router.push(returnUrl); }, 1000);
       } else {
@@ -179,7 +187,6 @@ export default function ProfilePage() {
             </div>
         )}
 
-        {/* כרטיס עליון */}
         <section className="bg-white rounded-[32px] border border-gray-200 p-8 shadow-sm flex flex-col md:flex-row items-center gap-10 relative overflow-hidden">
             <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-[#00BCD4] to-[#8BC34A]"></div>
             
@@ -277,5 +284,13 @@ export default function ProfilePage() {
         )}
       </div>
     </>
+  )
+}
+
+export default function ProfilePage() {
+  return (
+    <Suspense fallback={<div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>}>
+       <ProfileContent />
+    </Suspense>
   )
 }

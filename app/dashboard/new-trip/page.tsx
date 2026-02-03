@@ -668,31 +668,38 @@ function NewTripContent() {
                             />
                         </div>
 
-                        <div className="md:col-span-5 w-full relative bg-white rounded-xl border border-gray-200 p-2 min-h-[74px] flex flex-col justify-center group hover:border-[#E91E63] transition-colors">
-                            <div className="flex items-center gap-2 px-1 mb-1">
-                                <label className="text-xs font-bold text-gray-500 group-hover:text-[#E91E63] transition-colors">
-                                    {currentLogic.staffLabel}
-                                </label>
-                                <span className="text-[10px] text-gray-400 font-normal">(ניתן לבחור מס' אפשרויות)</span>
-                            </div>
-                            
-                            <div className="flex flex-wrap gap-1 items-center">
-                                {STAFF_AGES.map(age => (
-                                    <button key={age} onClick={() => toggleStaffAge(age)} 
-                                        className={`px-2 py-1 rounded-full text-[10px] font-bold border transition-all flex items-center gap-1
-                                        ${generalInfo.staffAges.includes(age) ? 'bg-[#E91E63] text-white border-[#E91E63] shadow-sm' : 'bg-white text-gray-500 border-gray-100 hover:bg-gray-100'}`}>
-                                        {generalInfo.staffAges.includes(age) && <Check size={8}/>}
-                                        {age}
-                                    </button>
-                                ))} 
-                            </div>
+                        <div className="md:col-span-5 w-full bg-white rounded-xl border border-gray-200 p-2 flex flex-col justify-center group hover:border-[#E91E63] transition-all min-h-[74px]">
+    <div className="flex items-center gap-2 px-1 mb-1">
+        <label className="text-xs font-bold text-gray-500 group-hover:text-[#E91E63] transition-colors">
+            {currentLogic.staffLabel}
+        </label>
+        <span className="text-[10px] text-gray-400 font-normal">(ניתן לבחור מס' אפשרויות)</span>
+    </div>
+    
+    <div className="flex flex-wrap gap-1 items-center">
+        {STAFF_AGES.map(age => (
+            <button key={age} onClick={() => toggleStaffAge(age)} 
+                className={`px-2 py-1 rounded-full text-[10px] font-bold border transition-all flex items-center gap-1
+                ${generalInfo.staffAges.includes(age) ? 'bg-[#E91E63] text-white border-[#E91E63] shadow-sm' : 'bg-white text-gray-500 border-gray-100 hover:bg-gray-100'}`}>
+                {generalInfo.staffAges.includes(age) && <Check size={8}/>}
+                {age}
+            </button>
+        ))} 
+    </div>
 
-                            {generalInfo.staffAges.includes('אחר') && (
-                                <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-pink-200 p-2 rounded-xl shadow-lg z-50 animate-fadeIn">
-                                    <input type="text" placeholder="נא לפרט כאן..." className="w-full p-2 text-xs border-b border-gray-300 focus:border-[#E91E63] outline-none bg-gray-50 rounded" value={generalInfo.staffOther} onChange={(e) => setGeneralInfo({...generalInfo, staffOther: e.target.value})} autoFocus />
-                                </div>
-                            )}
-                        </div>
+    {generalInfo.staffAges.includes('אחר') && (
+        <div className="mt-2 w-full animate-fadeIn border-t border-gray-100 pt-2">
+            <input 
+                type="text" 
+                placeholder="נא לפרט כאן..." 
+                className="w-full p-2 text-xs border border-gray-200 focus:border-[#E91E63] outline-none bg-gray-50 rounded-lg" 
+                value={generalInfo.staffOther} 
+                onChange={(e) => setGeneralInfo({...generalInfo, staffOther: e.target.value})} 
+                autoFocus 
+            />
+        </div>
+    )}
+</div>
 
                         <div className="md:col-span-2 w-full">
                             <CustomInput 
