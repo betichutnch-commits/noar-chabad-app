@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { ManagerHeader } from '@/components/layout/ManagerHeader'
-import { Loader2, AlertCircle, CheckCircle, Clock, UserPlus } from 'lucide-react'
+import { Loader2, AlertCircle, CheckCircle, Clock, UserPlus, FileText, ArrowLeft, Shield, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
 
 export default function ManagerHomePage() {
@@ -13,18 +13,14 @@ export default function ManagerHomePage() {
   useEffect(() => {
     const fetchStats = async () => {
         try {
-            // 1. נתוני טיולים
             const { count: pendingTrips } = await supabase.from('trips').select('*', { count: 'exact', head: true }).eq('status', 'pending');
             const { count: approvedTrips } = await supabase.from('trips').select('*', { count: 'exact', head: true }).eq('status', 'approved');
             const { count: totalTrips } = await supabase.from('trips').select('*', { count: 'exact', head: true });
 
-            // 2. נתוני משתמשים (נרשמים חדשים)
-            // מביאים את כל המשתמשים ובודקים ידנית למי אין סטטוס או שהוא pending
             const { data: usersData } = await supabase.from('users_management_view').select('raw_user_meta_data');
-            
             const pendingUsersCount = usersData?.filter((u: any) => {
                 const status = u.raw_user_meta_data?.status;
-                return !status || status === 'pending'; // נחשב ממתין אם אין סטטוס או שהוא 'pending'
+                return !status || status === 'pending';
             }).length || 0;
 
             setStats({
@@ -43,70 +39,95 @@ export default function ManagerHomePage() {
     fetchStats();
   }, []);
 
-  if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-gray-400"/></div>;
+  if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
 
   return (
     <>
-      <ManagerHeader title="לוח בקרה ראשי" />
+      <ManagerHeader title="מרכז שליטה" />
       
-      <div className="p-4 md:p-10 animate-fadeIn pb-32 max-w-[100vw] overflow-x-hidden">
-        <header className="mb-10">
-            <h2 className="text-xl font-bold text-gray-500">תמונת מצב - ניהול מפעלים וטיולים</h2>
-        </header>
+      <div className="p-4 md:p-8 animate-fadeIn pb-32 max-w-[100vw] overflow-x-hidden md:max-w-7xl md:mx-auto">
+        
+        {/* כותרת קטנה ונקייה */}
+        <div className="flex items-center gap-2 mb-4 opacity-60">
+            <Shield size={16} />
+            <span className="text-xs font-bold uppercase tracking-wider">תמונת מצב יומית</span>
+        </div>
 
-        {/* שינינו את הגריד ל-4 עמודות כדי להכניס את כרטיס המשתמשים */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-             
-             {/* 1. כרטיס משתמשים חדשים (חדש!) */}
-             <Link href="/manager/users" className="group">
-                <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm hover:shadow-xl hover:border-orange-500 transition-all cursor-pointer relative overflow-hidden h-full">
-                    <div className="absolute top-0 right-0 w-2 h-full bg-orange-500"></div>
-                    <div className="flex justify-between items-start">
-                        <div>
-                            <div className="text-4xl font-black text-gray-800 mb-2">{stats.pendingUsers}</div>
-                            <div className="text-sm font-bold text-gray-500 group-hover:text-orange-600 transition-colors">נרשמים לאישור</div>
-                        </div>
-                        <div className="p-3 bg-orange-50 text-orange-500 rounded-2xl"><UserPlus size={24}/></div>
-                    </div>
-                </div>
-            </Link>
-
-             {/* 2. כרטיס טיולים ממתינים */}
-             <Link href="/manager/approvals" className="group">
-                <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm hover:shadow-xl hover:border-[#E91E63] transition-all cursor-pointer relative overflow-hidden h-full">
-                    <div className="absolute top-0 right-0 w-2 h-full bg-[#E91E63]"></div>
-                    <div className="flex justify-between items-start">
-                        <div>
-                            <div className="text-4xl font-black text-gray-800 mb-2">{stats.pendingTrips}</div>
-                            <div className="text-sm font-bold text-gray-500 group-hover:text-[#E91E63] transition-colors">טיולים לאישור</div>
-                        </div>
-                        <div className="p-3 bg-red-50 text-[#E91E63] rounded-2xl"><AlertCircle size={24}/></div>
-                    </div>
-                </div>
-            </Link>
+        {/* --- עיצוב חדש: סרגל נתונים מאוחד למחשב / גריד קומפקטי לנייד --- */}
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden mb-8">
             
-            {/* 3. כרטיס מאושרים */}
-             <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm">
-                <div className="flex justify-between items-start">
-                    <div>
-                        <div className="text-4xl font-black text-gray-800 mb-2">{stats.approvedTrips}</div>
-                        <div className="text-sm font-bold text-gray-500">טיולים שאושרו</div>
-                    </div>
-                    <div className="p-3 bg-green-50 text-green-600 rounded-2xl"><CheckCircle size={24}/></div>
-                </div>
-            </div>
+            {/* מבנה גריד שמשתנה דרמטית בין מסכים */}
+            <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-y md:divide-y-0 divide-gray-100 dir-ltr">
+                
+                {/* 1. ממתינים לאישור (הכי חשוב) */}
+                <Link href="/manager/approvals" className="group p-4 md:p-6 flex flex-col items-center justify-center hover:bg-red-50/50 transition-colors cursor-pointer text-center relative dir-rtl">
+                    <div className="text-[#E91E63] bg-red-50 p-2 rounded-xl mb-2 group-hover:scale-110 transition-transform"><AlertCircle size={20}/></div>
+                    <div className="text-2xl md:text-3xl font-black text-gray-800 leading-none mb-1">{stats.pendingTrips}</div>
+                    <div className="text-xs font-bold text-gray-400 group-hover:text-[#E91E63]">ממתינים לאישור</div>
+                    {stats.pendingTrips > 0 && <span className="absolute top-3 right-3 flex h-2.5 w-2.5 rounded-full bg-[#E91E63] animate-pulse"></span>}
+                </Link>
 
-            {/* 4. כרטיס סה"כ */}
-            <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm">
-                <div className="flex justify-between items-start">
-                    <div>
-                        <div className="text-4xl font-black text-gray-800 mb-2">{stats.totalTrips}</div>
-                        <div className="text-sm font-bold text-gray-500">סה"כ פעילות</div>
-                    </div>
-                    <div className="p-3 bg-blue-50 text-blue-500 rounded-2xl"><Clock size={24}/></div>
+                {/* 2. רכזים חדשים */}
+                <Link href="/manager/users" className="group p-4 md:p-6 flex flex-col items-center justify-center hover:bg-orange-50/50 transition-colors cursor-pointer text-center relative dir-rtl">
+                    <div className="text-orange-500 bg-orange-50 p-2 rounded-xl mb-2 group-hover:scale-110 transition-transform"><UserPlus size={20}/></div>
+                    <div className="text-2xl md:text-3xl font-black text-gray-800 leading-none mb-1">{stats.pendingUsers}</div>
+                    <div className="text-xs font-bold text-gray-400 group-hover:text-orange-500">רכזים חדשים</div>
+                    {stats.pendingUsers > 0 && <span className="absolute top-3 right-3 flex h-2.5 w-2.5 rounded-full bg-orange-500"></span>}
+                </Link>
+
+                {/* 3. אושרו */}
+                <Link href="/manager/approvals?filter=approved" className="group p-4 md:p-6 flex flex-col items-center justify-center hover:bg-green-50/50 transition-colors cursor-pointer text-center dir-rtl">
+                    <div className="text-green-600 bg-green-50 p-2 rounded-xl mb-2 group-hover:scale-110 transition-transform"><CheckCircle size={20}/></div>
+                    <div className="text-2xl md:text-3xl font-black text-gray-800 leading-none mb-1">{stats.approvedTrips}</div>
+                    <div className="text-xs font-bold text-gray-400 group-hover:text-green-600">טיולים שאושרו</div>
+                </Link>
+
+                {/* 4. סה"כ */}
+                <div className="group p-4 md:p-6 flex flex-col items-center justify-center hover:bg-gray-50 transition-colors text-center dir-rtl">
+                    <div className="text-gray-400 bg-gray-50 p-2 rounded-xl mb-2"><FileText size={20}/></div>
+                    <div className="text-2xl md:text-3xl font-black text-gray-800 leading-none mb-1">{stats.totalTrips}</div>
+                    <div className="text-xs font-bold text-gray-400">סה"כ פעילויות</div>
                 </div>
+
             </div>
         </div>
+
+        {/* קישורים מהירים - מעוצב כרשימה אלגנטית */}
+        <h3 className="text-lg font-bold text-gray-800 mb-4">גישה מהירה</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            
+            <Link href="/manager/inbox" className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between hover:border-[#00BCD4] hover:shadow-md transition-all group">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-cyan-50 flex items-center justify-center text-[#00BCD4]">
+                        <Clock size={20} />
+                    </div>
+                    <div>
+                        <div className="font-bold text-gray-800 text-sm">פניות והודעות</div>
+                        <div className="text-[10px] text-gray-400">צפייה בדיווחים וטיפול בפניות</div>
+                    </div>
+                </div>
+                <div className="bg-gray-50 p-2 rounded-full text-gray-400 group-hover:bg-[#00BCD4] group-hover:text-white transition-colors">
+                    <ArrowLeft size={16} />
+                </div>
+            </Link>
+
+            <Link href="/manager/users" className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between hover:border-purple-400 hover:shadow-md transition-all group">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-purple-50 flex items-center justify-center text-purple-600">
+                        <UserPlus size={20} />
+                    </div>
+                    <div>
+                        <div className="font-bold text-gray-800 text-sm">ניהול משתמשים</div>
+                        <div className="text-[10px] text-gray-400">אישור נרשמים והרשאות</div>
+                    </div>
+                </div>
+                <div className="bg-gray-50 p-2 rounded-full text-gray-400 group-hover:bg-purple-600 group-hover:text-white transition-colors">
+                    <ArrowLeft size={16} />
+                </div>
+            </Link>
+
+        </div>
+
       </div>
     </>
   )

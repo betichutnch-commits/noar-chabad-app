@@ -2,37 +2,36 @@
 
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { Bell, UserPlus } from 'lucide-react';
+import { Bell, X, UserPlus, Users } from 'lucide-react';
 import Link from 'next/link';
 
 export const ManagerHeader = ({ title }: { title: string }) => {
   const [user, setUser] = useState<any>(null);
   const [counts, setCounts] = useState({ newUsers: 0, newMessages: 0 });
+  const [isBellOpen, setIsBellOpen] = useState(false);
+  const [isUsersOpen, setIsUsersOpen] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
-      // 1. הבאת פרטי המנהל הנוכחי
       const { data: userData } = await supabase.auth.getUser();
       setUser(userData.user);
 
-      // 2. ספירת משתמשים חדשים הממתינים לאישור
-      // אנחנו מושכים את כל המשתמשים מה-VIEW ובודקים למי אין סטטוס או שהסטטוס הוא pending
+      // ספירת משתמשים חדשים
       const { data: usersData } = await supabase.from('users_management_view').select('raw_user_meta_data');
-      
       const pendingUsersCount = usersData?.filter((u: any) => {
           const status = u.raw_user_meta_data?.status;
           return !status || status === 'pending';
       }).length || 0;
 
-      // 3. ספירת הודעות שלא טופלו
+      // ספירת הודעות חדשות
       const { count: pendingMessagesCount } = await supabase
         .from('contact_messages')
         .select('*', { count: 'exact', head: true })
-        .neq('status', 'treated'); // כל מה שלא "טופל"
+        .neq('status', 'treated');
 
       setCounts({
-          newUsers: pendingUsersCount,
-          newMessages: pendingMessagesCount || 0
+        newUsers: pendingUsersCount,
+        newMessages: pendingMessagesCount || 0
       });
     };
 
@@ -40,45 +39,93 @@ export const ManagerHeader = ({ title }: { title: string }) => {
   }, []);
 
   return (
-    <header className="h-24 sticky top-0 z-40 px-8 flex items-center justify-between transition-all bg-white/90 backdrop-blur-md border-b border-gray-200">
+    <header className="hidden md:flex h-24 sticky top-0 z-40 px-8 items-center justify-between transition-all bg-[#F8F9FA]/90 backdrop-blur-md border-b border-gray-200">
       
-      {/* צד ימין: כותרת */}
+      {/* צד ימין: כותרת בלבד (ללא לוגו מחלקה) */}
       <div>
-        <h1 className="text-2xl font-black text-gray-800 tracking-tight">{title}</h1>
+          <h1 className="text-3xl font-bold text-gray-800 tracking-tight leading-none">
+              {title}
+          </h1>
+          <p className="text-sm text-gray-500 font-medium mt-1">
+              ממשק ניהול ובקרה
+          </p>
       </div>
       
-      {/* צד שמאל: כלים */}
-      <div className="flex items-center h-full gap-4">
+      {/* צד שמאל: כלים ופרופיל */}
+      <div className="flex items-center gap-6 relative">
         
-        {/* פעמון 1: אישור משתמשים חדשים */}
-        <Link href="/manager/users">
-            <button className="text-gray-400 hover:text-[#00BCD4] transition-colors relative p-2.5 bg-white rounded-xl border border-gray-100 shadow-sm group">
-                <UserPlus size={20} className="group-hover:scale-110 transition-transform"/>
-                
-                {/* נקודה כתומה רק אם יש משתמשים חדשים */}
+        {/* כפתור אישור משתמשים - עם חלונית קופצת */}
+        <div className="relative">
+            <button 
+                onClick={() => setIsUsersOpen(!isUsersOpen)}
+                className="text-gray-400 hover:text-purple-600 transition-colors relative p-3 bg-white rounded-2xl shadow-sm border border-gray-100 hover:border-purple-200 group" 
+                title="אישור משתמשים"
+            >
+                <UserPlus size={22} className="group-hover:scale-110 transition-transform"/>
                 {counts.newUsers > 0 && (
-                    <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-orange-500 text-[10px] text-white font-bold border border-white">
-                        {counts.newUsers}
-                    </span>
+                    <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-orange-500 rounded-full border-2 border-white animate-pulse"></span>
                 )}
             </button>
-        </Link>
 
-        {/* פעמון 2: התראות / הודעות */}
-        <Link href="/manager/inbox">
-            <button className="text-gray-400 hover:text-[#00BCD4] transition-colors relative p-2.5 bg-white rounded-xl border border-gray-100 shadow-sm group">
-                <Bell size={20} className="group-hover:rotate-12 transition-transform" />
-                
-                {/* נקודה אדומה רק אם יש הודעות חדשות */}
+            {/* חלונית נרשמים */}
+            {isUsersOpen && (
+                <div className="absolute top-full left-0 mt-4 bg-white rounded-2xl shadow-2xl border border-gray-100 w-80 overflow-hidden animate-fadeIn z-50">
+                    <div className="bg-purple-600 p-3 flex justify-between items-center text-white">
+                        <span className="text-sm font-bold flex items-center gap-2"><Users size={16}/> נרשמים חדשים</span>
+                        <button onClick={() => setIsUsersOpen(false)}><X size={16}/></button>
+                    </div>
+                    <div className="p-4 text-center">
+                        {counts.newUsers > 0 ? (
+                            <Link href="/manager/users" className="block p-3 bg-orange-50 rounded-xl mb-2 text-orange-800 font-bold hover:bg-orange-100 transition-colors border border-orange-100">
+                                {counts.newUsers} משתמשים ממתינים לאישור
+                            </Link>
+                        ) : (
+                            <p className="text-gray-400 text-sm">אין נרשמים חדשים כרגע</p>
+                        )}
+                        <Link href="/manager/users" className="block text-xs font-bold text-gray-500 hover:text-purple-600 mt-4 underline">
+                            לניהול המשתמשים
+                        </Link>
+                    </div>
+                </div>
+            )}
+        </div>
+
+        {/* פעמון התראות (הודעות) */}
+        <div className="relative">
+            <button 
+                onClick={() => setIsBellOpen(!isBellOpen)}
+                className="text-gray-400 hover:text-[#00BCD4] transition-colors relative p-3 bg-white rounded-2xl shadow-sm border border-gray-100 hover:border-[#00BCD4] group"
+            >
+                <Bell size={22} className="group-hover:rotate-12 transition-transform" />
                 {counts.newMessages > 0 && (
-                    <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] text-white font-bold border border-white">
-                        {counts.newMessages}
-                    </span>
+                    <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-[#E91E63] rounded-full border-2 border-white animate-pulse"></span>
                 )}
             </button>
-        </Link>
 
-        <div className="h-8 w-px bg-gray-200 mx-2"></div>
+            {/* חלונית ההתראות */}
+            {isBellOpen && (
+                <div className="absolute top-full left-0 mt-4 bg-white rounded-2xl shadow-2xl border border-gray-100 w-80 overflow-hidden animate-fadeIn z-50">
+                    <div className="bg-[#00BCD4] p-3 flex justify-between items-center text-white">
+                        <span className="text-sm font-bold">הודעות מערכת</span>
+                        <button onClick={() => setIsBellOpen(false)}><X size={16}/></button>
+                    </div>
+                    <div className="p-4 text-center">
+                        {counts.newMessages > 0 ? (
+                            <Link href="/manager/inbox" className="block p-3 bg-cyan-50 rounded-xl mb-2 text-cyan-800 font-bold hover:bg-cyan-100 transition-colors">
+                                ישנן {counts.newMessages} פניות הממתינות לטיפול
+                            </Link>
+                        ) : (
+                            <p className="text-gray-400 text-sm">אין הודעות חדשות</p>
+                        )}
+                        <Link href="/manager/inbox" className="block text-xs font-bold text-gray-500 hover:text-[#00BCD4] mt-4 underline">
+                            לכל ההודעות
+                        </Link>
+                    </div>
+                </div>
+            )}
+        </div>
+
+        <div className="h-10 w-px bg-gray-300 opacity-50 mx-2"></div>
 
         {/* פרופיל מנהל */}
         <Link href="/manager/profile">
@@ -88,12 +135,16 @@ export const ManagerHeader = ({ title }: { title: string }) => {
                         {user?.user_metadata?.full_name || 'מנהל מערכת'}
                     </div>
                     <div className="text-xs text-gray-500 font-medium">
-                        מטה ארצי
+                        מחלקת בטיחות ומפעלים
                     </div>
                 </div>
                 
-                <div className="w-10 h-10 rounded-xl bg-[#1E293B] flex items-center justify-center text-white font-bold text-lg shadow-md border-2 border-white ring-1 ring-gray-100 group-hover:scale-105 transition-transform">
-                {user?.user_metadata?.full_name?.[0] || 'M'}
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-gray-700 to-gray-900 flex items-center justify-center text-white font-bold text-xl shadow-lg border-[3px] border-white ring-1 ring-gray-100 shrink-0 overflow-hidden relative group-hover:scale-105 transition-transform">
+                    {user?.user_metadata?.avatar_url ? (
+                        <img src={user.user_metadata.avatar_url} alt="Profile" className="w-full h-full object-cover" />
+                    ) : (
+                        user?.user_metadata?.full_name?.[0] || 'M'
+                    )}
                 </div>
             </div>
         </Link>

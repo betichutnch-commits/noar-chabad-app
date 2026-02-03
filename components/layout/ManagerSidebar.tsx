@@ -18,17 +18,11 @@ export const ManagerSidebar = ({ isOpen = true, onClose }: SidebarProps) => {
   const pathname = usePathname();
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   
-  const [debugInfo, setDebugInfo] = useState({ detectedEmail: '', contactEmail: '' });
-
   useEffect(() => {
     const checkRole = async () => {
         const { data: { user } } = await supabase.auth.getUser();
         const ADMIN_EMAIL = 'avremihalperin@gmail.com'; 
-        const loginEmail = user?.email?.toLowerCase() || '';
-        const contactEmail = user?.user_metadata?.contact_email?.toLowerCase() || '';
-        setDebugInfo({ detectedEmail: loginEmail, contactEmail: contactEmail });
-
-        if (loginEmail === ADMIN_EMAIL || contactEmail === ADMIN_EMAIL) {
+        if (user?.email === ADMIN_EMAIL || user?.user_metadata?.contact_email === ADMIN_EMAIL) {
             setIsSuperAdmin(true);
         }
     };
@@ -55,44 +49,47 @@ export const ManagerSidebar = ({ isOpen = true, onClose }: SidebarProps) => {
 
   return (
     <>
+        {/* Overlay למובייל */}
         <div 
-            className={`fixed inset-0 bg-black/60 z-40 transition-opacity duration-300 md:hidden 
+            className={`fixed inset-0 bg-black/40 z-[90] transition-opacity duration-300 md:hidden backdrop-blur-sm
             ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
             onClick={onClose}
         ></div>
 
-        <aside className={`w-64 bg-[#1E293B] text-white h-screen fixed right-0 top-0 z-50 flex flex-col shadow-xl border-l border-gray-700 transition-transform duration-300
+        {/* סרגל צד לבן ונקי */}
+        <aside className={`w-64 bg-white h-screen fixed right-0 top-0 z-[100] flex flex-col shadow-2xl md:shadow-none border-l border-gray-200 transition-transform duration-300
             ${isOpen ? 'translate-x-0' : 'translate-x-full'} 
-            md:translate-x-0`}
+            md:translate-x-0 md:z-40`}
         >
           
-          <div className="h-32 flex flex-col items-center justify-center border-b border-gray-700 p-6 bg-[#0F172A] relative">
+          {/* Header - לבן ונקי */}
+          <div className="h-32 flex flex-col items-center justify-center p-6 relative border-b border-gray-100">
               
-              {/* כפתור סגירה - מודגש ולחיץ */}
               <button 
                 onClick={onClose} 
-                className="absolute top-4 left-4 md:hidden text-white hover:text-red-400 p-2 bg-white/10 rounded-full transition-colors z-50"
+                className="absolute top-4 left-4 md:hidden text-gray-400 hover:text-gray-600 p-2 rounded-full transition-colors z-50"
               >
                   <X size={24} />
               </button>
 
-              {/* לוגו - הורדנו את הפילטרים כדי שיראו את הלוגו המקורי */}
+              {/* הלוגו משתלב טבעית על הרקע הלבן */}
               <div className="relative w-full h-16 flex items-center justify-center mb-2">
                  <Image 
                     src="/logo.png" 
                     alt="Logo" 
-                    width={140} 
-                    height={70} 
-                    className="object-contain" // הורדנו את brightness-0 invert
+                    fill
+                    className="object-contain"
                     priority
                  />
               </div>
-              <div className="text-[10px] text-gray-400 font-bold bg-gray-800 px-3 py-1 rounded-full uppercase tracking-wider">
-                  ממשק ניהול בטיחות
+              
+              <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider bg-gray-50 px-3 py-1 rounded-full border border-gray-100">
+                  ממשק ניהול
               </div>
           </div>
 
-          <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+          {/* תפריט */}
+          <nav className="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto">
             {menuItems.map((item) => {
               const isActive = item.exact ? pathname === item.href : pathname?.startsWith(item.href);
               const Icon = item.icon;
@@ -102,7 +99,10 @@ export const ManagerSidebar = ({ isOpen = true, onClose }: SidebarProps) => {
                     href={item.href} 
                     onClick={() => { if(onClose) onClose() }}
                     className={`flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 font-bold text-sm 
-                    ${isActive ? 'bg-[#00BCD4] text-white shadow-lg shadow-cyan-900/20' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
+                    ${isActive 
+                        ? 'bg-[#00BCD4] text-white shadow-lg shadow-cyan-100' // פעיל: תכלת מותג עם צל
+                        : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900' // לא פעיל: אפור נקי
+                    }`}
                 >
                   <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
                   {item.label}
@@ -111,16 +111,10 @@ export const ManagerSidebar = ({ isOpen = true, onClose }: SidebarProps) => {
             })}
           </nav>
 
-          {!isSuperAdmin && (
-              <div className="bg-red-600 text-white text-[10px] p-2 text-center" dir="ltr">
-                  Login: {debugInfo.detectedEmail} <br/>
-                  Contact: {debugInfo.contactEmail}
-              </div>
-          )}
-
-          <div className="p-4 border-t border-gray-700 bg-[#0F172A]">
-            <button onClick={handleLogout} className="flex items-center gap-3 px-4 py-3.5 rounded-xl w-full text-red-400 hover:bg-red-900/20 transition-all font-bold text-sm">
-              <LogOut size={20} /> יציאה מאובטחת
+          {/* Footer */}
+          <div className="p-4 border-t border-gray-100 bg-gray-50/50">
+            <button onClick={handleLogout} className="flex items-center justify-center gap-3 px-4 py-3 rounded-xl w-full text-red-500 hover:bg-red-50 transition-all font-bold text-sm group">
+              <LogOut size={20} className="group-hover:-translate-x-1 transition-transform"/> יציאה מאובטחת
             </button>
           </div>
         </aside>

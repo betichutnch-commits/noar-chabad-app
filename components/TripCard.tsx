@@ -1,9 +1,11 @@
+"use client"
+
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { 
   CheckCircle, Clock, AlertTriangle, FileEdit, 
   MapPin, ArrowRight, Trash2, ChevronLeft
 } from 'lucide-react';
-import Link from 'next/link';
 import { CATEGORY_STYLES } from '@/lib/constants';
 import { formatHebrewDateRange } from '@/lib/dateUtils';
 
@@ -24,7 +26,6 @@ const getStatusConfig = (status: string) => {
     return config[status] || config.pending;
 };
 
-// צבעי מט (Matte Pastel)
 const getRibbonColor = (type: string) => {
     if (!type) return 'bg-slate-400'; 
     if (type === "טיול מחוץ לסניף") return 'bg-[#4DD0E1]'; 
@@ -34,6 +35,7 @@ const getRibbonColor = (type: string) => {
     return 'bg-slate-400';
 };
 
+// לוגיקה לתצוגת דסקטופ (ריבוע צד שמאל)
 const getSmartDateDisplay = (startStr: string, endStr: string) => {
     const start = new Date(startStr);
     const end = new Date(endStr || startStr);
@@ -47,24 +49,45 @@ const getSmartDateDisplay = (startStr: string, endStr: string) => {
     const eYear = end.getFullYear();
 
     if (start.getTime() === end.getTime()) {
-        return { 
-            top: `${sDay}`, 
-            bottom: `${sMonth < 10 ? '0'+sMonth : sMonth}/${sYear}` 
-        };
+        return { top: `${sDay}`, bottom: `${sMonth < 10 ? '0'+sMonth : sMonth}/${sYear}` };
     }
     if (sMonth === eMonth && sYear === eYear) {
-        return { 
-            top: `${sDay}-${eDay}`, 
-            bottom: `${sMonth < 10 ? '0'+sMonth : sMonth}/${sYear}` 
-        };
+        return { top: `${sDay}-${eDay}`, bottom: `${sMonth < 10 ? '0'+sMonth : sMonth}/${sYear}` };
     }
-    return {
-        top: `${sDay}/${sMonth}-${eDay}/${eMonth}`,
-        bottom: `${eYear}`
-    };
+    return { top: `${sDay}/${sMonth}-${eDay}/${eMonth}`, bottom: `${sYear}` };
+};
+
+// --- פונקציה חדשה לתצוגת מובייל תקנית (DD/MM/YYYY) ---
+const getMobileDateString = (startStr: string, endStr: string) => {
+    const start = new Date(startStr);
+    const end = new Date(endStr || startStr);
+
+    const sDay = start.getDate();
+    const sMonth = (start.getMonth() + 1).toString().padStart(2, '0');
+    const sYear = start.getFullYear();
+
+    const eDay = end.getDate();
+    const eMonth = (end.getMonth() + 1).toString().padStart(2, '0');
+    const eYear = end.getFullYear();
+
+    // אותו יום
+    if (start.getTime() === end.getTime()) {
+        return `${sDay}/${sMonth}/${sYear}`;
+    }
+    // אותו חודש ואותה שנה: 18-19/02/2026
+    if (sMonth === eMonth && sYear === eYear) {
+        return `${sDay}-${eDay}/${sMonth}/${sYear}`;
+    }
+    // אותה שנה, חודשים שונים
+    if (sYear === eYear) {
+        return `${sDay}/${sMonth} - ${eDay}/${eMonth}/${sYear}`;
+    }
+    // שנים שונות
+    return `${sDay}/${sMonth}/${sYear.toString().slice(-2)} - ${eDay}/${eMonth}/${eYear.toString().slice(-2)}`;
 };
 
 export const TripCard = ({ trip, onDeleteDraft, onCancelTrip }: TripCardProps) => {
+    const router = useRouter();
     const d = trip.details || {};
     const timeline = d.timeline || [];
     const status = getStatusConfig(trip.status);
@@ -74,14 +97,22 @@ export const TripCard = ({ trip, onDeleteDraft, onCancelTrip }: TripCardProps) =
     const isCancelled = trip.status === 'cancelled';
     
     const smartDate = getSmartDateDisplay(trip.start_date, d.endDate);
+    // שימוש בפונקציה החדשה למובייל
+    const mobileDateString = getMobileDateString(trip.start_date, d.endDate);
     const dateRangeHeb = formatHebrewDateRange(trip.start_date, d.endDate);
 
     const deptName = trip.department || ''; 
     const isFemale = deptName.includes('בת מלך') || deptName.includes('בנות חב"ד') || deptName.includes('בנות חב״ד');
     const participantsLabel = isFemale ? 'משתתפות' : 'משתתפים';
 
+    const handleCardClick = () => {
+        router.push(`/dashboard/trip/${trip.id}`);
+    };
+
     return (
-        <div className={`bg-white border border-gray-200 rounded-2xl md:rounded-l-2xl md:rounded-r-none shadow-sm hover:shadow-md transition-all relative overflow-hidden flex flex-col md:flex-row min-h-[140px]
+        <div 
+            onClick={handleCardClick}
+            className={`bg-white border border-gray-200 rounded-2xl md:rounded-l-2xl md:rounded-r-none shadow-sm hover:shadow-md transition-all relative overflow-hidden flex flex-col md:flex-row min-h-[140px] cursor-pointer
             ${isDraft ? 'border-dashed bg-gray-50/50' : ''}
             ${isPast || isCancelled ? 'opacity-75 grayscale-[0.1]' : ''}
         `}>
@@ -92,18 +123,20 @@ export const TripCard = ({ trip, onDeleteDraft, onCancelTrip }: TripCardProps) =
                     {d.tripType}
                 </div>
                 <div className="flex justify-between items-center p-3 bg-slate-50 border-b border-gray-100">
-                     <div className={`px-2.5 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1.5 ${status.bg} ${status.textCol}`}>
-                        <StatusIcon size={12}/> {status.text}
-                     </div>
-                     <div className="text-right flex flex-col items-end leading-tight">
-                         <div className="flex items-baseline gap-1.5 dir-ltr">
-                             <span className="text-sm font-black text-gray-800">{smartDate.top}</span>
-                             <span className="text-xs font-bold text-gray-500">{smartDate.bottom}</span>
-                         </div>
-                         <div className="text-[10px] text-gray-400 font-bold">
-                             {dateRangeHeb}
-                         </div>
-                     </div>
+                      {/* סטטוס מימין */}
+                      <div className={`px-2.5 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1.5 ${status.bg} ${status.textCol}`}>
+                         <StatusIcon size={12}/> {status.text}
+                      </div>
+                      
+                      {/* תאריך משמאל - מסודר ונקי */}
+                      <div className="text-left flex flex-col items-end gap-0.5">
+                          <span className="text-sm font-black text-gray-800 leading-none">
+                              {mobileDateString}
+                          </span>
+                          <span className="text-[10px] text-gray-400 font-bold">
+                              {dateRangeHeb}
+                          </span>
+                      </div>
                 </div>
             </div>
 
@@ -154,7 +187,6 @@ export const TripCard = ({ trip, onDeleteDraft, onCancelTrip }: TripCardProps) =
 
                 {/* רכבת */}
                 <div className="relative w-full">
-                    {/* תיקון: הסרתי את הגרדיאנט מימין (התחלה בעברית) והשארתי רק בשמאל (סוף) */}
                     <div className="absolute left-0 top-0 bottom-4 w-6 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none"></div>
 
                     <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-hide px-1 md:px-0 w-full items-stretch">
@@ -215,32 +247,33 @@ export const TripCard = ({ trip, onDeleteDraft, onCancelTrip }: TripCardProps) =
                 </div>
             </div>
 
-            {/* --- כפתורים --- */}
-            {/* תיקון: הסרת הקו המפריד (border-r נמחק) */}
+            {/* === כפתורים === */}
             <div className="flex flex-row md:flex-col justify-end p-3 gap-2 w-full md:w-32 shrink-0 bg-white border-t md:border-t-0 border-gray-100">
                 {isDraft ? (
                     <>
-                        <Link href={`/dashboard/new-trip?id=${trip.id}`} className="w-full">
-                            <button className="w-full py-2 bg-[#00BCD4] text-white rounded-lg text-xs font-bold hover:bg-cyan-600 transition-colors flex items-center justify-center gap-1 shadow-sm">
-                                <FileEdit size={14}/> עריכה
-                            </button>
-                        </Link>
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/new-trip?id=${trip.id}`); }} 
+                            className="w-full py-2 bg-[#00BCD4] text-white rounded-lg text-xs font-bold hover:bg-cyan-600 transition-colors flex items-center justify-center gap-1 shadow-sm"
+                        >
+                            <FileEdit size={14}/> עריכה
+                        </button>
                         {onDeleteDraft && (
-                            <button onClick={() => onDeleteDraft(trip.id)} className="w-full py-2 bg-white border border-red-100 text-red-500 rounded-lg text-xs font-bold hover:bg-red-50 hover:border-red-200 transition-colors flex items-center justify-center gap-1">
+                            <button onClick={(e) => { e.stopPropagation(); onDeleteDraft(trip.id); }} className="w-full py-2 bg-white border border-red-100 text-red-500 rounded-lg text-xs font-bold hover:bg-red-50 hover:border-red-200 transition-colors flex items-center justify-center gap-1">
                                 <Trash2 size={14}/> מחק
                             </button>
                         )}
                     </>
                 ) : (
                     <>
-                        <Link href={`/dashboard/trip/${trip.id}`} className="w-full">
-                            <button className="w-full py-2 bg-white border border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1">
-                                <ArrowRight size={14}/> לפרטים 
-                            </button>
-                        </Link>
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/trip/${trip.id}`); }}
+                            className="w-full py-2 bg-white border border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1"
+                        >
+                            <ArrowRight size={14}/> לפרטים 
+                        </button>
 
                         {onCancelTrip && !isPast && !isCancelled && (
-                            <button onClick={() => onCancelTrip(trip.id)} className="w-full py-2 bg-red-50 border border-red-100 text-red-600 rounded-lg text-xs font-bold hover:bg-red-100 transition-colors flex items-center justify-center gap-1">
+                            <button onClick={(e) => { e.stopPropagation(); onCancelTrip(trip.id); }} className="w-full py-2 bg-red-50 border border-red-100 text-red-600 rounded-lg text-xs font-bold hover:bg-red-100 transition-colors flex items-center justify-center gap-1">
                                 <Trash2 size={14}/> לביטול
                             </button>
                         )}
