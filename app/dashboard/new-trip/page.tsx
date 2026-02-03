@@ -603,7 +603,7 @@ function NewTripContent() {
                                   />
                             </div>
 
-                            <div className="flex-1 grid grid-cols-2 gap-4 w-full">
+                            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
                                 <div>
                                     <label className="block text-[10px] font-bold text-gray-400 mb-1 mr-1">התחלה</label>
                                     <div className="bg-white rounded-lg border border-gray-200 flex items-center h-[48px] focus-within:border-[#E91E63] focus-within:ring-1 focus-within:ring-[#E91E63] transition-colors overflow-hidden cursor-pointer" onClick={() => startDateRef.current?.showPicker()}>
