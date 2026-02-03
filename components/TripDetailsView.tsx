@@ -12,6 +12,8 @@ import { CATEGORY_STYLES, TRIP_TYPES_CONFIG } from '@/lib/constants'
 import { formatHebrewDateRange, formatHebrewDate } from '@/lib/dateUtils'
 
 // --- פונקציות עזר פנימיות ---
+
+// פורמט תאריך: 23.02.26
 const formatDateShortYear = (dateStr: string) => {
     if (!dateStr) return '';
     const date = new Date(dateStr);
@@ -57,16 +59,21 @@ const DateBox = ({ dateStr }: { dateStr: string }) => {
     );
 };
 
+// --- הגדרת ה-Props שהרכיב מקבל ---
 interface TripDetailsViewProps {
     trip: any;
-    profile?: any;
-    isEditable: boolean;
-    isPublic: boolean;
+    profile?: any; // אופציונלי (לא קיים בציבורי)
+    isEditable: boolean; // האם להציג כפתורי עריכה?
+    isPublic: boolean; // האם זה דף ציבורי?
+    
+    // פעולות (Callbacks)
     onBack?: () => void;
     onEditTrip?: () => void;
     onEditStaff?: () => void;
     onDeleteStaff?: () => void;
     onSaveStaff?: () => void;
+    
+    // State עבור הוספת צוות (רלוונטי רק לדף פנימי)
     isAddingStaff?: boolean;
     setIsAddingStaff?: (val: boolean) => void;
     newStaffData?: any;
@@ -84,6 +91,7 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
     const timeline = d.timeline || [];
     const typeConfig = TRIP_TYPES_CONFIG.find(t => t.id === d.tripType) || TRIP_TYPES_CONFIG[4];
     
+    // זיהוי מגדר לפי מחלקה
     const deptName = trip.department || '';
     const isFemale = deptName.includes('בת מלך') || deptName.includes('בנות חב"ד') || deptName.includes('בנות חב״ד');
     
@@ -94,6 +102,7 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
     const secondStaffTitle = isFemale ? 'אחראית נוספת' : 'אחראי נוסף';
     const namePlaceholder = "שם מלא כפי שמופיע בתעודת זהות";
 
+    // תצוגת תפקיד
     let subRoleDisplay = '';
     if (trip.branch === 'מטה') {
         subRoleDisplay = `צוות מטה • ${trip.department || ''}`;
@@ -105,9 +114,7 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
     const missingDocsCount = timeline.filter((t: any) => t.requiresLicense && (!t.licenseFile || !t.insuranceFile)).length;
     const durationDays = calculateDuration(trip.start_date, d.endDate);
 
-    const showSecondaryStaffCard = d.secondaryStaffObj && (!isAddingStaff);
-    const showAddStaffForm = isEditable && !isPublic && (isAddingStaff || (!d.secondaryStaffObj && setIsAddingStaff));
-
+    // Badge סטטוס
     const getStatusBadge = (status: string) => {
         const styles: any = {
             approved: { text: 'מאושר', bg: 'bg-green-100', textCol: 'text-green-700', icon: CheckCircle },
@@ -126,10 +133,9 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
     };
 
     const handlePrint = () => window.print();
-
-    // --- תיקון: יצירת קישור ציבורי תמיד ---
+    
+    // שיתוף: תמיד יוצר קישור ציבורי
     const handleShare = async () => {
-        // בניית הקישור הציבורי באופן יזום
         const origin = typeof window !== 'undefined' && window.location.origin ? window.location.origin : '';
         const publicUrl = `${origin}/share/trip/${trip.id}`;
 
@@ -138,14 +144,26 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                 await navigator.share({ 
                     title: trip.name, 
                     text: `פרטי טיול: ${trip.name}`, 
-                    url: publicUrl // משתף את הקישור הציבורי
+                    url: publicUrl 
                 }); 
             } catch (err) {}
         } else {
-            navigator.clipboard.writeText(publicUrl); // מעתיק את הקישור הציבורי
+            navigator.clipboard.writeText(publicUrl);
             alert('הקישור הציבורי הועתק ללוח!');
         }
     };
+
+    // --- לוגיקה מתוקנת להצגת רכיבי צוות נוסף ---
+    
+    // 1. כרטיס קיים: מוצג אם יש נתונים ואנחנו לא במצב הוספה
+    const showSecondaryStaffCard = d.secondaryStaffObj && !isAddingStaff;
+
+    // 2. טופס הוספה: מוצג רק אם אנחנו במצב הוספה (isAddingStaff = true) ויש לנו את הפונקציות
+    const showAddStaffForm = isEditable && !isPublic && isAddingStaff && setNewStaffData && setIsAddingStaff;
+    
+    // 3. כפתור הוספה (+): מוצג רק אם אין כרטיס ואין טופס פתוח
+    const showAddButton = isEditable && !isPublic && !isAddingStaff && !d.secondaryStaffObj && setIsAddingStaff;
+
 
     return (
         <div className="animate-fadeIn pb-32 max-w-[1600px] mx-auto print:p-0">
@@ -283,6 +301,7 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                             )}
                         </div>
 
+                        {/* כרטיס רכז נוסף (אם קיים) */}
                         {showSecondaryStaffCard && (
                             <div className="mt-4 pt-4 border-t border-gray-100 group">
                                 <div className="flex justify-between items-center mb-2">
@@ -305,25 +324,31 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                             </div>
                         )}
 
-                        {showAddStaffForm && setNewStaffData && setIsAddingStaff && (
+                        {/* טופס הוספה - מופיע רק בלחיצה */}
+                        {showAddStaffForm && (
                             <div className="mt-4 pt-4 border-t border-gray-100">
                                 <div className="animate-fadeIn bg-gray-50 p-3 rounded-xl border border-gray-200">
-                                    <div className="flex justify-between items-center mb-2"><span className="text-xs font-bold text-gray-500">{addStaffBtnLabel}</span><button onClick={() => setIsAddingStaff(false)}><X size={14} className="text-gray-400"/></button></div>
+                                    <div className="flex justify-between items-center mb-2">
+                                        <span className="text-xs font-bold text-gray-500">{addStaffBtnLabel}</span>
+                                        {/* כפתור סגירה */}
+                                        <button onClick={() => setIsAddingStaff && setIsAddingStaff(false)}><X size={14} className="text-gray-400"/></button>
+                                    </div>
                                     <div className="space-y-2">
-                                        <input type="text" className="w-full p-2 text-xs border rounded-lg bg-white" placeholder={namePlaceholder} value={newStaffData.name} onChange={e => setNewStaffData({...newStaffData, name: e.target.value})}/>
-                                        <input type="text" className="w-full p-2 text-xs border rounded-lg bg-white" placeholder="תפקיד בארגון" value={newStaffData.role} onChange={e => setNewStaffData({...newStaffData, role: e.target.value})}/>
-                                        <input type="text" className="w-full p-2 text-xs border rounded-lg bg-white" placeholder="תעודת זהות" value={newStaffData.idNumber} onChange={e => setNewStaffData({...newStaffData, idNumber: e.target.value})}/>
-                                        <input type="tel" dir="rtl" className="w-full p-2 text-xs border rounded-lg bg-white text-right" placeholder="טלפון" value={newStaffData.phone} onChange={e => setNewStaffData({...newStaffData, phone: e.target.value})}/>
-                                        <input type="email" className="w-full p-2 text-xs border rounded-lg bg-white text-right" placeholder="אימייל" value={newStaffData.email} onChange={e => setNewStaffData({...newStaffData, email: e.target.value})}/>
+                                        <input type="text" className="w-full p-2 text-xs border rounded-lg bg-white" placeholder={namePlaceholder} value={newStaffData.name} onChange={e => setNewStaffData && setNewStaffData({...newStaffData, name: e.target.value})}/>
+                                        <input type="text" className="w-full p-2 text-xs border rounded-lg bg-white" placeholder="תפקיד בארגון" value={newStaffData.role} onChange={e => setNewStaffData && setNewStaffData({...newStaffData, role: e.target.value})}/>
+                                        <input type="text" className="w-full p-2 text-xs border rounded-lg bg-white" placeholder="תעודת זהות" value={newStaffData.idNumber} onChange={e => setNewStaffData && setNewStaffData({...newStaffData, idNumber: e.target.value})}/>
+                                        <input type="tel" dir="rtl" className="w-full p-2 text-xs border rounded-lg bg-white text-right" placeholder="טלפון" value={newStaffData.phone} onChange={e => setNewStaffData && setNewStaffData({...newStaffData, phone: e.target.value})}/>
+                                        <input type="email" className="w-full p-2 text-xs border rounded-lg bg-white text-right" placeholder="אימייל" value={newStaffData.email} onChange={e => setNewStaffData && setNewStaffData({...newStaffData, email: e.target.value})}/>
                                         <button onClick={onSaveStaff} disabled={isVerifying} className="w-full bg-[#00BCD4] text-white text-xs font-bold py-2 rounded-lg hover:bg-cyan-600 transition-colors mt-1 disabled:opacity-50">{isVerifying ? 'בודק במערכת...' : 'אימות ושמירה'}</button>
                                     </div>
                                 </div>
                             </div>
                         )}
                         
-                        {isEditable && !isPublic && !isAddingStaff && !d.secondaryStaffObj && setIsAddingStaff && (
+                        {/* כפתור הפתיחה לטופס - נעלם כשהטופס פתוח */}
+                        {showAddButton && (
                              <div className="mt-4 pt-4 border-t border-gray-100">
-                                <button onClick={() => setIsAddingStaff(true)} className="w-full py-2 border border-dashed border-gray-300 rounded-xl text-xs font-bold text-gray-500 hover:text-[#00BCD4] flex items-center justify-center gap-1"><Plus size={14}/> {addStaffBtnLabel}</button>
+                                <button onClick={() => setIsAddingStaff && setIsAddingStaff(true)} className="w-full py-2 border border-dashed border-gray-300 rounded-xl text-xs font-bold text-gray-500 hover:text-[#00BCD4] flex items-center justify-center gap-1"><Plus size={14}/> {addStaffBtnLabel}</button>
                              </div>
                         )}
                     </div>
