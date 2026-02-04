@@ -9,47 +9,47 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   icon?: React.ReactNode;
 }
 
-export const Input = ({ label, error, icon, type, className = '', ...props }: InputProps) => {
+// שים לב: כאן כתוב export const ולא export default
+export const Input = ({ label, error, icon, type, className = '', readOnly, ...props }: InputProps) => {
   const [showPassword, setShowPassword] = useState(false);
   
-  // בדיקה האם זה שדה סיסמה
   const isPasswordField = type === 'password';
   
-  // קביעת הסוג הסופי (טקסט או סיסמה)
   const inputType = isPasswordField 
     ? (showPassword ? 'text' : 'password') 
     : type;
 
   return (
     <div className="w-full">
-      {label && <label className="block text-xs font-bold text-gray-500 mb-1.5 mr-1">{label}</label>}
+      {label && <label className="block text-[10px] md:text-xs font-bold text-gray-500 mb-1.5 mr-1">{label}</label>}
       
       <div className="relative">
-        {/* אייקון רגיל (אם הועבר) - בצד ימין */}
         {icon && (
             <div className="absolute top-1/2 right-4 -translate-y-1/2 text-gray-400 pointer-events-none">
-                {icon}
+                {/* Casting כדי למנוע שגיאות TS */}
+                {React.cloneElement(icon as React.ReactElement<any>, { size: 18 })}
             </div>
         )}
         
         <input 
           type={inputType}
-          className={`w-full h-[60px] rounded-xl border outline-none font-bold text-sm transition-all
-          ${icon ? 'pr-12' : 'pr-4'} /* ריווח לימין אם יש אייקון */
-          ${isPasswordField ? 'pl-12' : 'pl-4'} /* ריווח לשמאל אם זו סיסמה */
-          ${error 
-            ? 'border-red-200 bg-red-50 text-red-600 placeholder-red-300' 
-            : 'bg-white border-gray-200 focus:border-[#E91E63] focus:ring-1 focus:ring-[#E91E63] text-[#263238]'
+          readOnly={readOnly}
+          className={`w-full h-[50px] md:h-[60px] rounded-xl border outline-none font-bold text-sm transition-all
+          ${icon ? 'pr-12' : 'pr-4'} pl-4
+          ${isPasswordField ? 'pl-12' : ''}
+          ${readOnly 
+            ? 'bg-gray-50 text-gray-500 border-transparent cursor-not-allowed' 
+            : error 
+              ? 'border-red-200 bg-red-50 text-red-600 placeholder-red-300' 
+              : 'bg-white border-gray-200 focus:border-[#E91E63] focus:ring-1 focus:ring-[#E91E63] text-[#263238]'
           } ${className}`}
           {...props}
         />
 
-        {/* כפתור עין לסיסמה - בצד שמאל */}
         {isPasswordField && (
             <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                // התיקון כאן: hover:text-[#E91E63] (ורוד)
                 className="absolute top-1/2 left-4 -translate-y-1/2 text-gray-400 hover:text-[#E91E63] transition-colors focus:outline-none"
                 tabIndex={-1}
             >

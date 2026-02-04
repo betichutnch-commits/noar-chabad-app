@@ -4,12 +4,18 @@ import React, { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { ManagerHeader } from '@/components/layout/ManagerHeader'
 import { Loader2, Shield, User, MapPin, CheckCircle, XCircle, ChevronDown, ChevronUp } from 'lucide-react'
+import { Modal } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/Button'
 
 export default function UsersManagement() {
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<any[]>([]);
   const [filter, setFilter] = useState('pending');
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
+
+  // מודל גלובלי
+  const [modal, setModal] = useState({ isOpen: false, type: 'info' as any, title: '', message: '', onConfirm: undefined as (() => void) | undefined });
+  const showModal = (type: string, title: string, msg: string, onConfirm?: () => void) => setModal({ isOpen: true, type: type as any, title, message: msg, onConfirm });
 
   useEffect(() => {
     fetchUsers();
@@ -21,23 +27,26 @@ export default function UsersManagement() {
     setLoading(false);
   };
 
-  const updateUserStatus = async (userId: string, newStatus: string) => {
-      const { error } = await supabase.rpc('update_user_status', { 
-          user_id: userId, 
-          new_status: newStatus 
+  const updateUserStatus = (userId: string, newStatus: string) => {
+      showModal('confirm', 'שינוי סטטוס משתמש', `האם אתה בטוח שברצונך לשנות את הסטטוס ל-${newStatus === 'approved' ? 'פעיל' : 'חסום'}?`, async () => {
+          const { error } = await supabase.rpc('update_user_status', { 
+              user_id: userId, 
+              new_status: newStatus 
+          });
+          
+          if (error) {
+              showModal('error', 'שגיאה', 'שגיאה בעדכון: ' + error.message);
+          } else {
+              setUsers(prev => prev.map(u => {
+                  if (u.id === userId) {
+                      const newMeta = { ...u.raw_user_meta_data, status: newStatus };
+                      return { ...u, raw_user_meta_data: newMeta };
+                  }
+                  return u;
+              }));
+              showModal('success', 'עודכן בהצלחה', 'סטטוס המשתמש עודכן.');
+          }
       });
-      
-      if (error) {
-          alert('שגיאה בעדכון: ' + error.message);
-      } else {
-          setUsers(prev => prev.map(u => {
-              if (u.id === userId) {
-                  const newMeta = { ...u.raw_user_meta_data, status: newStatus };
-                  return { ...u, raw_user_meta_data: newMeta };
-              }
-              return u;
-          }));
-      }
   };
 
   const filteredUsers = users.filter(u => {
@@ -45,16 +54,16 @@ export default function UsersManagement() {
       return status === filter;
   });
 
-  if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-gray-400"/></div>;
+  if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
 
   return (
     <>
       <ManagerHeader title="ניהול משתמשים ורכזים" />
+      <Modal isOpen={modal.isOpen} onClose={() => setModal({...modal, isOpen: false})} type={modal.type} title={modal.title} message={modal.message} onConfirm={modal.onConfirm} />
       
-      {/* התיקון לגלילה ולרוחב */}
       <div className="p-4 md:p-8 animate-fadeIn max-w-[100vw] overflow-x-hidden pb-32">
           
-          {/* סרגל סינון - גלילה אופקית בטלפון */}
+          {/* סרגל סינון */}
           <div className="flex gap-2 md:gap-4 mb-8 overflow-x-auto pb-2">
               {['pending', 'approved', 'rejected'].map(f => (
                   <button 
@@ -90,7 +99,6 @@ export default function UsersManagement() {
                                     <h3 className="font-bold text-gray-800">{meta.full_name || 'ללא שם'}</h3>
                                     <div className="text-xs text-gray-500">{u.email}</div>
                                 </div>
-                                {/* חץ במובייל */}
                                 <div className="md:hidden text-gray-400">
                                     {isExpanded ? <ChevronUp/> : <ChevronDown/>}
                                 </div>
@@ -108,7 +116,6 @@ export default function UsersManagement() {
                                 </div>
                             </div>
 
-                            {/* חץ במחשב */}
                             <button className="hidden md:block text-gray-400 ml-auto">
                                 {isExpanded ? <ChevronUp/> : <ChevronDown/>}
                             </button>
@@ -126,26 +133,18 @@ export default function UsersManagement() {
                                         <p className="text-xs font-bold text-gray-400">טלפון</p>
                                         <p className="font-medium text-gray-800 bg-white p-2 rounded border border-gray-100">{meta.phone || '-'}</p>
                                     </div>
-                                    <div className="space-y-2">
-                                        <p className="text-xs font-bold text-gray-400">כתובת למשלוח</p>
-                                        <p className="font-medium text-gray-800 bg-white p-2 rounded border border-gray-100">{meta.branch_address || '-'}</p>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <p className="text-xs font-bold text-gray-400">הצטרף בתאריך</p>
-                                        <p className="font-medium text-gray-800">{new Date(u.created_at).toLocaleDateString('he-IL')}</p>
-                                    </div>
                                 </div>
 
                                 <div className="flex flex-col md:flex-row justify-end gap-3 pt-4 border-t border-gray-200">
                                     {filter !== 'approved' && (
-                                        <button onClick={() => updateUserStatus(u.id, 'approved')} className="flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-green-100 transition-all w-full md:w-auto">
-                                            <CheckCircle size={18}/> אשר משתמש
-                                        </button>
+                                        <Button variant="secondary" onClick={() => updateUserStatus(u.id, 'approved')} icon={<CheckCircle size={18}/>} className="h-10 text-sm">
+                                            אשר משתמש
+                                        </Button>
                                     )}
                                     {filter !== 'rejected' && (
-                                        <button onClick={() => updateUserStatus(u.id, 'rejected')} className="flex items-center justify-center gap-2 bg-white border border-red-200 text-red-600 hover:bg-red-50 px-6 py-3 rounded-xl font-bold transition-all w-full md:w-auto">
-                                            <XCircle size={18}/> חסום / דחה
-                                        </button>
+                                        <Button variant="outline" onClick={() => updateUserStatus(u.id, 'rejected')} icon={<XCircle size={18}/>} className="h-10 text-sm border-red-200 text-red-600 hover:bg-red-50">
+                                            חסום / דחה
+                                        </Button>
                                     )}
                                 </div>
                             </div>

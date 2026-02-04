@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { ManagerHeader } from '@/components/layout/ManagerHeader'
-import { Loader2, MapPin, Search, Eye, Calendar, User } from 'lucide-react'
+import { Loader2, MapPin, Search, Eye, Calendar, User, Clock, CheckCircle, XCircle } from 'lucide-react'
 import Link from 'next/link'
 import { Input } from '@/components/ui/Input'
 
@@ -42,14 +42,18 @@ export default function ApprovalsPage() {
           rejected: "bg-red-100 text-red-700 border-red-200"
       };
       const labels: any = { approved: 'אושר', pending: 'ממתין', rejected: 'נדחה' };
+      const icons: any = { approved: CheckCircle, pending: Clock, rejected: XCircle };
+      const Icon = icons[status] || Clock;
+
       return (
-          <span className={`px-3 py-1 rounded-full text-xs font-bold border w-fit ${styles[status] || styles.pending}`}>
+          <span className={`px-3 py-1 rounded-full text-xs font-bold border w-fit flex items-center gap-1.5 ${styles[status] || styles.pending}`}>
+              <Icon size={12}/>
               {labels[status]}
           </span>
       );
   };
 
-  if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-gray-400"/></div>;
+  if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
 
   return (
     <>
@@ -78,9 +82,8 @@ export default function ApprovalsPage() {
                     <Input 
                         placeholder="חיפוש..." 
                         value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
+                        onChange={(e: any) => setSearchTerm(e.target.value)}
                         icon={<Search size={18}/>}
-                        className="bg-white"
                     />
                 </div>
             </div>

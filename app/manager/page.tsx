@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { ManagerHeader } from '@/components/layout/ManagerHeader'
-import { Loader2, AlertCircle, CheckCircle, Clock, UserPlus, FileText, ArrowLeft, Shield, ChevronRight } from 'lucide-react'
+import { Loader2, AlertCircle, CheckCircle, UserPlus, FileText, Clock, ArrowLeft, Shield } from 'lucide-react'
 import Link from 'next/link'
 
 export default function ManagerHomePage() {
@@ -47,32 +47,29 @@ export default function ManagerHomePage() {
       
       <div className="p-4 md:p-8 animate-fadeIn pb-32 max-w-[100vw] overflow-x-hidden md:max-w-7xl md:mx-auto">
         
-        {/* כותרת קטנה ונקייה */}
         <div className="flex items-center gap-2 mb-4 opacity-60">
             <Shield size={16} />
             <span className="text-xs font-bold uppercase tracking-wider">תמונת מצב יומית</span>
         </div>
 
-        {/* --- עיצוב חדש: סרגל נתונים מאוחד למחשב / גריד קומפקטי לנייד --- */}
+        {/* --- גריד סטטיסטיקה --- */}
         <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden mb-8">
-            
-            {/* מבנה גריד שמשתנה דרמטית בין מסכים */}
             <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-y md:divide-y-0 divide-gray-100 dir-ltr">
                 
-                {/* 1. ממתינים לאישור (הכי חשוב) */}
-                <Link href="/manager/approvals" className="group p-4 md:p-6 flex flex-col items-center justify-center hover:bg-red-50/50 transition-colors cursor-pointer text-center relative dir-rtl">
-                    <div className="text-[#E91E63] bg-red-50 p-2 rounded-xl mb-2 group-hover:scale-110 transition-transform"><AlertCircle size={20}/></div>
+                {/* 1. ממתינים לאישור */}
+                <Link href="/manager/approvals" className="group p-4 md:p-6 flex flex-col items-center justify-center hover:bg-orange-50/50 transition-colors cursor-pointer text-center relative dir-rtl">
+                    <div className="text-orange-500 bg-orange-50 p-2 rounded-xl mb-2 group-hover:scale-110 transition-transform"><Clock size={20}/></div>
                     <div className="text-2xl md:text-3xl font-black text-gray-800 leading-none mb-1">{stats.pendingTrips}</div>
-                    <div className="text-xs font-bold text-gray-400 group-hover:text-[#E91E63]">ממתינים לאישור</div>
-                    {stats.pendingTrips > 0 && <span className="absolute top-3 right-3 flex h-2.5 w-2.5 rounded-full bg-[#E91E63] animate-pulse"></span>}
+                    <div className="text-xs font-bold text-gray-400 group-hover:text-orange-500">ממתינים לאישור</div>
+                    {stats.pendingTrips > 0 && <span className="absolute top-3 right-3 flex h-2.5 w-2.5 rounded-full bg-orange-500 animate-pulse"></span>}
                 </Link>
 
                 {/* 2. רכזים חדשים */}
-                <Link href="/manager/users" className="group p-4 md:p-6 flex flex-col items-center justify-center hover:bg-orange-50/50 transition-colors cursor-pointer text-center relative dir-rtl">
-                    <div className="text-orange-500 bg-orange-50 p-2 rounded-xl mb-2 group-hover:scale-110 transition-transform"><UserPlus size={20}/></div>
+                <Link href="/manager/users" className="group p-4 md:p-6 flex flex-col items-center justify-center hover:bg-purple-50/50 transition-colors cursor-pointer text-center relative dir-rtl">
+                    <div className="text-purple-500 bg-purple-50 p-2 rounded-xl mb-2 group-hover:scale-110 transition-transform"><UserPlus size={20}/></div>
                     <div className="text-2xl md:text-3xl font-black text-gray-800 leading-none mb-1">{stats.pendingUsers}</div>
-                    <div className="text-xs font-bold text-gray-400 group-hover:text-orange-500">רכזים חדשים</div>
-                    {stats.pendingUsers > 0 && <span className="absolute top-3 right-3 flex h-2.5 w-2.5 rounded-full bg-orange-500"></span>}
+                    <div className="text-xs font-bold text-gray-400 group-hover:text-purple-500">רכזים חדשים</div>
+                    {stats.pendingUsers > 0 && <span className="absolute top-3 right-3 flex h-2.5 w-2.5 rounded-full bg-purple-500"></span>}
                 </Link>
 
                 {/* 3. אושרו */}
@@ -92,7 +89,7 @@ export default function ManagerHomePage() {
             </div>
         </div>
 
-        {/* קישורים מהירים - מעוצב כרשימה אלגנטית */}
+        {/* קישורים מהירים */}
         <h3 className="text-lg font-bold text-gray-800 mb-4">גישה מהירה</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             
@@ -111,17 +108,17 @@ export default function ManagerHomePage() {
                 </div>
             </Link>
 
-            <Link href="/manager/users" className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between hover:border-purple-400 hover:shadow-md transition-all group">
+            <Link href="/manager/approvals" className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between hover:border-orange-400 hover:shadow-md transition-all group">
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-purple-50 flex items-center justify-center text-purple-600">
-                        <UserPlus size={20} />
+                    <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center text-orange-600">
+                        <AlertCircle size={20} />
                     </div>
                     <div>
-                        <div className="font-bold text-gray-800 text-sm">ניהול משתמשים</div>
-                        <div className="text-[10px] text-gray-400">אישור נרשמים והרשאות</div>
+                        <div className="font-bold text-gray-800 text-sm">אישור טיולים</div>
+                        <div className="text-[10px] text-gray-400">צפייה בבקשות לטיולים חדשים</div>
                     </div>
                 </div>
-                <div className="bg-gray-50 p-2 rounded-full text-gray-400 group-hover:bg-purple-600 group-hover:text-white transition-colors">
+                <div className="bg-gray-50 p-2 rounded-full text-gray-400 group-hover:bg-orange-600 group-hover:text-white transition-colors">
                     <ArrowLeft size={16} />
                 </div>
             </Link>

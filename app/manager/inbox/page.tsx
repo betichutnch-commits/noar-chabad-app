@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { ManagerHeader } from '@/components/layout/ManagerHeader'
 import { Button } from '@/components/ui/Button'
+import { Modal } from '@/components/ui/Modal'
 import { Loader2, HelpCircle, CheckCircle, Bug, Reply, Send, X, Clock, User } from 'lucide-react'
 
 export default function ManagerInbox() {
@@ -11,6 +12,13 @@ export default function ManagerInbox() {
   const [messages, setMessages] = useState<any[]>([]);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   
+  // מודל גלובלי - תיקון TS
+  const [modal, setModal] = useState({ isOpen: false, type: 'info' as any, title: '', message: '', onConfirm: undefined as (() => void) | undefined });
+  
+  // התיקון כאן: הוספתי onConfirm: undefined באופן מפורש
+  const showModal = (type: string, title: string, msg: string) => 
+      setModal({ isOpen: true, type: type as any, title, message: msg, onConfirm: undefined });
+
   // ניהול תגובה
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
@@ -61,10 +69,10 @@ export default function ManagerInbox() {
           
           setReplyingTo(null);
           setReplyText('');
-          alert('התשובה נשלחה בהצלחה!');
+          showModal('success', 'נשלח', 'התשובה נשלחה בהצלחה!');
 
       } catch (e) {
-          alert('שגיאה בשליחה');
+          showModal('error', 'שגיאה', 'שגיאה בשליחה');
       } finally {
           setSendingReply(false);
       }
@@ -75,14 +83,13 @@ export default function ManagerInbox() {
   return (
     <>
       <ManagerHeader title="דואר נכנס והודעות" />
+      <Modal isOpen={modal.isOpen} onClose={() => setModal({...modal, isOpen: false})} type={modal.type} title={modal.title} message={modal.message} />
 
-      {/* התיקון לגלילה: max-w-[100vw] overflow-x-hidden */}
       <div className="p-4 md:p-8 animate-fadeIn max-w-[100vw] overflow-x-hidden pb-32">
           
-          {/* --- תצוגה 1: טבלה (רק למחשב) --- */}
-          <div className="hidden md:block bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full text-right">
+                <table className="w-full text-right hidden md:table">
                     <thead className="bg-gray-50 text-gray-500 text-xs font-bold uppercase border-b border-gray-100">
                         <tr>
                             <th className="p-5">נושא</th>
@@ -110,7 +117,7 @@ export default function ManagerInbox() {
                                             <div className="font-bold">{senderName}</div>
                                             <div className="text-xs text-gray-400">{new Date(msg.created_at).toLocaleDateString('he-IL')}</div>
                                         </td>
-                                        <td className="p-5 text-sm text-gray-600 max-w-xs truncate cursor-pointer" title={msg.message} onClick={() => alert(msg.message)}>
+                                        <td className="p-5 text-sm text-gray-600 max-w-xs truncate cursor-pointer" title={msg.message} onClick={() => showModal('info', 'תוכן ההודעה', msg.message)}>
                                             {msg.message}
                                         </td>
                                         <td className="p-5">
@@ -122,12 +129,8 @@ export default function ManagerInbox() {
                                         <td className="p-5 text-left flex justify-end gap-2">
                                             {msg.status !== 'treated' && !isReplying && (
                                                 <>
-                                                    <button onClick={() => setReplyingTo(msg.id)} className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg text-xs font-bold shadow-md transition-all flex items-center gap-1">
-                                                        <Reply size={16}/> ענה
-                                                    </button>
-                                                    <button onClick={() => markAsTreated(msg.id)} className="text-green-600 hover:bg-green-50 p-2 rounded-lg text-xs font-bold border border-transparent hover:border-green-200 transition-all">
-                                                        <CheckCircle size={16}/>
-                                                    </button>
+                                                    <Button variant="primary" onClick={() => setReplyingTo(msg.id)} className="h-8 px-4 text-xs" icon={<Reply size={14}/>}>ענה</Button>
+                                                    <Button variant="ghost" onClick={() => markAsTreated(msg.id)} className="h-8 px-2 text-green-600 hover:bg-green-50"><CheckCircle size={18}/></Button>
                                                 </>
                                             )}
                                         </td>
@@ -158,75 +161,48 @@ export default function ManagerInbox() {
                     </tbody>
                 </table>
               </div>
-          </div>
 
-          {/* --- תצוגה 2: כרטיסים (רק לטלפון) --- */}
-          <div className="md:hidden space-y-4">
-              {messages.map((msg) => {
-                  const isBug = msg.subject?.includes('תקלה') || msg.subject?.includes('באג');
-                  if (isBug && !isSuperAdmin) return null;
-                  const isReplying = replyingTo === msg.id;
-                  const senderName = msg.user?.raw_user_meta_data?.full_name || 'משתמש לא ידוע';
+              {/* מובייל קארדס - אותו היגיון אבל בעיצוב מובייל */}
+              <div className="md:hidden space-y-4 p-4">
+                  {messages.map((msg) => {
+                       const isBug = msg.subject?.includes('תקלה') || msg.subject?.includes('באג');
+                       if (isBug && !isSuperAdmin) return null;
+                       const isReplying = replyingTo === msg.id;
+                       const senderName = msg.user?.raw_user_meta_data?.full_name || 'משתמש לא ידוע';
 
-                  return (
-                      <div key={msg.id} className={`bg-white p-5 rounded-2xl border shadow-sm ${isReplying ? 'border-blue-300 ring-2 ring-blue-50' : 'border-gray-200'}`}>
-                          
-                          {/* כותרת הכרטיס */}
-                          <div className="flex justify-between items-start mb-3">
-                              <div className="flex items-start gap-2">
-                                  {isBug ? <Bug size={18} className="text-red-500 mt-1"/> : <HelpCircle size={18} className="text-blue-500 mt-1"/>}
-                                  <div>
-                                      <h3 className="font-bold text-gray-800 text-sm leading-tight">{msg.subject}</h3>
-                                      <div className="flex items-center gap-2 mt-1">
-                                          <span className="text-xs text-gray-500 flex items-center gap-1"><User size={12}/> {senderName}</span>
-                                          <span className="text-gray-300">|</span>
-                                          <span className="text-xs text-gray-500 flex items-center gap-1"><Clock size={12}/> {new Date(msg.created_at).toLocaleDateString('he-IL')}</span>
-                                      </div>
-                                  </div>
-                              </div>
-                              {msg.status === 'treated' 
-                                  ? <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[10px] font-bold border border-green-200">טופל</span>
-                                  : <span className="bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded text-[10px] font-bold border border-yellow-200">חדש</span>
-                              }
-                          </div>
-
-                          {/* תוכן ההודעה */}
-                          <div className="bg-gray-50 p-3 rounded-xl text-sm text-gray-700 mb-4 border border-gray-100">
-                              {msg.message}
-                          </div>
-
-                          {/* פעולות */}
-                          {msg.status !== 'treated' && !isReplying && (
-                              <div className="flex gap-2">
-                                  <button onClick={() => setReplyingTo(msg.id)} className="flex-1 bg-blue-600 text-white py-2.5 rounded-xl font-bold text-sm shadow-md flex items-center justify-center gap-2">
-                                      <Reply size={16}/> השב להודעה
-                                  </button>
-                                  <button onClick={() => markAsTreated(msg.id)} className="bg-green-50 text-green-600 border border-green-200 py-2.5 px-4 rounded-xl font-bold text-sm flex items-center justify-center">
-                                      <CheckCircle size={18}/>
-                                  </button>
-                              </div>
-                          )}
-
-                          {/* אזור תגובה בתוך הכרטיס */}
-                          {isReplying && (
-                              <div className="animate-fadeIn mt-2 pt-2 border-t border-blue-100">
-                                  <p className="text-xs font-bold text-blue-600 mb-2">תגובה שלך:</p>
-                                  <textarea 
-                                      className="w-full p-3 border border-gray-200 rounded-xl text-sm focus:border-blue-500 outline-none bg-blue-50/30"
-                                      placeholder="הקלד תשובה..."
-                                      rows={3}
-                                      value={replyText}
-                                      onChange={e => setReplyText(e.target.value)}
-                                  ></textarea>
-                                  <div className="flex gap-2 mt-3">
-                                      <Button variant="secondary" onClick={() => setReplyingTo(null)} className="bg-gray-100 text-gray-500 h-10 px-0 w-12 flex items-center justify-center"><X size={18}/></Button>
-                                      <Button onClick={() => sendReply(msg)} isLoading={sendingReply} icon={<Send size={16}/>} className="bg-blue-600 h-10 text-sm flex-1">שלח</Button>
-                                  </div>
-                              </div>
-                          )}
-                      </div>
-                  )
-              })}
+                       return (
+                           <div key={msg.id} className={`bg-white p-5 rounded-2xl border shadow-sm ${isReplying ? 'border-blue-300 ring-2 ring-blue-50' : 'border-gray-200'}`}>
+                               <div className="flex justify-between items-start mb-3">
+                                   <div className="flex items-start gap-2">
+                                       {isBug ? <Bug size={18} className="text-red-500 mt-1"/> : <HelpCircle size={18} className="text-blue-500 mt-1"/>}
+                                       <div>
+                                           <h3 className="font-bold text-gray-800 text-sm leading-tight">{msg.subject}</h3>
+                                           <div className="flex items-center gap-2 mt-1">
+                                               <span className="text-xs text-gray-500 flex items-center gap-1"><User size={12}/> {senderName}</span>
+                                           </div>
+                                       </div>
+                                   </div>
+                               </div>
+                               <div className="bg-gray-50 p-3 rounded-xl text-sm text-gray-700 mb-4 border border-gray-100">{msg.message}</div>
+                               {msg.status !== 'treated' && !isReplying && (
+                                   <div className="flex gap-2">
+                                       <Button onClick={() => setReplyingTo(msg.id)} className="flex-1 h-10 text-sm" icon={<Reply size={16}/>}>השב</Button>
+                                       <Button variant="secondary" onClick={() => markAsTreated(msg.id)} className="h-10 w-12 flex justify-center"><CheckCircle size={18}/></Button>
+                                   </div>
+                               )}
+                               {isReplying && (
+                                   <div className="animate-fadeIn mt-2 pt-2 border-t border-blue-100">
+                                       <textarea className="w-full p-3 border border-gray-200 rounded-xl text-sm focus:border-blue-500 outline-none bg-blue-50/30" placeholder="הקלד תשובה..." rows={3} value={replyText} onChange={e => setReplyText(e.target.value)}></textarea>
+                                       <div className="flex gap-2 mt-3">
+                                           <Button variant="secondary" onClick={() => setReplyingTo(null)} className="bg-gray-100 text-gray-500 h-10 px-0 w-12 flex items-center justify-center"><X size={18}/></Button>
+                                           <Button onClick={() => sendReply(msg)} isLoading={sendingReply} icon={<Send size={16}/>} className="bg-blue-600 h-10 text-sm flex-1">שלח</Button>
+                                       </div>
+                                   </div>
+                               )}
+                           </div>
+                       )
+                  })}
+              </div>
           </div>
       </div>
     </>

@@ -2,13 +2,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { ArrowLeft, UserPlus, ShieldCheck, Users, Briefcase, ArrowRight } from 'lucide-react';
+import { ArrowLeft, UserPlus, ShieldCheck, Users, Briefcase } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
+import { Input } from '@/components/ui/Input'; 
+import { Modal } from '@/components/ui/Modal'; 
 import { useRouter } from 'next/navigation';
 import Image from 'next/image'; 
 
-// ייבוא מתיקיות העזר
 import { DEPARTMENTS_CONFIG } from '@/lib/constants'; 
 
 const SUPER_ADMIN_EMAIL = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL;
@@ -17,8 +17,13 @@ export default function Home() {
   const router = useRouter();
   const [view, setView] = useState<'landing' | 'login' | 'dept_selection' | 'role_selection' | 'register_form'>('landing');
   const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
+  
+  // מודל גלובלי - תיקון TS
+  const [modal, setModal] = useState({ isOpen: false, type: 'info' as any, title: '', message: '', onConfirm: undefined as (() => void) | undefined });
+  
+  // התיקון כאן:
+  const showModal = (type: string, title: string, msg: string) => 
+      setModal({ isOpen: true, type: type as any, title, message: msg, onConfirm: undefined });
 
   // דאטה
   const [selectedDept, setSelectedDept] = useState(''); 
@@ -28,7 +33,6 @@ export default function Home() {
   });
 
   const getRoleLabel = (roleType: 'coordinator' | 'hq') => {
-    // הגנה מפני קריסה אם המחלקה לא נבחרה עדיין
     const config = DEPARTMENTS_CONFIG[selectedDept] || { gender: 'mixed' };
     const gender = config.gender;
 
@@ -83,28 +87,28 @@ export default function Home() {
 
   const handleLogin = async (e: any) => {
     e.preventDefault();
-    setLoading(true); setErrorMsg('');
+    setLoading(true);
 
     try {
         const email = formData.idNumber.includes('@') ? formData.idNumber : `${formData.idNumber}@noar.chabad.co.il`; 
         const { data, error } = await supabase.auth.signInWithPassword({ email: email, password: formData.password });
 
         if (error) {
-          setErrorMsg('שגיאה בהתחברות: בדוק את תעודת הזהות והסיסמה.');
+          showModal('error', 'שגיאה בהתחברות', 'פרטי הזיהוי שגויים, או שהמשתמש טרם אושר.');
           setLoading(false);
           return;
         }
         await checkRoleAndRedirect(data.user);
     } catch (err: any) {
         console.error(err);
-        setErrorMsg(err.message || 'שגיאה כללית במערכת');
+        showModal('error', 'שגיאה', err.message || 'שגיאה כללית במערכת');
         setLoading(false);
     }
   };
 
   const handleRegister = async (e: any) => {
     e.preventDefault();
-    setLoading(true); setErrorMsg('');
+    setLoading(true);
 
     try {
         const email = `${formData.idNumber}@noar.chabad.co.il`;
@@ -127,15 +131,15 @@ export default function Home() {
         });
 
         if (error) {
-          setErrorMsg(error.message);
+          showModal('error', 'שגיאה בהרשמה', error.message);
           setLoading(false);
         } else {
-          setSuccessMsg('נרשמת בהצלחה! החשבון ממתין לאישור מנהל.');
+          showModal('success', 'ההרשמה נקלטה!', 'הפרטים נשלחו לאישור מנהל.\nתקבל הודעה כשהחשבון יאושר.');
           setTimeout(() => {
-              setSuccessMsg('');
+              setModal(prev => ({...prev, isOpen: false}));
               setView('login');
               setLoading(false);
-          }, 2000);
+          }, 3000);
         }
     } catch (err) {
         console.error(err);
@@ -147,12 +151,10 @@ export default function Home() {
   if (view === 'landing') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#F8F9FA] p-4 relative overflow-hidden">
-        {/* רקע דקורטיבי */}
         <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-[#00BCD4] via-[#4CAF50] to-[#E91E63]"></div>
         
         <main className="max-w-md w-full text-center space-y-8 relative z-10 animate-fadeIn">
           
-          {/* לוגו במלבן מאוזן מוקטן */}
           <div className="relative mx-auto w-32 h-20 bg-white p-3 rounded-2xl shadow-lg flex items-center justify-center mb-6 border border-gray-50 transform hover:scale-105 transition-transform duration-500">
             <Image 
                 src="/logo.png" 
@@ -175,8 +177,6 @@ export default function Home() {
           </div>
 
           <div className="space-y-4 pt-4 px-6">
-            
-            {/* כפתור כניסה - עיצוב ירוק מותאם אישית (השתמשתי ב-! כדי לדרוס את התכלת) */}
             <Button 
                 onClick={() => setView('login')} 
                 className="w-full !bg-[#F1F8E9] border-2 !border-[#8BC34A] !text-[#558B2F] text-lg py-6 rounded-2xl shadow-lg transition-all font-bold justify-center hover:!bg-[#8BC34A] hover:!text-white"
@@ -184,7 +184,6 @@ export default function Home() {
               כניסה למערכת
             </Button>
 
-            {/* כפתור הרשמה */}
             <div className="pt-2 space-y-3">
                 <div className="relative flex py-2 items-center">
                     <div className="flex-grow border-t border-gray-200"></div>
@@ -212,6 +211,8 @@ export default function Home() {
   if (view === 'login') {
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6">
+        <Modal isOpen={modal.isOpen} onClose={() => setModal({...modal, isOpen: false})} type={modal.type} title={modal.title} message={modal.message} />
+        
         <button onClick={() => setView('landing')} className="absolute top-6 right-6 text-gray-400 hover:text-[#00BCD4] transition-colors">
             <ArrowLeft size={24} className="rotate-180" />
         </button>
@@ -225,12 +226,6 @@ export default function Home() {
             <form onSubmit={handleLogin} className="space-y-5">
               <Input label="תעודת זהות" name="idNumber" required onChange={handleInputChange} autoFocus />
               <Input label="סיסמה" type="password" name="password" required onChange={handleInputChange} />
-
-              {errorMsg && (
-                  <div className="bg-red-50 text-red-600 p-3 rounded-xl text-sm font-bold border border-red-100 flex items-center gap-2">
-                      <span className="block w-1.5 h-1.5 bg-red-600 rounded-full"></span>{errorMsg}
-                  </div>
-              )}
 
               <Button type="submit" isLoading={loading} className="w-full mt-4 bg-[#00BCD4] hover:bg-cyan-600">כניסה</Button>
             </form>
@@ -306,7 +301,6 @@ export default function Home() {
           <p className="text-center text-gray-400 mb-8">מחלקה נבחרת: <span className="font-bold text-[#00BCD4]">{selectedDept}</span></p>
           
           <div className="space-y-4">
-            {/* כפתור רכז - ורוד */}
             <button onClick={() => { setSelectedRoleType('coordinator'); setView('register_form'); }}
               className="w-full bg-white p-6 rounded-2xl shadow-sm border-2 border-transparent hover:border-pink-400 hover:bg-pink-50 text-right group relative overflow-hidden transition-all">
               <div className="flex items-center justify-between relative z-10">
@@ -318,7 +312,6 @@ export default function Home() {
               </div>
             </button>
 
-            {/* כפתור מטה - תכלת מותג (כמו שרצית) */}
             <button onClick={() => { setSelectedRoleType('dept_staff'); setView('register_form'); }}
               className="w-full bg-white p-6 rounded-2xl shadow-sm border-2 border-transparent hover:border-[#00BCD4] hover:bg-cyan-50 text-right group relative overflow-hidden transition-all">
               <div className="flex items-center justify-between relative z-10">
@@ -341,6 +334,8 @@ export default function Home() {
 
     return (
       <div className="min-h-screen bg-[#F8F9FA] p-6 flex flex-col items-center">
+        <Modal isOpen={modal.isOpen} onClose={() => setModal({...modal, isOpen: false})} type={modal.type} title={modal.title} message={modal.message} />
+        
         <header className="w-full max-w-md flex justify-between items-center mb-6 mt-4">
             <button onClick={() => isSafety ? setView('dept_selection') : setView('role_selection')} className="text-gray-400 hover:text-[#00BCD4]"><ArrowLeft className="rotate-180"/></button>
             <div className="text-xs font-bold text-gray-300">שלב 3 מתוך 3</div>
@@ -375,9 +370,6 @@ export default function Home() {
               </div>
 
               <Input label="סיסמה" name="password" type="password" required minLength={6} placeholder="לפחות 6 תווים" onChange={handleInputChange} />
-
-              {errorMsg && <p className="text-red-600 text-sm bg-red-50 p-2 rounded-lg font-bold border border-red-100 text-center">{errorMsg}</p>}
-              {successMsg && <div className="text-green-700 text-sm bg-green-50 p-4 rounded-lg font-bold border border-green-200 text-center">{successMsg}</div>}
 
               <Button type="submit" isLoading={loading} variant={isSafety ? 'dark' : 'primary'} className="w-full mt-6 bg-[#4CAF50] hover:bg-green-600">
                 סיום הרשמה

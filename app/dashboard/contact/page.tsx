@@ -5,20 +5,21 @@ import { supabase } from '@/lib/supabaseClient'
 import { Header } from '@/components/layout/Header'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { Modal } from '@/components/ui/Modal'
 import { Send, CheckCircle, HelpCircle, Image as ImageIcon, X, AlertTriangle, Info } from 'lucide-react'
 
 export default function ContactPage() {
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
   
-  // סוג הפנייה: 'general' או 'bug'
+  // ניהול מודל גלובלי
+  const [modal, setModal] = useState({ isOpen: false, type: 'info' as any, title: '', message: '' });
+  const showModal = (type: string, title: string, msg: string) => setModal({ isOpen: true, type, title, message: msg });
+
   const [type, setType] = useState<'general' | 'bug'>('general');
   const [screenshot, setScreenshot] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-
   const [formData, setFormData] = useState({ subject: '', message: '' });
 
-  // טיפול בהדבקת תמונה (CTRL+V) - עובד בעיקר במחשב
   const handlePaste = (e: React.ClipboardEvent) => {
     const items = e.clipboardData.items;
     for (let i = 0; i < items.length; i++) {
@@ -32,7 +33,6 @@ export default function ContactPage() {
     }
   };
 
-  // טיפול בבחירת קובץ ידנית (חשוב למובייל)
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       if (e.target.files && e.target.files[0]) {
           const file = e.target.files[0];
@@ -47,13 +47,14 @@ export default function ContactPage() {
   };
 
   const handleSubmit = async () => {
-    if (!formData.subject || !formData.message) return alert('נא למלא נושא ותוכן. אם זו תקלה, אנא פרט מה ניסית לעשות.');
+    if (!formData.subject || !formData.message) {
+        return showModal('error', 'שגיאה', 'נא למלא נושא ותוכן.\nאם זו תקלה, אנא פרט מה ניסית לעשות.');
+    }
     setLoading(true);
 
     const { data: { user } } = await supabase.auth.getUser();
     let imageUrl = null;
 
-    // 1. העלאת צילום מסך אם יש
     if (screenshot && user) {
         const fileName = `bugs/${user.id}_${Date.now()}.png`;
         const { error: uploadError } = await supabase.storage.from('trip-files').upload(fileName, screenshot);
@@ -63,12 +64,10 @@ export default function ContactPage() {
         }
     }
     
-    // 2. בניית תוכן ההודעה הסופי
     const finalMessage = imageUrl 
         ? `${formData.message}\n\n[צורף צילום מסך]: ${imageUrl}`
         : formData.message;
 
-    // 3. שמירה בדאטהבייס
     const { error } = await supabase.from('contact_messages').insert([{
         user_id: user?.id,
         subject: `[${type === 'bug' ? 'תקלה' : 'פנייה'}] ${formData.subject}`,
@@ -79,23 +78,22 @@ export default function ContactPage() {
     setLoading(false);
 
     if (error) {
-        alert('שגיאה בשליחה: ' + error.message);
+        showModal('error', 'שגיאה', 'אירעה שגיאה בשליחה: ' + error.message);
     } else {
-        setSuccess(true);
+        showModal('success', 'נשלח בהצלחה', 'הפנייה התקבלה ומספרה נרשם במערכת.\nאנו נטפל בה בהקדם.');
         setFormData({ subject: '', message: '' });
         removeImage();
-        setTimeout(() => setSuccess(false), 3000);
     }
   };
 
   return (
     <>
       <Header title="צור קשר / דיווח על תקלה" />
+      <Modal isOpen={modal.isOpen} onClose={() => setModal({...modal, isOpen: false})} type={modal.type} title={modal.title} message={modal.message} />
 
       <div className="max-w-3xl mx-auto p-4 md:p-8 animate-fadeIn pb-32">
          <div className="bg-white rounded-[32px] border border-gray-200 p-6 md:p-8 shadow-sm text-center md:text-right">
              
-             {/* בחירת סוג פנייה */}
              <div className="flex flex-col sm:flex-row gap-4 mb-6">
                  <button 
                     onClick={() => setType('general')}
@@ -116,8 +114,6 @@ export default function ContactPage() {
              </div>
 
              <div className="space-y-6">
-                 
-                 {/* תיבת הסבר מיוחדת לדיווח על תקלה */}
                  {type === 'bug' && (
                     <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 flex items-start gap-3 animate-fadeIn text-right">
                         <Info size={22} className="text-yellow-600 shrink-0 mt-0.5"/>
@@ -131,11 +127,12 @@ export default function ContactPage() {
                     </div>
                  )}
 
+                 {/* תיקון השגיאה: הגדרת ה-type ל-any בתוך ה-onChange */}
                  <Input 
                     label="נושא" 
                     placeholder={type === 'bug' ? "בקצרה: מה הבעיה?" : "בנושא..."}
                     value={formData.subject}
-                    onChange={e => setFormData({...formData, subject: e.target.value})}
+                    onChange={(e: any) => setFormData({...formData, subject: e.target.value})}
                  />
 
                  <div>
@@ -144,22 +141,20 @@ export default function ContactPage() {
                      </label>
                      <div className="relative">
                         <textarea 
-                            className="w-full p-4 rounded-xl border border-gray-200 outline-none focus:border-[#00BCD4] min-h-[150px] resize-none text-base md:text-sm font-medium bg-gray-50 focus:bg-white transition-all text-right"
+                            className="w-full p-4 rounded-xl border border-gray-200 outline-none focus:border-[#E91E63] focus:ring-1 focus:ring-[#E91E63] min-h-[150px] resize-none text-base md:text-sm font-medium bg-white transition-all text-right"
                             placeholder={type === 'bug' ? "אנא פרטו כאן את השלבים שגרמו לתקלה...\n\n(ניתן להדביק כאן צילום מסך או לבחור קובץ)" : "תוכן הפנייה..."}
                             value={formData.message}
                             onChange={e => setFormData({...formData, message: e.target.value})}
                             onPaste={handlePaste}
                         ></textarea>
                         
-                        {/* כפתור העלאה ידני - מוגדל למובייל */}
-                        <label className="absolute bottom-3 left-3 text-gray-400 hover:text-[#00BCD4] cursor-pointer p-3 bg-white rounded-lg shadow-sm border border-gray-200 transition-all active:scale-95" title="צרף קובץ תמונה">
+                        <label className="absolute bottom-3 left-3 text-gray-400 hover:text-[#E91E63] cursor-pointer p-3 bg-gray-50 rounded-lg shadow-sm border border-gray-200 transition-all active:scale-95" title="צרף קובץ תמונה">
                             <ImageIcon size={22}/>
                             <input type="file" accept="image/*" className="hidden" onChange={handleFileChange}/>
                         </label>
                      </div>
                  </div>
 
-                 {/* תצוגה מקדימה של צילום מסך */}
                  {previewUrl && (
                      <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 relative w-fit animate-fadeIn mx-auto md:mx-0">
                          <p className="text-xs font-bold text-gray-500 mb-2 flex items-center gap-1 justify-center md:justify-start"><ImageIcon size={12}/> צילום מסך מצורף:</p>
@@ -171,11 +166,6 @@ export default function ContactPage() {
                  )}
 
                  <div className="pt-4 flex flex-col-reverse md:flex-row items-center justify-end gap-4 border-t border-gray-100">
-                     {success && (
-                         <span className="text-[#8BC34A] font-bold text-sm flex items-center gap-2 animate-fadeIn bg-green-50 px-4 py-2 rounded-xl w-full md:w-auto justify-center">
-                             <CheckCircle size={18}/> נשלח בהצלחה!
-                         </span>
-                     )}
                      <Button 
                         onClick={handleSubmit} 
                         isLoading={loading}

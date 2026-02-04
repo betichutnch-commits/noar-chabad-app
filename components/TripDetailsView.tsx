@@ -6,7 +6,7 @@ import {
   Printer, Share2, Users, MapPin, Tent, Info, 
   User, CreditCard, Hash, Phone, Mail, 
   Briefcase, Edit2, Trash2, Plus, X, Paperclip, ShieldCheck,
-  ArrowRight // <-- הוספתי את זה
+  ArrowRight
 } from 'lucide-react'
 import { TRIP_TYPES_CONFIG } from '@/lib/constants'
 import { formatHebrewDateRange, formatHebrewDate } from '@/lib/dateUtils'
@@ -65,6 +65,7 @@ interface TripDetailsViewProps {
     isPublic: boolean;
     onBack?: () => void;
     onEditTrip?: () => void;
+    onCancelTrip?: () => void; // <--- הוספתי את השדה החסר כאן
     onEditStaff?: () => void;
     onDeleteStaff?: () => void;
     onSaveStaff?: () => void;
@@ -77,7 +78,7 @@ interface TripDetailsViewProps {
 
 export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
     trip, profile, isEditable, isPublic,
-    onBack, onEditTrip, onEditStaff, onDeleteStaff, onSaveStaff,
+    onBack, onEditTrip, onCancelTrip, onEditStaff, onDeleteStaff, onSaveStaff,
     isAddingStaff, setIsAddingStaff, newStaffData, setNewStaffData, isVerifying
 }) => {
     
@@ -85,6 +86,10 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
     const timeline = d.timeline || [];
     const typeConfig = TRIP_TYPES_CONFIG.find(t => t.id === d.tripType) || TRIP_TYPES_CONFIG[4];
     
+    // חישובים לביטול
+    const isPast = new Date(trip.start_date) < new Date(new Date().setHours(0,0,0,0));
+    const isCancelled = trip.status === 'cancelled';
+
     // זיהוי מגדר
     const deptName = trip.department || '';
     const isFemale = deptName.includes('בת מלך') || deptName.includes('בנות חב"ד') || deptName.includes('בנות חב״ד');
@@ -98,11 +103,7 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
 
     // --- לוגיקה משופרת לתצוגת תפקיד (HQ Fix) ---
     let subRoleDisplay = '';
-    
-    // בדיקה 1: האם הסניף מוגדר כ"מטה" או דומה לזה
     const isBranchHQ = trip.branch === 'מטה' || (trip.branch || '').includes('הנהלה');
-    
-    // בדיקה 2: האם הפרופיל (אם קיים) הוא של איש צוות מטה
     const isProfileHQ = profile?.role === 'admin' || profile?.role === 'dept_staff' || profile?.role === 'safety_admin';
 
     if (isBranchHQ || isProfileHQ) {
@@ -122,7 +123,7 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
             pending: { text: 'ממתין לאישור', bg: 'bg-orange-100', textCol: 'text-orange-700', icon: Clock },
             rejected: { text: 'לא אושר', bg: 'bg-red-100', textCol: 'text-red-700', icon: AlertTriangle },
             draft: { text: 'טיוטה', bg: 'bg-gray-100', textCol: 'text-gray-600', icon: FileText },
-            cancelled: { text: 'בוטל', bg: 'bg-gray-200', textCol: 'text-gray-500', icon: AlertTriangle }
+            cancelled: { text: 'בוטל', bg: 'bg-stone-100', textCol: 'text-stone-500', icon: AlertTriangle }
         };
         const conf = styles[status] || styles.pending;
         const Icon = conf.icon;
@@ -145,7 +146,6 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
         }
     };
 
-    // לוגיקה להצגת רכיבים
     const showSecondaryStaffCard = d.secondaryStaffObj && !isAddingStaff;
     const showAddStaffForm = isEditable && !isPublic && isAddingStaff && setNewStaffData && setIsAddingStaff;
     const showAddButton = isEditable && !isPublic && !isAddingStaff && !d.secondaryStaffObj && setIsAddingStaff;
@@ -219,7 +219,6 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                         <div className="absolute top-4 bottom-4 right-[27px] w-[2px] bg-gray-200 z-0"></div>
                         <div className="space-y-4 relative z-10">
                             {timeline.map((item: any, i: number) => {
-                                // תיקון קטן: שימוש ב-require כדי למנוע בעיות רינדור דינמיות בצד שרת/לקוח
                                 const catStyle = require('@/lib/constants').CATEGORY_STYLES[item.category] || require('@/lib/constants').CATEGORY_STYLES.other;
                                 const Icon = catStyle.icon;
                                 const borderClass = getCategoryBorder(item.category);
@@ -339,15 +338,28 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                         </div>
                     )}
 
-                    {isEditable && onEditTrip && (
-                        <button 
-                            onClick={onEditTrip}
-                            className="w-full py-4 bg-[#00BCD4] hover:bg-cyan-600 text-white rounded-2xl font-bold shadow-lg shadow-cyan-100 transition-all active:scale-95 flex items-center justify-center gap-2"
-                        >
-                            <Edit2 size={18} />
-                            עריכת הטיול
-                        </button>
-                    )}
+                    <div className="flex flex-col gap-3">
+                        {isEditable && onEditTrip && (
+                            <button 
+                                onClick={onEditTrip}
+                                className="w-full py-4 bg-[#00BCD4] hover:bg-cyan-600 text-white rounded-2xl font-bold shadow-lg shadow-cyan-100 transition-all active:scale-95 flex items-center justify-center gap-2"
+                            >
+                                <Edit2 size={18} />
+                                עריכת הטיול
+                            </button>
+                        )}
+                        
+                        {/* הוספת כפתור הביטול כאן */}
+                        {isEditable && onCancelTrip && !isPast && !isCancelled && (
+                            <button 
+                                onClick={onCancelTrip}
+                                className="w-full py-4 bg-red-50 border border-red-100 text-red-600 hover:bg-red-100 rounded-2xl font-bold transition-all active:scale-95 flex items-center justify-center gap-2"
+                            >
+                                <Trash2 size={18} />
+                                ביטול פעילות
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

@@ -3,13 +3,13 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { Header } from '@/components/layout/Header'
+import { Modal } from '@/components/ui/Modal' // <-- החדש
 import { 
   Bell, CheckCircle, AlertTriangle, Info, X, Clock, MailOpen, Trash2, Send, 
   ChevronDown, ChevronUp, Loader2, MessageCircle, HelpCircle, Wrench
 } from 'lucide-react'
 
-// --- פונקציות עזר ---
-
+// ... (פונקציות עזר formatDate, parseMessageSubject נשארות אותו דבר)
 const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('he-IL', {
         day: 'numeric', month: 'numeric', year: '2-digit', hour: '2-digit', minute: '2-digit'
@@ -39,6 +39,15 @@ export default function InboxPage() {
   
   const [notifications, setNotifications] = useState<any[]>([]); 
   const [sentMessages, setSentMessages] = useState<any[]>([]);
+
+  // מודל גלובלי
+  const [modal, setModal] = useState({
+      isOpen: false,
+      type: 'info' as any,
+      title: '',
+      message: '',
+      onConfirm: undefined as (() => void) | undefined
+  });
 
   const fetchData = async () => {
     setLoading(true);
@@ -70,11 +79,18 @@ export default function InboxPage() {
       await supabase.from('notifications').update({ is_read: true }).eq('id', id);
   };
 
-  const deleteNotification = async (id: string, e: React.MouseEvent) => {
+  const deleteNotification = (id: string, e: React.MouseEvent) => {
       e.stopPropagation();
-      if(!confirm('למחוק את ההודעה?')) return;
-      setNotifications(prev => prev.filter(n => n.id !== id));
-      await supabase.from('notifications').delete().eq('id', id);
+      setModal({
+          isOpen: true,
+          type: 'confirm',
+          title: 'מחיקת הודעה',
+          message: 'האם למחוק הודעה זו?',
+          onConfirm: async () => {
+             setNotifications(prev => prev.filter(n => n.id !== id));
+             await supabase.from('notifications').delete().eq('id', id);
+          }
+      });
   };
 
   const toggleExpand = (id: string, isRead: boolean = true) => {
@@ -88,6 +104,7 @@ export default function InboxPage() {
       }
   };
 
+  // ... (getIcon, getStatusBadge נשארים אותו דבר)
   const getIcon = (type: string) => {
       switch (type) {
           case 'success': return <CheckCircle size={20} className="text-green-500" />;
@@ -114,6 +131,7 @@ export default function InboxPage() {
   return (
     <>
       <Header title="הודעות ועדכונים" />
+      <Modal isOpen={modal.isOpen} onClose={() => setModal({...modal, isOpen: false})} type={modal.type} title={modal.title} message={modal.message} onConfirm={modal.onConfirm} />
 
       <div className="max-w-5xl mx-auto p-4 md:p-8 animate-fadeIn pb-32">
         
@@ -212,7 +230,6 @@ export default function InboxPage() {
                             return (
                                 <div key={msg.id} className={`transition-all hover:bg-gray-50 relative overflow-hidden ${isExpanded ? 'bg-gray-50' : 'bg-white'}`}>
                                     
-                                    {/* סרט בפינה הימנית (מוחזר לימין) */}
                                     <div className={`absolute top-0 right-0 px-3 py-1 rounded-bl-xl text-[10px] font-bold text-white flex items-center gap-1.5 shadow-sm z-10
                                         ${isBug ? 'bg-[#E91E63]' : 'bg-[#00BCD4]'}`}
                                     >
@@ -220,22 +237,18 @@ export default function InboxPage() {
                                         {isBug ? 'דיווח תקלה' : 'פנייה כללית'}
                                     </div>
 
-                                    {/* שורה סגורה - items-start כדי לשלוט בגובה */}
                                     <div 
                                         onClick={() => toggleExpand(msg.id)}
                                         className="p-4 flex items-start gap-3 cursor-pointer"
                                     >
-                                        {/* סטטוס - מונמך (mt-6) כדי לא להתנגש עם הסרט */}
                                         <div className="shrink-0 w-16 mt-6">
                                             {getStatusBadge(msg.status)}
                                         </div>
                                         
-                                        {/* תוכן ראשי - מונמך גם הוא (mt-6) כדי להתיישר עם הסטטוס */}
                                         <div className="flex-1 min-w-0 grid grid-cols-1 md:grid-cols-12 gap-1 md:gap-4 items-center mt-6">
                                             <div className="md:col-span-8 text-sm font-bold text-gray-800 truncate">
                                                 {cleanSubject}
                                             </div>
-                                            {/* תאריך במחשב */}
                                             <div className="md:col-span-4 text-xs text-gray-400 flex items-center justify-end gap-2">
                                                 <span>{formatDate(msg.created_at)}</span>
                                                 {isExpanded ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
@@ -246,7 +259,7 @@ export default function InboxPage() {
                                     {isExpanded && (
                                         <div className="px-4 pb-6 pt-2 pl-4 md:pl-12 border-t border-gray-100 animate-fadeIn space-y-4">
                                             <div className="bg-white p-4 rounded-xl border border-gray-100 relative">
-                                                <div className="text-xs font-bold text-gray-400 mb-1">ההודעה שלך:</div>
+                                                <div className="text-xs font-bold text-gray-400 mb-1">הודעה שלך:</div>
                                                 <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{msg.message}</p>
                                             </div>
 

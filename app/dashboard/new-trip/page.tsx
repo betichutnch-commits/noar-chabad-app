@@ -3,6 +3,9 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { Header } from '@/components/layout/Header'
+import { Modal } from '@/components/ui/Modal' // <-- החדש
+import { Input } from '@/components/ui/Input' // <-- החדש
+import { useUser } from '@/hooks/useUser'
 import { 
   Calendar, MapPin, AlertTriangle, Save, CheckCircle, FileUp, 
   Flag, ChevronDown, ChevronUp, Lock, Unlock, Check, Trash2, Loader2, Link as LinkIcon,
@@ -16,37 +19,13 @@ import {
 } from '@/lib/constants'
 import { getHebrewDateString } from '@/lib/dateUtils'
 
-// --- קומפוננטת Input פנימית ---
-const CustomInput = ({ label, icon, error, readOnly, ...props }: any) => (
-    <div className="w-full">
-        {label && <label className="block text-[10px] font-bold text-gray-400 mb-1 mr-1">{label}</label>}
-        <div className="relative">
-            {icon && (
-                <div className="absolute top-1/2 right-3 -translate-y-1/2 text-gray-400 pointer-events-none">
-                    {React.cloneElement(icon, { size: 14 })}
-                </div>
-            )}
-            <input 
-                readOnly={readOnly}
-                {...props}
-                className={`w-full h-[48px] rounded-lg border outline-none font-bold text-xs transition-all
-                ${icon ? 'pr-9' : 'pr-3'} pl-3
-                ${readOnly 
-                    ? 'bg-gray-50 text-gray-500 border-transparent cursor-not-allowed' 
-                    : error 
-                        ? 'border-red-200 bg-red-50 text-red-600 placeholder-red-300' 
-                        : 'bg-white border-gray-200 focus:border-[#E91E63] focus:ring-1 focus:ring-[#E91E63] text-[#263238]'
-                } ${props.className || ''}`}
-            />
-        </div>
-        {error && <p className="text-[10px] text-red-500 font-bold mt-1 mr-1">{error}</p>}
-    </div>
-);
-
 function NewTripContent() {
+  // --- להדביק את זה במקום ---
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
+  // שימוש ב-Hook החדש:
+  const { user, profile, loading: userLoading } = useUser('/'); 
+
+  const [loading, setLoading] = useState(false); // זה ה-loading של שמירת הטופס
   const [step, setStep] = useState(0); 
   const [userGender, setUserGender] = useState<'male' | 'female' | 'mixed'>('mixed');
   const searchParams = useSearchParams();
@@ -55,31 +34,16 @@ function NewTripContent() {
   const [isOtherSelected, setIsOtherSelected] = useState(false);
   const [tempOtherType, setTempOtherType] = useState('');
 
-  // --- ניהול מודל ---
-  const [modalState, setModalState] = useState<{
-      show: boolean;
-      message: string;
-      type: 'error' | 'success' | 'confirm' | 'info';
-      onConfirm?: () => void;
-  }>({ show: false, message: '', type: 'error' });
-  
-  const showModal = (type: 'error' | 'success' | 'confirm' | 'info', msg: string, onConfirm?: () => void) => {
-      setModalState({ show: true, message: msg, type, onConfirm });
-  };
+  // --- Modal State החדש ---
+  const [modal, setModal] = useState({
+      isOpen: false,
+      type: 'info' as 'success' | 'error' | 'info' | 'confirm',
+      message: '',
+      onConfirm: undefined as (() => void) | undefined
+  });
 
-  const handleModalClose = () => {
-      setModalState(prev => ({ ...prev, show: false }));
-      if (modalState.type === 'success' && modalState.message.includes('הצלחה')) {
-          window.location.href = '/dashboard';
-      }
-      if (modalState.type === 'info' && modalState.onConfirm) {
-          modalState.onConfirm();
-      }
-  };
-
-  const handleModalConfirm = () => {
-      if (modalState.onConfirm) modalState.onConfirm();
-      setModalState(prev => ({ ...prev, show: false }));
+  const showModal = (type: 'success' | 'error' | 'info' | 'confirm', msg: string, onConfirm?: () => void) => {
+      setModal({ isOpen: true, type, message: msg, onConfirm });
   };
 
   // --- State לקבצים ונעילת שורות ---
@@ -166,32 +130,24 @@ function NewTripContent() {
       return dict[key]?.[userGender] || key;
   };
 
-  useEffect(() => {
-    const checkUser = async () => {
-        const { data } = await supabase.auth.getUser();
-        if (data?.user) {
-            setUser(data.user);
-            setUserGender(checkGender(data.user.user_metadata?.department));
-            
-            if (!editId) {
-                const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
-                if (profile) {
-                    setGeneralInfo(prev => ({
-                        ...prev,
-                        coordName: `${profile.official_name} ${profile.last_name}`,
-                        coordId: profile.identity_number || '',
-                        coordPhone: profile.phone || '',
-                        coordEmail: profile.email || '',
-                        coordDob: profile.birth_date || ''
-                    }));
-                }
-            }
-        } else {
-            window.location.href = '/';
-        }
-    };
-    checkUser();
-  }, [editId]);
+  // --- להדביק את זה במקום ---
+useEffect(() => {
+  if (user && !userLoading) {
+      setUserGender(checkGender(user.user_metadata?.department));
+      
+      // אם זה טיול חדש (לא עריכה), נמלא את פרטי האחראי אוטומטית מהפרופיל
+      if (!editId && profile) {
+          setGeneralInfo(prev => ({
+              ...prev,
+              coordName: `${profile.official_name} ${profile.last_name}`,
+              coordId: profile.identity_number || '',
+              coordPhone: profile.phone || '',
+              coordEmail: profile.email || '',
+              coordDob: profile.birth_date || ''
+          }));
+      }
+  }
+}, [user, profile, userLoading, editId]);
 
   useEffect(() => {
       const fetchTrip = async () => {
@@ -480,46 +436,14 @@ function NewTripContent() {
     <>
       <Header title={step === 0 ? t('select_type') : (editId ? "עריכת טיול" : "הגשת טיול חדש")} />
 
-      {modalState.show && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fadeIn p-4">
-              <div className={`bg-white p-6 rounded-2xl shadow-2xl max-w-sm w-full text-center border-t-4 ${
-                  modalState.type === 'success' ? 'border-[#8BC34A]' : 
-                  modalState.type === 'confirm' ? 'border-[#FFC107]' : 
-                  modalState.type === 'info' ? 'border-[#00BCD4]' : 'border-[#E91E63]'
-              }`}>
-                  <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
-                      modalState.type === 'success' ? 'bg-green-50 text-[#8BC34A]' : 
-                      modalState.type === 'confirm' ? 'bg-yellow-50 text-[#FFC107]' : 
-                      modalState.type === 'info' ? 'bg-cyan-50 text-[#00BCD4]' : 'bg-red-50 text-[#E91E63]'
-                  }`}>
-                      {modalState.type === 'success' ? <CheckCircle size={32} /> : 
-                       modalState.type === 'confirm' ? <HelpCircle size={32} /> : 
-                       modalState.type === 'info' ? <Info size={32} /> : <AlertTriangle size={32} />}
-                  </div>
-                  <h3 className="font-black text-xl mb-2 text-gray-800">
-                      {modalState.type === 'success' ? 'איזה יופי!' : 
-                       modalState.type === 'confirm' ? 'רגע אחד...' : 
-                       modalState.type === 'info' ? 'שים לב' : 'שגיאה'}
-                  </h3>
-                  <p className="text-gray-600 mb-6 text-sm font-medium leading-relaxed whitespace-pre-line">{modalState.message}</p>
-                  <div className="flex gap-3">
-                      {modalState.type === 'confirm' ? (
-                          <>
-                              <button onClick={handleModalClose} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-3 rounded-xl font-bold transition-colors">לא, אני רוצה לתקן</button>
-                              <button onClick={handleModalConfirm} className="flex-1 bg-[#FFC107] hover:bg-yellow-500 text-white px-4 py-3 rounded-xl font-bold transition-colors shadow-lg shadow-yellow-100">כן, שלח בכל זאת</button>
-                          </>
-                      ) : (
-                          <button onClick={handleModalClose} className={`text-white px-6 py-3 rounded-xl font-bold w-full transition-colors ${
-                              modalState.type === 'success' ? 'bg-[#8BC34A] hover:bg-[#7CB342]' : 
-                              modalState.type === 'info' ? 'bg-[#00BCD4] hover:bg-[#00ACC1]' : 'bg-[#E91E63] hover:bg-pink-600'
-                          }`}>
-                              {modalState.type === 'success' ? 'מעולה, תודה' : 'הבנתי'}
-                          </button>
-                      )}
-                  </div>
-              </div>
-          </div>
-      )}
+      {/* שימוש במודל הגלובלי החדש */}
+      <Modal 
+        isOpen={modal.isOpen} 
+        onClose={() => setModal({ ...modal, isOpen: false })} 
+        type={modal.type} 
+        message={modal.message} 
+        onConfirm={modal.onConfirm}
+      />
 
       <div className="p-4 md:p-8 animate-fadeIn pb-32 max-w-[100vw] overflow-x-hidden">
         
@@ -536,7 +460,7 @@ function NewTripContent() {
                             return (
                                 <div key="other-input" className="bg-gray-50 p-4 rounded-2xl border border-gray-200 animate-fadeIn shadow-inner">
                                     <div className="flex gap-2">
-                                        <CustomInput 
+                                        <Input 
                                             value={tempOtherType}
                                             onChange={(e: any) => setTempOtherType(e.target.value)}
                                             placeholder="נא לפרט..." 
@@ -589,7 +513,7 @@ function NewTripContent() {
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
                         <div className="md:col-span-12 flex flex-col md:flex-row gap-4 w-full">
                             <div className="flex-1 w-full">
-                                  <CustomInput 
+                                  <Input 
                                       label={currentLogic.nameLabel}
                                       value={generalInfo.name} 
                                       onChange={(e: any) => setGeneralInfo({...generalInfo, name: e.target.value})} 
@@ -600,8 +524,8 @@ function NewTripContent() {
 
                             <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
                                 <div>
-                                    <label className="block text-[10px] font-bold text-gray-400 mb-1 mr-1">התחלה</label>
-                                    <div className="bg-white rounded-lg border border-gray-200 flex items-center h-[48px] focus-within:border-[#E91E63] focus-within:ring-1 focus-within:ring-[#E91E63] transition-colors overflow-hidden cursor-pointer" onClick={() => startDateRef.current?.showPicker()}>
+                                    <label className="block text-[10px] md:text-xs font-bold text-gray-500 mb-1.5 mr-1">התחלה</label>
+                                    <div className="bg-white rounded-xl border border-gray-200 flex items-center h-[50px] md:h-[60px] focus-within:border-[#E91E63] focus-within:ring-1 focus-within:ring-[#E91E63] transition-colors overflow-hidden cursor-pointer" onClick={() => startDateRef.current?.showPicker()}>
                                          <div className="flex-1 px-3 border-l border-gray-100 relative h-full flex flex-col justify-center">
                                              <input ref={startDateRef} type="date" className="w-full bg-transparent text-xs font-bold text-gray-800 outline-none z-10 relative" 
                                                  value={generalInfo.startDate} onChange={(e) => setGeneralInfo({...generalInfo, startDate: e.target.value})} onClick={(e) => e.stopPropagation()} />
@@ -614,8 +538,8 @@ function NewTripContent() {
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="block text-[10px] font-bold text-gray-400 mb-1 mr-1">סיום</label>
-                                    <div className="bg-white rounded-lg border border-gray-200 flex items-center h-[48px] focus-within:border-[#E91E63] focus-within:ring-1 focus-within:ring-[#E91E63] transition-colors overflow-hidden cursor-pointer" onClick={() => endDateRef.current?.showPicker()}>
+                                    <label className="block text-[10px] md:text-xs font-bold text-gray-500 mb-1.5 mr-1">סיום</label>
+                                    <div className="bg-white rounded-xl border border-gray-200 flex items-center h-[50px] md:h-[60px] focus-within:border-[#E91E63] focus-within:ring-1 focus-within:ring-[#E91E63] transition-colors overflow-hidden cursor-pointer" onClick={() => endDateRef.current?.showPicker()}>
                                          <div className="flex-1 px-3 border-l border-gray-100 relative h-full flex flex-col justify-center">
                                              <input ref={endDateRef} type="date" className="w-full bg-transparent text-xs font-bold text-gray-800 outline-none z-10 relative" 
                                                  value={generalInfo.endDate} onChange={handleEndDateChange} onClick={(e) => e.stopPropagation()}/>
@@ -643,7 +567,7 @@ function NewTripContent() {
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
                         <div className="md:col-span-3 w-full">
                             <label className="text-xs font-bold text-gray-500 block mb-1.5">שכבות גיל</label>
-                            <div className="flex items-center gap-2 bg-white p-1 rounded-lg border border-gray-200 h-[48px] focus-within:border-[#E91E63] focus-within:ring-1 focus-within:ring-[#E91E63] transition-colors">
+                            <div className="flex items-center gap-2 bg-white p-1 rounded-xl border border-gray-200 h-[50px] md:h-[60px] focus-within:border-[#E91E63] focus-within:ring-1 focus-within:ring-[#E91E63] transition-colors">
                                 <select className="bg-transparent text-xs p-1 outline-none font-bold w-full cursor-pointer h-full text-gray-700" value={generalInfo.gradeFrom} onChange={(e) => setGeneralInfo({...generalInfo, gradeFrom: e.target.value})}>
                                     <option value="">מכיתה...</option>{GRADES.map(g => <option key={g} value={g}>כיתה {g}</option>)}
                                 </select>
@@ -655,8 +579,8 @@ function NewTripContent() {
                         </div>
 
                         <div className="md:col-span-2 w-full">
-                            <CustomInput 
-                                label='ס"ה כמות חניכים' // תיקון לגרשיים
+                            <Input 
+                                label='ס"ה כמות חניכים' 
                                 type="number" 
                                 value={generalInfo.chanichimCount} 
                                 onChange={(e: any) => setGeneralInfo({...generalInfo, chanichimCount: e.target.value})} 
@@ -697,8 +621,8 @@ function NewTripContent() {
                         </div>
 
                         <div className="md:col-span-2 w-full">
-                            <CustomInput 
-                                label='ס"ה משתתפים' // תיקון לגרשיים
+                            <Input 
+                                label='ס"ה משתתפים' 
                                 type="number" 
                                 className="bg-[#E0F7FA] font-bold text-[#00BCD4]"
                                 placeholder="חניכים + צוות" 
@@ -805,12 +729,12 @@ function NewTripContent() {
                             <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
                                 <div className="md:col-span-1 w-full">
                                     <label className="text-[10px] font-bold text-gray-400 mb-1 block">תאריך</label>
-                                    <div className="w-full text-xs p-2 rounded-lg border border-gray-200 bg-gray-50 text-gray-500 h-[48px] flex items-center justify-center font-bold select-none cursor-default whitespace-nowrap overflow-hidden text-ellipsis">
+                                    <div className="w-full text-xs p-2 rounded-lg border border-gray-200 bg-gray-50 text-gray-500 h-[50px] md:h-[60px] flex items-center justify-center font-bold select-none cursor-default whitespace-nowrap overflow-hidden text-ellipsis">
                                         {currentLine.date ? `${currentLine.date.split('-')[2]}/${currentLine.date.split('-')[1]}/${currentLine.date.split('-')[0]}` : '-'}
                                     </div>
                                 </div>
                                 <div className="md:col-span-2 relative w-full">
-                                    <CustomInput 
+                                    <Input 
                                         label="מיקום"
                                         placeholder="הזן מיקום"
                                         value={currentLine.locationValue}
@@ -832,7 +756,7 @@ function NewTripContent() {
                                 <div className="md:col-span-5 flex flex-col md:flex-row gap-2 w-full">
                                     <div className="flex-1 relative">
                                         <label className="text-[10px] font-bold text-gray-400 mb-1.5 block">התרחשות</label>
-                                        <div className="w-full text-xs p-2 rounded-lg border border-gray-200 hover:border-[#E91E63] bg-white cursor-pointer h-[48px] flex items-center justify-between px-3 transition-all" onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}>
+                                        <div className="w-full text-xs p-2 rounded-lg border border-gray-200 hover:border-[#E91E63] bg-white cursor-pointer h-[50px] md:h-[60px] flex items-center justify-between px-3 transition-all" onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}>
                                             <span className={`font-bold ${currentLine.category ? 'text-gray-800' : 'text-gray-400'}`}>{CATEGORIES[currentLine.category]?.label || 'בחר...'}</span><ChevronDown size={16} className="text-gray-400" />
                                         </div>
                                         {showCategoryDropdown && (
@@ -848,9 +772,9 @@ function NewTripContent() {
                                     <div className="flex-[1.5] relative">
                                         <label className="text-[10px] font-bold text-gray-400 mb-1.5 block">פירוט ההתרחשות</label>
                                         {currentLine.subCategory === 'אחר' ? (
-                                            <div className="relative"><CustomInput placeholder="פרט..." autoFocus value={currentLine.otherDetail} onChange={(e: any) => setCurrentLine({...currentLine, otherDetail: e.target.value})} /><div className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 cursor-pointer font-bold" onClick={() => setCurrentLine({...currentLine, subCategory: ''})}>X</div></div>
+                                            <div className="relative"><Input placeholder="פרט..." autoFocus value={currentLine.otherDetail} onChange={(e: any) => setCurrentLine({...currentLine, otherDetail: e.target.value})} /><div className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 cursor-pointer font-bold" onClick={() => setCurrentLine({...currentLine, subCategory: ''})}>X</div></div>
                                         ) : (
-                                            <><div className={`w-full text-xs p-2 rounded-lg border border-gray-200 h-[48px] flex items-center justify-between px-3 transition-all ${!currentLine.category ? 'bg-gray-100 cursor-not-allowed opacity-50' : 'hover:border-[#E91E63] bg-white cursor-pointer'}`} onClick={() => { if(currentLine.category) setShowSubCategoryDropdown(!showSubCategoryDropdown) }}><span className={`font-bold ${currentLine.subCategory ? 'text-gray-800' : 'text-gray-400'}`}>{currentLine.subCategory || (currentLine.category ? 'בחר פירוט...' : '-')}</span><ChevronDown size={16} className="text-gray-400" /></div>
+                                            <><div className={`w-full text-xs p-2 rounded-lg border border-gray-200 h-[50px] md:h-[60px] flex items-center justify-between px-3 transition-all ${!currentLine.category ? 'bg-gray-100 cursor-not-allowed opacity-50' : 'hover:border-[#E91E63] bg-white cursor-pointer'}`} onClick={() => { if(currentLine.category) setShowSubCategoryDropdown(!showSubCategoryDropdown) }}><span className={`font-bold ${currentLine.subCategory ? 'text-gray-800' : 'text-gray-400'}`}>{currentLine.subCategory || (currentLine.category ? 'בחר פירוט...' : '-')}</span><ChevronDown size={16} className="text-gray-400" /></div>
                                             {showSubCategoryDropdown && currentLine.category && (
                                                 <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-2xl z-[100] overflow-hidden max-h-48 overflow-y-auto">{CATEGORIES[currentLine.category]?.options.map((opt: any) => (<div key={opt.label} className="p-3 text-xs text-gray-700 hover:bg-pink-50 hover:text-[#E91E63] cursor-pointer border-b border-gray-50 font-bold transition-colors" onClick={() => { setCurrentLine({...currentLine, subCategory: opt.label}); setShowSubCategoryDropdown(false); }}>{opt.label}</div>))}</div>
                                             )}
@@ -861,17 +785,17 @@ function NewTripContent() {
                                 <div className="md:col-span-4 flex gap-2 items-end w-full">
                                     {currentLine.subCategory === 'לינת מבנה' ? (
                                         <div className="flex-grow flex flex-col md:flex-row gap-2">
-                                            <div className="flex-1"><CustomInput label="שם המקום/כתובת (חובה)" placeholder="שם המקום/כתובת" value={currentLine.otherDetail} onChange={(e: any) => setCurrentLine({...currentLine, otherDetail: e.target.value})} /></div>
-                                            <div className="flex-1"><CustomInput label="פרטים נוספים" placeholder="הערות..." value={currentLine.details} onChange={(e: any) => setCurrentLine({...currentLine, details: e.target.value})} /></div>
+                                            <div className="flex-1"><Input label="שם המקום/כתובת (חובה)" placeholder="שם המקום/כתובת" value={currentLine.otherDetail} onChange={(e: any) => setCurrentLine({...currentLine, otherDetail: e.target.value})} /></div>
+                                            <div className="flex-1"><Input label="פרטים נוספים" placeholder="הערות..." value={currentLine.details} onChange={(e: any) => setCurrentLine({...currentLine, details: e.target.value})} /></div>
                                         </div>
                                     ) : (
                                         <div className="flex-grow relative w-full">
                                             <div className="flex justify-between items-end mb-1.5"><label className="text-[10px] font-bold text-gray-400 block">{currentLine.category === 'hiking' ? 'פירוט המסלול' : 'פרטים נוספים'}</label>{currentLine.category === 'hiking' && (<a href="https://mokedteva.co.il/InfoCenter/TrackWizard" target="_blank" rel="noreferrer" className="text-[10px] font-bold text-[#E91E63] flex items-center gap-1 hover:underline"><LinkIcon size={10} />לכניסה לאשף המסלולים של מוקד טבע</a>)}</div>
-                                            <CustomInput placeholder={currentLine.category === 'hiking' ? 'מס\' המסלול וכו\'' : 'פרטים נוספים...'} value={currentLine.details} onChange={(e: any) => setCurrentLine({...currentLine, details: e.target.value})} />
+                                            <Input placeholder={currentLine.category === 'hiking' ? 'מס\' המסלול וכו\'' : 'פרטים נוספים...'} value={currentLine.details} onChange={(e: any) => setCurrentLine({...currentLine, details: e.target.value})} />
                                         </div>
                                     )}
                                     <div className="w-full md:w-auto mt-2 md:mt-0">
-                                        <button onClick={handleAddLine} className="bg-[#8BC34A] hover:bg-[#7CB342] text-white h-[48px] w-full md:w-[48px] rounded-lg flex items-center justify-center shadow-lg transition-all active:scale-95 flex-shrink-0 mb-[1px]" title="לאישור השורה ופתיחת שורה חדשה">
+                                        <button onClick={handleAddLine} className="bg-[#8BC34A] hover:bg-[#7CB342] text-white h-[50px] md:h-[60px] w-full md:w-[60px] rounded-lg flex items-center justify-center shadow-lg transition-all active:scale-95 flex-shrink-0 mb-[1px]" title="לאישור השורה ופתיחת שורה חדשה">
                                             <Check size={28} strokeWidth={3} />
                                             <span className="md:hidden mr-2 font-bold">הוסף שורה ללו"ז</span>
                                         </button>
@@ -910,7 +834,7 @@ function NewTripContent() {
                 </section>
 
                 {/* --- אזור הוספת אחראי (הוזז לפה) --- */}
-                <section className="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-visible relative z-20 mb-8 animate-fadeIn">
+                <section className="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-visible relative z-10 mb-8 animate-fadeIn">
                     <div className="bg-[#00BCD4] text-white h-12 flex items-center px-6 font-bold text-lg shadow-sm gap-2 rounded-t-3xl">
                        <UserPlus size={20} />
                        <span>{getStaffTitle('title')}</span>
@@ -930,11 +854,11 @@ function NewTripContent() {
                                 </button>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-                                <CustomInput label="שם מלא (כפי שמופיע בת.ז.)" value={generalInfo.coordName} readOnly icon={<User size={14}/>} />
-                                <CustomInput label="תעודת זהות" value={generalInfo.coordId} readOnly icon={<CreditCard size={14}/>} />
-                                <CustomInput label="תאריך לידה" type="date" value={generalInfo.coordDob} readOnly />
-                                <CustomInput label="טלפון" type="tel" value={generalInfo.coordPhone} readOnly icon={<Phone size={14}/>} />
-                                <CustomInput label="אימייל" type="email" value={generalInfo.coordEmail} readOnly icon={<Mail size={14}/>} className="text-left" dir="ltr" />
+                                <Input label="שם מלא (כפי שמופיע בת.ז.)" value={generalInfo.coordName} readOnly icon={<User size={14}/>} />
+                                <Input label="תעודת זהות" value={generalInfo.coordId} readOnly icon={<CreditCard size={14}/>} />
+                                <Input label="תאריך לידה" type="date" value={generalInfo.coordDob} readOnly />
+                                <Input label="טלפון" type="tel" value={generalInfo.coordPhone} readOnly icon={<Phone size={14}/>} />
+                                <Input label="אימייל" type="email" value={generalInfo.coordEmail} readOnly icon={<Mail size={14}/>} className="text-left" dir="ltr" />
                             </div>
                         </div>
 
@@ -973,15 +897,15 @@ function NewTripContent() {
                                     </div>
                                     
                                     <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
-                                        <CustomInput label="שם מלא" icon={<User size={14}/>} value={newStaffData.name} onChange={(e: any) => setNewStaffData({...newStaffData, name: e.target.value})} />
-                                        <CustomInput label="תפקיד בארגון" icon={<Briefcase size={14}/>} value={newStaffData.role} onChange={(e: any) => setNewStaffData({...newStaffData, role: e.target.value})} />
-                                        <CustomInput label="תעודת זהות" icon={<CreditCard size={14}/>} value={newStaffData.idNumber} onChange={(e: any) => setNewStaffData({...newStaffData, idNumber: e.target.value})} />
-                                        <CustomInput label="תאריך לידה" type="date" value={newStaffData.dob} onChange={(e: any) => setNewStaffData({...newStaffData, dob: e.target.value})} />
-                                        <CustomInput label="טלפון" icon={<Phone size={14}/>} type="tel" value={newStaffData.phone} onChange={(e: any) => setNewStaffData({...newStaffData, phone: e.target.value})} />
-                                        <CustomInput label="אימייל" icon={<Mail size={14}/>} type="email" value={newStaffData.email} onChange={(e: any) => setNewStaffData({...newStaffData, email: e.target.value})} className="text-left" dir="ltr"/>
+                                        <Input label="שם מלא" icon={<User size={14}/>} value={newStaffData.name} onChange={(e: any) => setNewStaffData({...newStaffData, name: e.target.value})} />
+                                        <Input label="תפקיד בארגון" icon={<Briefcase size={14}/>} value={newStaffData.role} onChange={(e: any) => setNewStaffData({...newStaffData, role: e.target.value})} />
+                                        <Input label="תעודת זהות" icon={<CreditCard size={14}/>} value={newStaffData.idNumber} onChange={(e: any) => setNewStaffData({...newStaffData, idNumber: e.target.value})} />
+                                        <Input label="תאריך לידה" type="date" value={newStaffData.dob} onChange={(e: any) => setNewStaffData({...newStaffData, dob: e.target.value})} />
+                                        <Input label="טלפון" icon={<Phone size={14}/>} type="tel" value={newStaffData.phone} onChange={(e: any) => setNewStaffData({...newStaffData, phone: e.target.value})} />
+                                        <Input label="אימייל" icon={<Mail size={14}/>} type="email" value={newStaffData.email} onChange={(e: any) => setNewStaffData({...newStaffData, email: e.target.value})} className="text-left" dir="ltr"/>
                                     </div>
                                     <div className="flex justify-end">
-                                        <button onClick={handleSaveStaff} disabled={isVerifyingStaff} className="bg-[#E91E63] text-white px-6 py-3 rounded-lg font-bold hover:bg-pink-600 transition-colors shadow-md text-xs flex items-center gap-2 h-[48px]">
+                                        <button onClick={handleSaveStaff} disabled={isVerifyingStaff} className="bg-[#E91E63] text-white px-6 py-3 rounded-lg font-bold hover:bg-pink-600 transition-colors shadow-md text-xs flex items-center gap-2 h-[60px]">
                                             {isVerifyingStaff ? <Loader2 size={16} className="animate-spin"/> : <CheckCircle size={16}/>}
                                             {isVerifyingStaff ? 'בודק...' : 'שמור אחראי'}
                                         </button>

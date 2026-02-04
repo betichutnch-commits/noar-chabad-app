@@ -5,9 +5,10 @@ import { supabase } from '@/lib/supabaseClient'
 import { Header } from '@/components/layout/Header'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { Modal } from '@/components/ui/Modal' // החדש
 import { 
   User, Mail, Building2, Save, CheckCircle, Loader2, Camera, 
-  ShieldCheck, Lock, Trash2, Calendar, AlertTriangle, ArrowRight, Info
+  ShieldCheck, Lock, Trash2, Calendar, ArrowRight, Info
 } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
@@ -25,8 +26,10 @@ function ProfileContent() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [user, setUser] = useState<any>(null);
-  const [successMsg, setSuccessMsg] = useState('');
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  
+  // מודל גלובלי
+  const [modal, setModal] = useState({ isOpen: false, type: 'info' as any, title: '', message: '', onConfirm: undefined as (() => void) | undefined });
+  const showModal = (type: string, title: string, msg: string, onConfirm?: () => void) => setModal({ isOpen: true, type: type as any, title, message: msg, onConfirm });
 
   const [formData, setFormData] = useState({
     officialName: '', 
@@ -49,11 +52,9 @@ function ProfileContent() {
 
   useEffect(() => {
     const getUser = async () => {
-      // בדיקה יסודית למניעת לופ טעינה
       const { data, error } = await supabase.auth.getUser();
       
       if (error || !data?.user) {
-          // אם אין משתמש, נקה הכל ושלח להתחברות
           await supabase.auth.signOut();
           window.location.href = '/'; 
           return;
@@ -98,18 +99,20 @@ function ProfileContent() {
       if (uploadError) throw uploadError;
       const { data: { publicUrl } } = supabase.storage.from('trip-files').getPublicUrl(fileName);
       setFormData(prev => ({ ...prev, profileImage: publicUrl }));
-    } catch (error: any) { alert('שגיאה בהעלאת תמונה: ' + error.message); } 
+    } catch (error: any) { showModal('error', 'שגיאה', 'שגיאה בהעלאת תמונה: ' + error.message); } 
     finally { setUploading(false); }
   };
 
-  const handleRemoveImageClick = (e: React.MouseEvent) => { e.preventDefault(); setShowDeleteModal(true); };
-  const confirmRemoveImage = () => { setFormData(prev => ({ ...prev, profileImage: null })); setShowDeleteModal(false); };
+  const handleRemoveImageClick = (e: React.MouseEvent) => { 
+      e.preventDefault(); 
+      showModal('confirm', 'מחיקת תמונה', 'האם את/ה בטוח/ה שברצונך להסיר את התמונה?\nלא ניתן לשחזר את הפעולה לאחר השמירה.', () => {
+          setFormData(prev => ({ ...prev, profileImage: null }));
+      });
+  };
 
   const handleSave = async () => {
     setSaving(true);
-    setSuccessMsg('');
     try {
-      // עדכון Metadata (לשימוש מיידי)
       await supabase.auth.updateUser({
         data: {
           official_name: formData.officialName,
@@ -129,7 +132,6 @@ function ProfileContent() {
         }
       });
       
-      // עדכון טבלת Profiles (לחיפושים וקישורים)
       if (user) {
           const updates = {
               id: user.id,
@@ -147,16 +149,13 @@ function ProfileContent() {
           await supabase.from('profiles').upsert(updates);
       }
 
-      setSuccessMsg('הפרטים נשמרו בהצלחה!');
+      showModal('success', 'הפרטים נשמרו', 'העדכון בוצע בהצלחה!');
       
-      // אם הגענו מטופס - נחזור לשם
       if (returnUrl) {
-          setTimeout(() => { router.push(returnUrl); }, 1000);
-      } else {
-          setTimeout(() => { window.location.reload(); }, 1000);
+          setTimeout(() => { router.push(returnUrl); }, 1500);
       }
 
-    } catch (e: any) { alert('שגיאה בשמירה: ' + e.message); } 
+    } catch (e: any) { showModal('error', 'שגיאה', 'שגיאה בשמירה: ' + e.message); } 
     finally { setSaving(false); }
   };
 
@@ -165,10 +164,10 @@ function ProfileContent() {
   return (
     <>
       <Header title="פרופיל אישי" />
+      <Modal isOpen={modal.isOpen} onClose={() => setModal({...modal, isOpen: false})} type={modal.type} title={modal.title} message={modal.message} onConfirm={modal.onConfirm} />
 
       <div className="max-w-5xl mx-auto p-8 space-y-8 animate-fadeIn pb-32">
         
-        {/* --- כפתור חזרה חכם לטופס --- */}
         {returnUrl && (
             <div className="bg-blue-50 border border-blue-200 p-4 rounded-2xl flex items-center justify-between animate-fadeIn shadow-sm">
                 <div className="flex items-center gap-3">
@@ -261,27 +260,12 @@ function ProfileContent() {
                     </div>
                 </div>
                 <div className="mt-10 flex items-center justify-end gap-4">
-                    {successMsg && <div className="text-[#8BC34A] font-bold text-sm flex items-center gap-2 animate-fadeIn bg-green-50 px-4 py-2 rounded-xl"><CheckCircle size={18}/> {successMsg}</div>}
                     <Button onClick={handleSave} isLoading={saving} variant="secondary" className="w-full md:w-auto px-12 shadow-xl shadow-green-100" icon={<Save size={20}/>}>
                         {returnUrl ? 'שמירה וחזרה לטיול' : 'שמירת שינויים'}
                     </Button>
                 </div>
             </section>
         </div>
-
-        {showDeleteModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fadeIn">
-                <div className="bg-white rounded-[24px] shadow-2xl p-8 max-w-sm w-full text-center border border-gray-100">
-                    <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4"><AlertTriangle size={32} /></div>
-                    <h3 className="text-xl font-black text-gray-800 mb-2">מחיקת תמונת פרופיל</h3>
-                    <p className="text-gray-500 mb-8 text-sm font-medium leading-relaxed">האם את/ה בטוח/ה שברצונך להסיר את התמונה?<br/>לא ניתן לשחזר את הפעולה לאחר השמירה.</p>
-                    <div className="flex gap-3 justify-center">
-                        <button onClick={() => setShowDeleteModal(false)} className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-100 transition-colors">ביטול</button>
-                        <button onClick={confirmRemoveImage} className="flex-1 py-3 bg-red-500 text-white font-bold rounded-xl hover:bg-red-600 transition-colors shadow-lg shadow-red-200">מחק תמונה</button>
-                    </div>
-                </div>
-            </div>
-        )}
       </div>
     </>
   )

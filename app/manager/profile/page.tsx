@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { ManagerHeader } from '@/components/layout/ManagerHeader'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { Modal } from '@/components/ui/Modal'
 import { Save, User, Mail, Lock, ShieldCheck, Camera, Loader2 } from 'lucide-react'
 
 export default function ManagerProfile() {
@@ -13,13 +14,17 @@ export default function ManagerProfile() {
   const [uploading, setUploading] = useState(false);
   const [user, setUser] = useState<any>(null);
 
+  // מודל גלובלי
+  const [modal, setModal] = useState({ isOpen: false, type: 'info' as any, title: '', message: '' });
+  const showModal = (type: string, title: string, msg: string) => setModal({ isOpen: true, type: type as any, title, message: msg });
+
   const [formData, setFormData] = useState({
-    officialName: '', // שם פרטי לפי ת"ז
+    officialName: '', 
     lastName: '',
     idNumber: '', 
     birthDate: '',
     nickname: '',
-    fullNameAndMother: '', // השדה שהיה חסר
+    fullNameAndMother: '', 
     email: '',
     phone: '',
     profileImage: null as string | null
@@ -32,14 +37,12 @@ export default function ManagerProfile() {
         setUser(user);
         const meta = user.user_metadata || {};
         
-        // לוגיקה חכמה לחילוץ ת"ז
         let extractedId = meta.id_number || '';
         if (!extractedId && user.email?.includes('@')) {
             const possibleId = user.email.split('@')[0];
             if (/^\d+$/.test(possibleId)) extractedId = possibleId;
         }
 
-        // לוגיקה חכמה לחילוץ שם פרטי ומשפחה (למקרה שהשדות החדשים ריקים)
         const fallbackFirstName = meta.full_name?.split(' ')[0] || '';
         const fallbackLastName = meta.full_name?.split(' ').slice(1).join(' ') || '';
 
@@ -47,9 +50,9 @@ export default function ManagerProfile() {
             officialName: meta.official_name || meta.first_name || fallbackFirstName,
             lastName: meta.last_name || fallbackLastName,
             idNumber: extractedId,
-            birthDate: meta.birth_date || '', // וודא שזה קיים בדאטה בייס, אחרת יישאר ריק
+            birthDate: meta.birth_date || '', 
             nickname: meta.nickname || '',
-            fullNameAndMother: meta.full_name_mother || '', // טעינת שם האם
+            fullNameAndMother: meta.full_name_mother || '', 
             email: meta.contact_email || user.email || '',
             phone: meta.phone || '',
             profileImage: meta.avatar_url || null
@@ -73,7 +76,7 @@ export default function ManagerProfile() {
       const { data } = supabase.storage.from('trip-files').getPublicUrl(fileName);
       setFormData(prev => ({ ...prev, profileImage: data.publicUrl }));
     } catch (error: any) {
-      alert('שגיאה: ' + error.message);
+      showModal('error', 'שגיאה', error.message);
     } finally {
       setUploading(false);
     }
@@ -82,19 +85,17 @@ export default function ManagerProfile() {
   const handleSave = async () => {
       setSaving(true);
       
-      // שמירה של כל השדות בצורה מסודרת למטא-דאטה
       const { error } = await supabase.auth.updateUser({
           data: { 
               official_name: formData.officialName,
-              first_name: formData.officialName, // שומרים גם וגם ליתר ביטחון
+              first_name: formData.officialName, 
               last_name: formData.lastName,
               nickname: formData.nickname,
               birth_date: formData.birthDate,
-              full_name_mother: formData.fullNameAndMother, // שמירת שם האם
+              full_name_mother: formData.fullNameAndMother, 
               phone: formData.phone,
               contact_email: formData.email,
               avatar_url: formData.profileImage,
-              // מעדכנים גם את ה-full_name הכללי לתצוגה יפה
               full_name: `${formData.officialName} ${formData.lastName}`
           }
       });
@@ -102,10 +103,10 @@ export default function ManagerProfile() {
       setSaving(false);
       
       if (error) {
-          alert('שגיאה בשמירה: ' + error.message);
+          showModal('error', 'שגיאה', error.message);
       } else {
-          alert('הפרופיל עודכן בהצלחה');
-          window.location.reload(); // רענון כדי לראות את השינויים בכותרת העליונה
+          showModal('success', 'נשמר', 'הפרופיל עודכן בהצלחה');
+          setTimeout(() => window.location.reload(), 1500); 
       }
   };
 
@@ -114,10 +115,10 @@ export default function ManagerProfile() {
   return (
     <>
       <ManagerHeader title="פרופיל אישי - מנהל" />
+      <Modal isOpen={modal.isOpen} onClose={() => setModal({...modal, isOpen: false})} type={modal.type} title={modal.title} message={modal.message} />
       
       <div className="p-8 max-w-5xl mx-auto pb-32 animate-fadeIn">
           
-          {/* כרטיס עליון */}
           <div className="bg-white rounded-[32px] p-8 border border-gray-200 shadow-sm flex items-center gap-8 mb-8">
                <div className="relative group w-24 h-24">
                    <div className="w-full h-full bg-gray-800 rounded-3xl flex items-center justify-center text-white text-3xl font-bold overflow-hidden border-4 border-white shadow-lg">
@@ -142,9 +143,8 @@ export default function ManagerProfile() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               
-              {/* צד ימין: נתונים נעולים (מערכת) */}
               <div className="bg-[#F1F8E9] p-6 rounded-3xl border border-green-100 h-fit">
-                  <div className="flex items-center gap-2 mb-6 text-[#8BC34A] font-bold text-sm uppercase">
+                  <div className="flex items-center gap-2 mb-6 text-[#8BC34A] font-bold text-sm uppercase tracking-wider">
                       <Lock size={14}/> פרטי מערכת
                   </div>
                   <div className="space-y-4">
@@ -167,52 +167,23 @@ export default function ManagerProfile() {
                   </div>
               </div>
 
-              {/* צד שמאל: טופס עריכה */}
               <div className="md:col-span-2 bg-white p-8 rounded-3xl border border-gray-200 shadow-sm">
                   <h3 className="text-xl font-bold text-gray-800 mb-6">עדכון פרטים</h3>
                   <div className="space-y-6">
                       
-                      {/* שורת שמות לעריכה */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <Input 
-                            label="שם פרטי (כפי שמופיע בתעודת זהות)" 
-                            value={formData.officialName} 
-                            onChange={e => setFormData({...formData, officialName: e.target.value})} 
-                          />
-                          <Input 
-                            label="כינוי / שם חיבה" 
-                            value={formData.nickname} 
-                            onChange={e => setFormData({...formData, nickname: e.target.value})} 
-                          />
+                          <Input label="שם פרטי (כפי שמופיע בתעודת זהות)" value={formData.officialName} onChange={(e: any) => setFormData({...formData, officialName: e.target.value})} />
+                          <Input label="כינוי / שם חיבה" value={formData.nickname} onChange={(e: any) => setFormData({...formData, nickname: e.target.value})} />
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <Input 
-                            label="שם משפחה" 
-                            value={formData.lastName} 
-                            onChange={e => setFormData({...formData, lastName: e.target.value})} 
-                          />
-                          <Input 
-                            label="טלפון נייד" 
-                            value={formData.phone} 
-                            onChange={e => setFormData({...formData, phone: e.target.value})} 
-                          />
+                          <Input label="שם משפחה" value={formData.lastName} onChange={(e: any) => setFormData({...formData, lastName: e.target.value})} />
+                          <Input label="טלפון נייד" value={formData.phone} onChange={(e: any) => setFormData({...formData, phone: e.target.value})} />
                       </div>
 
-                      {/* השדה החדש שביקשת! */}
-                      <Input 
-                        label="שם מלא + שם האם (לתפילה)" 
-                        value={formData.fullNameAndMother} 
-                        onChange={e => setFormData({...formData, fullNameAndMother: e.target.value})} 
-                        placeholder="לדוגמה: יוסף בן שרה"
-                      />
+                      <Input label="שם מלא + שם האם (לתפילה)" value={formData.fullNameAndMother} onChange={(e: any) => setFormData({...formData, fullNameAndMother: e.target.value})} placeholder="לדוגמה: יוסף בן שרה" />
 
-                      <Input 
-                        label="אימייל ליצירת קשר" 
-                        value={formData.email} 
-                        onChange={e => setFormData({...formData, email: e.target.value})} 
-                        icon={<Mail size={18}/>} 
-                      />
+                      <Input label="אימייל ליצירת קשר" value={formData.email} onChange={(e: any) => setFormData({...formData, email: e.target.value})} icon={<Mail size={18}/>} />
                       
                       <div className="pt-6 flex justify-end border-t border-gray-100 mt-6">
                           <Button onClick={handleSave} isLoading={saving} icon={<Save size={18}/>} className="bg-gray-800 hover:bg-gray-900 px-10 shadow-lg shadow-gray-200">

@@ -3,12 +3,11 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { Header } from '@/components/layout/Header'
-import { 
-  Loader2, Search, Trash2, History
-} from 'lucide-react'
+import { Loader2, Search, History, Trash2 } from 'lucide-react' // Trash2 לשימוש במודל אם צריך
 import { useRouter } from 'next/navigation'
 import { TripCard } from '@/components/TripCard' 
 import { MultiSelectFilter } from '@/components/ui/MultiSelectFilter'
+import { Modal } from '@/components/ui/Modal' // <-- החדש
 
 export default function MyTripsPage() {
   const router = useRouter();
@@ -16,12 +15,22 @@ export default function MyTripsPage() {
   const [trips, setTrips] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
-  
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   
-  const [cancelModal, setCancelModal] = useState<{show: boolean, tripId: string | null}>({show: false, tripId: null});
-  const [deleteDraftModal, setDeleteDraftModal] = useState<{show: boolean, tripId: string | null}>({show: false, tripId: null});
+  // --- ניהול מודל מאוחד ---
+  const [modal, setModal] = useState({
+      isOpen: false,
+      type: 'info' as 'success' | 'error' | 'info' | 'confirm',
+      title: '',
+      message: '',
+      onConfirm: undefined as (() => void) | undefined,
+      confirmText: 'אישור',
+      cancelText: 'ביטול'
+  });
+
+  // State עבור סיבת ביטול (מיוחד לביטול)
   const [cancelReason, setCancelReason] = useState('');
+  const [pendingTripId, setPendingTripId] = useState<string | null>(null); // שומר ID לפעולה
 
   const filterOptions = [
       { id: "טיול מחוץ לסניף", label: "טיול מחוץ לסניף", color: "bg-[#4DD0E1]" },
@@ -52,34 +61,84 @@ export default function MyTripsPage() {
     fetchTrips();
   }, []);
 
-  const confirmDeleteDraft = async () => {
-      if (!deleteDraftModal.tripId) return;
-      const id = deleteDraftModal.tripId;
+  // --- פעולת מחיקת טיוטה ---
+  const handleDeleteDraftClick = (id: string) => {
+      setPendingTripId(id);
+      setModal({
+          isOpen: true,
+          type: 'confirm',
+          title: 'מחיקת טיוטה',
+          message: 'האם למחוק את הטיוטה לצמיתות?\nלא ניתן לשחזר פעולה זו.',
+          confirmText: 'מחק טיוטה',
+          cancelText: 'ביטול',
+          onConfirm: () => executeDeleteDraft(id)
+      });
+  };
+
+  const executeDeleteDraft = async (id: string) => {
       const { error } = await supabase.from('trips').delete().eq('id', id);
       if (!error) {
           setTrips(prev => prev.filter(t => t.id !== id));
-          setDeleteDraftModal({show: false, tripId: null});
+          setModal(prev => ({...prev, isOpen: false}));
       } else {
           alert('שגיאה במחיקה: ' + error.message);
       }
   };
 
-  const handleCancelTrip = async () => {
-      if (!cancelModal.tripId || !cancelReason.trim()) return;
+  // --- פעולת ביטול טיול (דורש טקסט) ---
+  // מכיוון שהמודל הגלובלי לא תומך ב-Textarea, כאן נשתמש בטריק: 
+  // נפתח מודל אישור, ואם מאשרים, נשתמש ב-prompt של הדפדפן או נשאיר את המודל המותאם אישית (עדיף מותאם).
+  // במקרה הזה, נשאיר את המודל המותאם אישית לביטול כי הוא דורש סיבה, 
+  // אבל נשתמש ב-Modal הגלובלי להודעות שגיאה/הצלחה.
+  
+  const [showCustomCancelModal, setShowCustomCancelModal] = useState(false);
+
+  const handleCancelClick = (id: string) => {
+      setPendingTripId(id);
+      setCancelReason('');
+      setShowCustomCancelModal(true);
+  };
+
+  const executeCancelTrip = async () => {
+      if (!pendingTripId || !cancelReason.trim()) return;
       try {
-          const trip = trips.find(t => t.id === cancelModal.tripId);
+          const trip = trips.find(t => t.id === pendingTripId);
           const updatedDetails = { ...trip.details, cancellationReason: cancelReason };
+          
           const { error } = await supabase.from('trips').update({
               status: 'cancelled',
               cancellation_reason: cancelReason, 
               details: updatedDetails
-          }).eq('id', cancelModal.tripId);
+          }).eq('id', pendingTripId);
           
           if (error) throw error;
-          setTrips(prev => prev.map(t => t.id === cancelModal.tripId ? {...t, status: 'cancelled', cancellation_reason: cancelReason, details: updatedDetails} : t));
-          setCancelModal({show: false, tripId: null});
-          setCancelReason('');
-      } catch (e: any) { alert('שגיאה בביטול: ' + e.message); }
+          
+          setTrips(prev => prev.map(t => t.id === pendingTripId ? {...t, status: 'cancelled', cancellation_reason: cancelReason, details: updatedDetails} : t));
+          setShowCustomCancelModal(false);
+          
+          // הודעת הצלחה עם המודל הגלובלי
+          setModal({
+              isOpen: true,
+              type: 'success',
+              title: 'הפעילות בוטלה',
+              message: 'הסטטוס עודכן והודעה נשלחה לגורמים הרלוונטיים.',
+              onConfirm: undefined,
+              confirmText: 'סגור',
+              cancelText: ''
+          });
+
+      } catch (e: any) { 
+          // הודעת שגיאה
+          setModal({
+              isOpen: true,
+              type: 'error',
+              title: 'שגיאה',
+              message: 'לא ניתן היה לבטל את הפעילות: ' + e.message,
+              onConfirm: undefined,
+              confirmText: 'סגור',
+              cancelText: ''
+          });
+      }
   };
 
   if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
@@ -106,26 +165,36 @@ export default function MyTripsPage() {
   return (
     <>
       <Header title="הטיולים שלי" />
+      
+      {/* המודל הגלובלי */}
+      <Modal 
+        isOpen={modal.isOpen} 
+        onClose={() => setModal({...modal, isOpen: false})} 
+        type={modal.type as any} 
+        title={modal.title} 
+        message={modal.message} 
+        onConfirm={modal.onConfirm}
+        confirmText={modal.confirmText}
+        cancelText={modal.cancelText}
+      />
 
-      {cancelModal.show && (
+      {/* מודל מותאם אישית לביטול (כי הוא מכיל Textarea) */}
+      {showCustomCancelModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fadeIn">
-              <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm text-center">
-                  <div className="w-14 h-14 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4"><Trash2 size={28}/></div>
-                  <h3 className="text-lg font-black text-gray-800 mb-2">ביטול פעילות</h3>
-                  <p className="text-sm text-gray-500 mb-4 font-medium leading-relaxed">האם את/ה בטוח/ה שברצונך לבטל את הפעילות? <br/>פעולה זו תעדכן את מחלקת המפעלים והבטיחות.</p>
-                  <textarea className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm mb-4 outline-none focus:border-red-400 min-h-[80px]" placeholder="נא לפרט את סיבת הביטול..." value={cancelReason} onChange={e => setCancelReason(e.target.value)}></textarea>
-                  <div className="flex gap-2"><button onClick={() => setCancelModal({show: false, tripId: null})} className="flex-1 py-2 bg-gray-100 text-gray-700 font-bold rounded-xl text-sm">חזרה</button><button onClick={handleCancelTrip} className="flex-1 py-2 bg-red-500 text-white font-bold rounded-xl text-sm hover:bg-red-600 transition-colors">אשר ביטול</button></div>
-              </div>
-          </div>
-      )}
-
-      {deleteDraftModal.show && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fadeIn">
-              <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm text-center border-t-4 border-[#E91E63]">
-                  <div className="w-14 h-14 bg-red-50 text-[#E91E63] rounded-full flex items-center justify-center mx-auto mb-4"><Trash2 size={28}/></div>
-                  <h3 className="text-lg font-black text-gray-800 mb-2">מחיקת טיוטה</h3>
-                  <p className="text-sm text-gray-500 mb-4 font-medium">האם למחוק את הטיוטה לצמיתות? לא ניתן לשחזר פעולה זו.</p>
-                  <div className="flex gap-2"><button onClick={() => setDeleteDraftModal({show: false, tripId: null})} className="flex-1 py-2 bg-gray-100 text-gray-700 font-bold rounded-xl text-sm">ביטול</button><button onClick={confirmDeleteDraft} className="flex-1 py-2 bg-[#E91E63] text-white font-bold rounded-xl text-sm hover:bg-pink-600 transition-colors">מחק</button></div>
+              <div className="bg-white p-6 rounded-3xl shadow-2xl w-full max-w-sm text-center border-t-4 border-red-500">
+                  <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4"><Trash2 size={32}/></div>
+                  <h3 className="text-xl font-black text-gray-800 mb-2">ביטול פעילות</h3>
+                  <p className="text-sm text-gray-500 mb-4 font-medium leading-relaxed">האם את/ה בטוח/ה? <br/>פעולה זו תעדכן את מחלקת המפעלים.</p>
+                  <textarea 
+                    className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm mb-4 outline-none focus:border-red-400 min-h-[100px] resize-none" 
+                    placeholder="חובה לפרט את סיבת הביטול..." 
+                    value={cancelReason} 
+                    onChange={e => setCancelReason(e.target.value)}
+                  ></textarea>
+                  <div className="flex gap-3">
+                      <button onClick={() => setShowCustomCancelModal(false)} className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl text-sm hover:bg-gray-200">חזרה</button>
+                      <button onClick={executeCancelTrip} className="flex-1 py-3 bg-red-500 text-white font-bold rounded-xl text-sm hover:bg-red-600 shadow-lg shadow-red-100">אשר ביטול</button>
+                  </div>
               </div>
           </div>
       )}
@@ -144,15 +213,12 @@ export default function MyTripsPage() {
                       })}
                   </div>
 
-                   {/* אזור החיפוש והסינון - רספונסיבי */}
                   <div className="flex flex-col-reverse md:flex-row gap-2 w-full md:w-auto">
-                      
                       <MultiSelectFilter 
                         options={filterOptions}
                         selected={selectedTypes}
                         onChange={setSelectedTypes}
                       />
-
                       <div className="relative flex-1 md:w-64">
                           <input type="text" placeholder="חיפוש..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-4 pr-10 py-3 bg-white border border-gray-200 rounded-2xl text-sm font-bold focus:border-[#00BCD4] outline-none transition-all shadow-sm focus:ring-4 focus:ring-cyan-50"/>
                           <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={18}/>
@@ -167,8 +233,8 @@ export default function MyTripsPage() {
                       <TripCard 
                           key={trip.id} 
                           trip={trip} 
-                          onDeleteDraft={() => setDeleteDraftModal({show: true, tripId: trip.id})}
-                          onCancelTrip={() => setCancelModal({show: true, tripId: trip.id})}
+                          onDeleteDraft={() => handleDeleteDraftClick(trip.id)}
+                          onCancelTrip={() => handleCancelClick(trip.id)}
                       />
                   ))}
               </div>
