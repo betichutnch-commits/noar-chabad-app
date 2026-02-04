@@ -5,71 +5,104 @@ import { supabase } from '@/lib/supabaseClient'
 import { ManagerHeader } from '@/components/layout/ManagerHeader'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
-import { Loader2, HelpCircle, CheckCircle, Bug, Reply, Send, X, Clock, User } from 'lucide-react'
+import { Loader2, HelpCircle, Bug, Reply, Send, X, User, CheckCircle } from 'lucide-react'
+
+// ייבוא Hook ו-Zod
+import { useUser } from '@/hooks/useUser'
+import { managerReplySchema } from '@/lib/schemas'
+
+const SUPER_ADMIN_EMAIL = 'avremihalperin@gmail.com';
 
 export default function ManagerInbox() {
-  const [loading, setLoading] = useState(true);
+  // 1. שימוש ב-Hook
+  const { user, loading: userLoading } = useUser('/');
+
+  const [messagesLoading, setMessagesLoading] = useState(true);
   const [messages, setMessages] = useState<any[]>([]);
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   
-  // מודל גלובלי - תיקון TS
-  const [modal, setModal] = useState({ isOpen: false, type: 'info' as any, title: '', message: '', onConfirm: undefined as (() => void) | undefined });
-  
-  // התיקון כאן: הוספתי onConfirm: undefined באופן מפורש
-  const showModal = (type: string, title: string, msg: string) => 
-      setModal({ isOpen: true, type: type as any, title, message: msg, onConfirm: undefined });
+  // מודל גלובלי
+  const [modal, setModal] = useState({
+      isOpen: false,
+      type: 'info' as 'success' | 'error' | 'info' | 'confirm',
+      title: '',
+      message: '',
+      onConfirm: undefined as (() => void) | undefined
+  });
+
+  const showModal = (type: 'success' | 'error' | 'info' | 'confirm', title: string, msg: string) => 
+      setModal({ isOpen: true, type, title, message: msg, onConfirm: undefined });
 
   // ניהול תגובה
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
   const [sendingReply, setSendingReply] = useState(false);
 
+  // 2. טעינת הודעות
   useEffect(() => {
-    const init = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        const myEmail = 'avremihalperin@gmail.com'; 
+    const fetchMessages = async () => {
+        if (!user) return;
 
-        if (user?.email === myEmail || user?.user_metadata?.contact_email === myEmail) {
-            setIsSuperAdmin(true);
-        }
-        fetchMessages();
+        const { data } = await supabase
+            .from('contact_messages')
+            .select('*, user:user_id ( email, raw_user_meta_data )') 
+            .order('created_at', { ascending: false });
+        
+        if (data) setMessages(data);
+        setMessagesLoading(false);
     };
-    init();
-  }, []);
 
-  const fetchMessages = async () => {
-    const { data } = await supabase
-      .from('contact_messages')
-      .select('*, user:user_id ( email, raw_user_meta_data )') 
-      .order('created_at', { ascending: false });
-    
-    if (data) setMessages(data);
-    setLoading(false);
+    if (!userLoading && user) {
+        fetchMessages();
+    }
+  }, [user, userLoading]);
+
+  // חישוב הרשאות (מבוסס על ה-User מה-Hook)
+  const isSuperAdmin = user?.email === SUPER_ADMIN_EMAIL || user?.user_metadata?.contact_email === SUPER_ADMIN_EMAIL;
+
+  const refreshMessages = async () => {
+      const { data } = await supabase
+          .from('contact_messages')
+          .select('*, user:user_id ( email, raw_user_meta_data )') 
+          .order('created_at', { ascending: false });
+      if (data) setMessages(data);
   };
 
   const markAsTreated = async (id: string) => {
       await supabase.from('contact_messages').update({ status: 'treated' }).eq('id', id);
-      fetchMessages();
+      refreshMessages();
   };
 
   const sendReply = async (originalMsg: any) => {
-      if (!replyText) return;
+      // 3. ולידציה עם Zod
+      const validation = managerReplySchema.safeParse({ replyText });
+      if (!validation.success) {
+          showModal('error', 'שגיאה', validation.error.issues[0].message);
+          return;
+      }
+
       setSendingReply(true);
 
       try {
+          // שליחת התראה למשתמש
           await supabase.from('notifications').insert([{
               user_id: originalMsg.user_id,
               title: `תשובה לפנייתך: ${originalMsg.subject}`,
               message: `מטה בטיחות ענה:\n"${replyText}"`,
               type: 'info',
-              link: '/dashboard/contact'
+              link: '/dashboard/inbox' // מפנה לדואר הנכנס של המשתמש
           }]);
 
-          await markAsTreated(originalMsg.id);
+          // עדכון הודעה מקורית עם התשובה ושינוי סטטוס
+          await supabase.from('contact_messages').update({ 
+              status: 'treated',
+              admin_reply: replyText 
+          }).eq('id', originalMsg.id);
+          
+          await refreshMessages();
           
           setReplyingTo(null);
           setReplyText('');
-          showModal('success', 'נשלח', 'התשובה נשלחה בהצלחה!');
+          showModal('success', 'נשלח', 'התשובה נשלחה בהצלחה והמשתמש קיבל התראה.');
 
       } catch (e) {
           showModal('error', 'שגיאה', 'שגיאה בשליחה');
@@ -78,12 +111,19 @@ export default function ManagerInbox() {
       }
   };
 
-  if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-gray-400"/></div>;
+  if (userLoading || messagesLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
 
   return (
     <>
       <ManagerHeader title="דואר נכנס והודעות" />
-      <Modal isOpen={modal.isOpen} onClose={() => setModal({...modal, isOpen: false})} type={modal.type} title={modal.title} message={modal.message} />
+      
+      <Modal 
+        isOpen={modal.isOpen} 
+        onClose={() => setModal({...modal, isOpen: false})} 
+        type={modal.type} 
+        title={modal.title} 
+        message={modal.message} 
+      />
 
       <div className="p-4 md:p-8 animate-fadeIn max-w-[100vw] overflow-x-hidden pb-32">
           
@@ -102,7 +142,9 @@ export default function ManagerInbox() {
                     <tbody className="divide-y divide-gray-50">
                         {messages.map((msg) => {
                             const isBug = msg.subject?.includes('תקלה') || msg.subject?.includes('באג');
+                            // סינון באגים אם לא סופר-אדמין
                             if (isBug && !isSuperAdmin) return null;
+                            
                             const isReplying = replyingTo === msg.id;
                             const senderName = msg.user?.raw_user_meta_data?.full_name || 'משתמש לא ידוע';
 
@@ -162,7 +204,7 @@ export default function ManagerInbox() {
                 </table>
               </div>
 
-              {/* מובייל קארדס - אותו היגיון אבל בעיצוב מובייל */}
+              {/* מובייל קארדס */}
               <div className="md:hidden space-y-4 p-4">
                   {messages.map((msg) => {
                        const isBug = msg.subject?.includes('תקלה') || msg.subject?.includes('באג');

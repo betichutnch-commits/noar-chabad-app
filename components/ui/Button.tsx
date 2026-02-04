@@ -2,45 +2,43 @@ import React from 'react';
 import { Loader2 } from 'lucide-react';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'danger' | 'outline' | 'ghost' | 'dark';
+  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'dark';
   isLoading?: boolean;
   icon?: React.ReactNode;
 }
 
-export const Button = ({ 
+export const Button: React.FC<ButtonProps> = ({ 
   children, 
-  variant = 'primary', 
-  isLoading, 
-  icon, 
   className = '', 
+  variant = 'primary', 
+  isLoading = false, 
+  icon,
   disabled,
   ...props 
-}: ButtonProps) => {
+}) => {
   
-  // Base: גובה 60px (או padding תואם), פינות עגולות מאוד, פונט מודגש
-  const baseStyles = "relative flex items-center justify-center gap-2 font-bold rounded-2xl transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed h-[60px]";
+  const baseStyles = "relative flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100";
   
   const variants = {
-    primary: "bg-brand-cyan hover:bg-[#00ACC1] text-white shadow-lg shadow-cyan-100 text-lg",
-    secondary: "bg-brand-green hover:bg-[#7CB342] text-white shadow-lg shadow-green-100 text-lg",
-    danger: "bg-brand-pink hover:bg-[#D81B60] text-white shadow-lg shadow-pink-100",
-    dark: "bg-brand-dark hover:bg-black text-white shadow-lg",
-    outline: "bg-white border-2 border-brand-pink text-brand-pink hover:bg-pink-50",
-    ghost: "bg-transparent hover:bg-gray-100 text-gray-500 h-auto py-2" // Ghost לא חייב להיות ענק
+    primary: "bg-[#00BCD4] hover:bg-cyan-600 text-white shadow-lg shadow-cyan-100 hover:shadow-cyan-200",
+    secondary: "bg-[#8BC34A] hover:bg-[#7CB342] text-white shadow-lg shadow-green-100 hover:shadow-green-200",
+    dark: "bg-gray-800 hover:bg-gray-900 text-white shadow-lg",
+    danger: "bg-red-50 text-red-600 border border-red-100 hover:bg-red-100",
+    outline: "bg-transparent border-2 border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50",
+    ghost: "bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700 p-2",
   };
 
   return (
     <button 
       className={`${baseStyles} ${variants[variant]} ${className}`}
-      disabled={disabled || isLoading}
+      disabled={isLoading || disabled}
       {...props}
     >
-      {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : (
-        <>
-          {children}
-          {icon && <span className="shrink-0">{icon}</span>}
-        </>
-      )}
+      {isLoading && <Loader2 size={18} className="animate-spin absolute" />}
+      <span className={`flex items-center gap-2 ${isLoading ? 'opacity-0' : 'opacity-100'}`}>
+        {icon}
+        {children}
+      </span>
     </button>
   );
 };

@@ -8,8 +8,9 @@ import {
   Briefcase, Edit2, Trash2, Plus, X, Paperclip, ShieldCheck,
   ArrowRight
 } from 'lucide-react'
-import { TRIP_TYPES_CONFIG } from '@/lib/constants'
+import { TRIP_TYPES_CONFIG, CATEGORY_STYLES } from '@/lib/constants'
 import { formatHebrewDateRange, formatHebrewDate } from '@/lib/dateUtils'
+import { Button } from '@/components/ui/Button' // הנחה שקיים, אם לא נשתמש ב-HTML רגיל
 
 // --- פונקציות עזר ---
 const formatDateShortYear = (dateStr: string) => {
@@ -65,7 +66,7 @@ interface TripDetailsViewProps {
     isPublic: boolean;
     onBack?: () => void;
     onEditTrip?: () => void;
-    onCancelTrip?: () => void; // <--- הוספתי את השדה החסר כאן
+    onCancelTrip?: () => void; 
     onEditStaff?: () => void;
     onDeleteStaff?: () => void;
     onSaveStaff?: () => void;
@@ -90,7 +91,7 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
     const isPast = new Date(trip.start_date) < new Date(new Date().setHours(0,0,0,0));
     const isCancelled = trip.status === 'cancelled';
 
-    // זיהוי מגדר
+    // זיהוי מגדר ומחלקות
     const deptName = trip.department || '';
     const isFemale = deptName.includes('בת מלך') || deptName.includes('בנות חב"ד') || deptName.includes('בנות חב״ד');
     
@@ -101,7 +102,7 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
     const secondStaffTitle = isFemale ? 'אחראית נוספת' : 'אחראי נוסף';
     const namePlaceholder = "שם מלא כפי שמופיע בתעודת זהות";
 
-    // --- לוגיקה משופרת לתצוגת תפקיד (HQ Fix) ---
+    // --- לוגיקה משופרת לתצוגת תפקיד (Role Display) ---
     let subRoleDisplay = '';
     const isBranchHQ = trip.branch === 'מטה' || (trip.branch || '').includes('הנהלה');
     const isProfileHQ = profile?.role === 'admin' || profile?.role === 'dept_staff' || profile?.role === 'safety_admin';
@@ -111,8 +112,14 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
     } else {
         const roleBase = isFemale ? 'רכזת סניף' : 'רכז סניף';
         const branchName = trip.branch || '';
-        subRoleDisplay = `${roleBase} • ${branchName}`;
+        // הוספת שם המחלקה לתצוגה
+        subRoleDisplay = `${roleBase} ${branchName} | ${trip.department || ''}`;
     }
+
+    // --- טקסטים לכפתורים ---
+    const isTripType = d.tripType === 'טיול מחוץ לסניף';
+    const editButtonText = isTripType ? 'עריכת פרטי הטיול' : 'עריכת פרטי הפעילות';
+    const cancelButtonText = isTripType ? 'ביטול הטיול' : 'ביטול הפעילות';
 
     const missingDocsCount = timeline.filter((t: any) => t.requiresLicense && (!t.licenseFile || !t.insuranceFile)).length;
     const durationDays = calculateDuration(trip.start_date, d.endDate);
@@ -219,7 +226,7 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                         <div className="absolute top-4 bottom-4 right-[27px] w-[2px] bg-gray-200 z-0"></div>
                         <div className="space-y-4 relative z-10">
                             {timeline.map((item: any, i: number) => {
-                                const catStyle = require('@/lib/constants').CATEGORY_STYLES[item.category] || require('@/lib/constants').CATEGORY_STYLES.other;
+                                const catStyle = CATEGORY_STYLES[item.category] || CATEGORY_STYLES.other;
                                 const Icon = catStyle.icon;
                                 const borderClass = getCategoryBorder(item.category);
                                 return (
@@ -325,7 +332,8 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                     <div className="bg-white rounded-3xl border border-gray-200 p-6 shadow-sm">
                         <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2 border-b border-gray-100 pb-2"><Paperclip size={18} className="text-[#E91E63]"/>קבצים ומסמכים</h3>
                         {missingDocsCount > 0 ? (
-                            <div className="bg-red-50 border border-red-100 rounded-xl p-4 flex gap-3 items-start"><AlertTriangle size={20} className="text-red-500 mt-0.5 shrink-0"/><div><span className="block text-sm font-bold text-red-700">חסרים מסמכים!</span><span className="text-xs text-red-600 block mt-1">יש להשלים {missingDocsCount} אישורים.</span></div></div>
+                            // תיקון: שינוי הטקסט מ-"חסרים מסמכים" ל-"חסר רישוי עסק וביטוח"
+                            <div className="bg-red-50 border border-red-100 rounded-xl p-4 flex gap-3 items-start"><AlertTriangle size={20} className="text-red-500 mt-0.5 shrink-0"/><div><span className="block text-sm font-bold text-red-700">חסר רישוי עסק וביטוח</span><span className="text-xs text-red-600 block mt-1">יש להשלים {missingDocsCount} אישורים.</span></div></div>
                         ) : (
                             <div className="bg-green-50 border border-green-100 rounded-xl p-4 flex gap-3 items-center"><CheckCircle size={20} className="text-green-600 shrink-0"/><div><span className="block text-sm font-bold text-green-700">הכל תקין</span><span className="text-xs text-green-600">כל האישורים הנדרשים הועלו.</span></div></div>
                         )}
@@ -338,25 +346,24 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                         </div>
                     )}
 
-                    <div className="flex flex-col gap-3">
+                    <div className="flex flex-row gap-2">
                         {isEditable && onEditTrip && (
                             <button 
                                 onClick={onEditTrip}
-                                className="w-full py-4 bg-[#00BCD4] hover:bg-cyan-600 text-white rounded-2xl font-bold shadow-lg shadow-cyan-100 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                className="flex-1 h-12 bg-[#00BCD4] hover:bg-cyan-600 text-white rounded-2xl font-bold shadow-lg shadow-cyan-100 transition-all active:scale-95 flex items-center justify-center gap-2 text-sm"
                             >
-                                <Edit2 size={18} />
-                                עריכת הטיול
+                                <Edit2 size={16} />
+                                {editButtonText}
                             </button>
                         )}
                         
-                        {/* הוספת כפתור הביטול כאן */}
                         {isEditable && onCancelTrip && !isPast && !isCancelled && (
                             <button 
                                 onClick={onCancelTrip}
-                                className="w-full py-4 bg-red-50 border border-red-100 text-red-600 hover:bg-red-100 rounded-2xl font-bold transition-all active:scale-95 flex items-center justify-center gap-2"
+                                className="flex-1 h-12 bg-red-50 border border-red-100 text-red-600 hover:bg-red-100 rounded-2xl font-bold transition-all active:scale-95 flex items-center justify-center gap-2 text-sm"
                             >
-                                <Trash2 size={18} />
-                                ביטול פעילות
+                                <Trash2 size={16} />
+                                {cancelButtonText}
                             </button>
                         )}
                     </div>

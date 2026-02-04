@@ -124,3 +124,10 @@ export const staffSchema = z.object({
 export const cancellationSchema = z.object({
     reason: z.string().min(5, "חובה לפרט את סיבת הביטול (לפחות 5 תווים)"),
 });
+
+// ---------------------------------------------------------
+// 8. חוקים למענה מנהל (Manager Reply)
+// ---------------------------------------------------------
+export const managerReplySchema = z.object({
+    replyText: z.string().min(2, "תוכן התשובה חייב להכיל לפחות 2 תווים"),
+});

@@ -1,6 +1,6 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Rubik } from "next/font/google";
-import "./globals.css"; // <--- חייב להיות כאן!
+import "./globals.css";
 
 const rubik = Rubik({
   subsets: ["hebrew", "latin"],
@@ -11,12 +11,20 @@ const rubik = Rubik({
 export const metadata: Metadata = {
   title: 'בטיחות ומפעלים | נוער חב"ד',
   description: 'מערכת לניהול, תכנון ואישור טיולים ואירועים',
-  manifest: '/manifest.json', // הוספנו את זה
+  manifest: '/manifest.json',
   icons: {
-    icon: '/icon.png',        // הוספנו את זה
-    apple: '/icon.png',       // אייקון לאייפון
+    icon: '/icon.png',
+    apple: '/icon.png',
   },
-  themeColor: '#00BCD4',      // צבע הדפדפן במובייל
+};
+
+// הגדרות תצוגה למובייל (PWA) בנפרד - לפי התקן החדש
+export const viewport: Viewport = {
+  themeColor: '#00BCD4',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1, // מונע זום אוטומטי מעצבן בשדות קלט בטלפון
+  userScalable: false,
 };
 
 export default function RootLayout({

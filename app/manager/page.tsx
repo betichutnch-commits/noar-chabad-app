@@ -5,41 +5,67 @@ import { supabase } from '@/lib/supabaseClient'
 import { ManagerHeader } from '@/components/layout/ManagerHeader'
 import { Loader2, AlertCircle, CheckCircle, UserPlus, FileText, Clock, ArrowLeft, Shield } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+
+// ייבוא Hook
+import { useUser } from '@/hooks/useUser'
 
 export default function ManagerHomePage() {
-  const [stats, setStats] = useState({ pendingTrips: 0, approvedTrips: 0, totalTrips: 0, pendingUsers: 0 });
-  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+  
+  // 1. שימוש ב-Hook
+  const { user, profile, loading: userLoading } = useUser('/');
 
+  const [stats, setStats] = useState({ pendingTrips: 0, approvedTrips: 0, totalTrips: 0, pendingUsers: 0 });
+  const [statsLoading, setStatsLoading] = useState(true);
+
+  // 2. טעינת נתונים
   useEffect(() => {
     const fetchStats = async () => {
-        try {
-            const { count: pendingTrips } = await supabase.from('trips').select('*', { count: 'exact', head: true }).eq('status', 'pending');
-            const { count: approvedTrips } = await supabase.from('trips').select('*', { count: 'exact', head: true }).eq('status', 'approved');
-            const { count: totalTrips } = await supabase.from('trips').select('*', { count: 'exact', head: true });
+        if (!user) return;
 
-            const { data: usersData } = await supabase.from('users_management_view').select('raw_user_meta_data');
-            const pendingUsersCount = usersData?.filter((u: any) => {
+        // בדיקת הרשאות בסיסית
+        const isManager = profile?.role === 'admin' || profile?.role === 'safety_admin' || user.user_metadata?.department === 'בטיחות ומפעלים' || profile?.role === 'dept_staff'; // הוספתי dept_staff כי גם להם יש גישה
+        
+        if (profile && !isManager) {
+             router.push('/dashboard');
+             return;
+        }
+
+        try {
+            // ביצוע כל השאילתות במקביל לשיפור ביצועים
+            const [pendingTripsRes, approvedTripsRes, totalTripsRes, usersRes] = await Promise.all([
+                supabase.from('trips').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+                supabase.from('trips').select('*', { count: 'exact', head: true }).eq('status', 'approved'),
+                supabase.from('trips').select('*', { count: 'exact', head: true }),
+                supabase.from('users_management_view').select('raw_user_meta_data')
+            ]);
+
+            const pendingUsersCount = usersRes.data?.filter((u: any) => {
                 const status = u.raw_user_meta_data?.status;
                 return !status || status === 'pending';
             }).length || 0;
 
             setStats({
-                pendingTrips: pendingTrips || 0,
-                approvedTrips: approvedTrips || 0,
-                totalTrips: totalTrips || 0,
+                pendingTrips: pendingTripsRes.count || 0,
+                approvedTrips: approvedTripsRes.count || 0,
+                totalTrips: totalTripsRes.count || 0,
                 pendingUsers: pendingUsersCount
             });
 
         } catch (error) {
             console.error('Error fetching stats:', error);
         } finally {
-            setLoading(false);
+            setStatsLoading(false);
         }
     };
-    fetchStats();
-  }, []);
 
-  if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
+    if (!userLoading && user) {
+        fetchStats();
+    }
+  }, [user, userLoading, profile, router]);
+
+  if (userLoading || statsLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
 
   return (
     <>

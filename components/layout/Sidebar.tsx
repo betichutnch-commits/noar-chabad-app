@@ -57,7 +57,13 @@ export const Sidebar = ({ isOpen = true, onClose }: SidebarProps) => {
               </button>
 
               <div className="relative w-full h-10 md:h-12 flex items-center justify-center mt-1">
-                 <Image src="/logo.png" alt="נוער חב״ד" fill className="object-contain" priority />
+                 <Image 
+                    src="/logo.png" 
+                    alt="נוער חב״ד" 
+                    fill 
+                    className="object-contain" 
+                    priority 
+                 />
               </div>
           </div>
 
@@ -87,7 +93,6 @@ export const Sidebar = ({ isOpen = true, onClose }: SidebarProps) => {
           </nav>
 
           <div className="p-3 border-t border-gray-100">
-            {/* תיקון: הוספתי justify-center כדי למרכז את התוכן */}
             <button onClick={handleLogout} className="flex items-center justify-center gap-3 px-3 py-3 rounded-xl w-full text-red-500 hover:bg-red-50 transition-all font-bold text-sm group">
               <LogOut size={18} className="group-hover:-translate-x-1 transition-transform"/>
               יציאה

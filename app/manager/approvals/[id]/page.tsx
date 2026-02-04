@@ -8,42 +8,64 @@ import { TripDetailsView } from '@/components/TripDetailsView'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 
+// ייבוא Hook
+import { useUser } from '@/hooks/useUser'
+
 export default function ManagerTripView({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
   
+  // 1. שימוש ב-Hook
+  const { user, profile, loading: userLoading } = useUser('/');
+
   const [trip, setTrip] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [ownerProfile, setOwnerProfile] = useState<any>(null); // פרופיל של מי שיצר את הטיול
+  const [dataLoading, setDataLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
 
-  // מודל גלובלי - תיקון TS
+  // מודל גלובלי
   const [modal, setModal] = useState({
       isOpen: false,
-      type: 'info' as any,
+      type: 'info' as 'success' | 'error' | 'info' | 'confirm',
       title: '',
       message: '',
       onConfirm: undefined as (() => void) | undefined
   });
 
-  const showModal = (type: string, title: string, msg: string, onConfirm?: () => void) => 
-      setModal({ isOpen: true, type: type as any, title, message: msg, onConfirm });
+  const showModal = (type: 'success' | 'error' | 'info' | 'confirm', title: string, msg: string, onConfirm?: () => void) => 
+      setModal({ isOpen: true, type, title, message: msg, onConfirm });
 
+  // 2. טעינת הנתונים
   useEffect(() => {
     const fetchData = async () => {
-      const { data: tripData, error } = await supabase.from('trips').select('*').eq('id', id).single();
-      if (error) { router.push('/manager/approvals'); return; }
-      setTrip(tripData);
+        if (!user) return;
 
-      if (tripData?.user_id) {
-          const { data: profileData } = await supabase.from('profiles').select('*').eq('id', tripData.user_id).single();
-          setProfile(profileData);
-      }
-      setLoading(false);
+        // בדיקת הרשאות (רק למנהלים)
+        const isManager = profile?.role === 'admin' || profile?.role === 'safety_admin' || user.user_metadata?.department === 'בטיחות ומפעלים';
+        
+        if (profile && !isManager) {
+             router.push('/dashboard');
+             return;
+        }
+
+        const { data: tripData, error } = await supabase.from('trips').select('*').eq('id', id).single();
+        if (error || !tripData) { 
+            router.push('/manager/approvals'); 
+            return; 
+        }
+        setTrip(tripData);
+
+        if (tripData?.user_id) {
+            const { data: profileData } = await supabase.from('profiles').select('*').eq('id', tripData.user_id).single();
+            setOwnerProfile(profileData);
+        }
+        setDataLoading(false);
     };
     
-    if (id) fetchData();
-  }, [id, router]);
+    if (!userLoading && user) {
+        fetchData();
+    }
+  }, [id, router, user, userLoading, profile]);
 
   const handleStatusUpdate = (newStatus: 'approved' | 'rejected') => {
       showModal(
@@ -57,6 +79,7 @@ export default function ManagerTripView({ params }: { params: Promise<{ id: stri
               if (error) {
                   showModal('error', 'שגיאה', 'שגיאה בעדכון הסטטוס');
               } else {
+                  // שליחת התראה
                   await supabase.from('notifications').insert({
                       user_id: trip.user_id,
                       title: newStatus === 'approved' ? 'הטיול אושר!' : 'הטיול נדחה',
@@ -73,12 +96,20 @@ export default function ManagerTripView({ params }: { params: Promise<{ id: stri
       );
   };
 
-  if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
+  // בדיקת טעינה משולבת
+  if (userLoading || dataLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
 
   return (
     <div className="min-h-screen bg-[#F5F5F5] font-sans text-gray-800 pb-32" dir="rtl">
       
-      <Modal isOpen={modal.isOpen} onClose={() => setModal({...modal, isOpen: false})} type={modal.type} title={modal.title} message={modal.message} onConfirm={modal.onConfirm} />
+      <Modal 
+        isOpen={modal.isOpen} 
+        onClose={() => setModal({...modal, isOpen: false})} 
+        type={modal.type} 
+        title={modal.title} 
+        message={modal.message} 
+        onConfirm={modal.onConfirm} 
+      />
 
       <header className="bg-[#263238] text-white shadow-md sticky top-0 z-30 border-b-4 border-[#00BCD4]">
         <div className="max-w-[1600px] mx-auto px-6 h-16 flex items-center justify-between">
@@ -95,7 +126,7 @@ export default function ManagerTripView({ params }: { params: Promise<{ id: stri
       <main className="max-w-[1600px] mx-auto p-6">
         <TripDetailsView 
             trip={trip}
-            profile={profile}
+            profile={ownerProfile}
             isEditable={false} 
             isPublic={false}
         />

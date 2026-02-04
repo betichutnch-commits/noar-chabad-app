@@ -2,13 +2,15 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { ArrowLeft, UserPlus, ShieldCheck, Users, Briefcase } from 'lucide-react';
+import { ArrowLeft, UserPlus, ShieldCheck, Users, Briefcase, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input'; 
 import { Modal } from '@/components/ui/Modal'; 
 import { useRouter } from 'next/navigation';
 import Image from 'next/image'; 
 
+// ייבוא הסכמות החדשות
+import { loginSchema, registerSchema } from '@/lib/schemas';
 import { DEPARTMENTS_CONFIG } from '@/lib/constants'; 
 
 const SUPER_ADMIN_EMAIL = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL;
@@ -18,12 +20,20 @@ export default function Home() {
   const [view, setView] = useState<'landing' | 'login' | 'dept_selection' | 'role_selection' | 'register_form'>('landing');
   const [loading, setLoading] = useState(false);
   
-  // מודל גלובלי - תיקון TS
-  const [modal, setModal] = useState({ isOpen: false, type: 'info' as any, title: '', message: '', onConfirm: undefined as (() => void) | undefined });
-  
-  // התיקון כאן:
-  const showModal = (type: string, title: string, msg: string) => 
-      setModal({ isOpen: true, type: type as any, title, message: msg, onConfirm: undefined });
+  // ניהול הצגת סיסמה
+  const [showPassword, setShowPassword] = useState(false);
+
+  // ניהול מודל
+  const [modal, setModal] = useState({
+      isOpen: false,
+      type: 'info' as 'success' | 'error' | 'info' | 'confirm',
+      title: '',
+      message: '',
+      onConfirm: undefined as (() => void) | undefined
+  });
+
+  const showModal = (type: 'success' | 'error' | 'info' | 'confirm', title: string, msg: string) => 
+      setModal({ isOpen: true, type, title, message: msg, onConfirm: undefined });
 
   // דאטה
   const [selectedDept, setSelectedDept] = useState(''); 
@@ -87,6 +97,18 @@ export default function Home() {
 
   const handleLogin = async (e: any) => {
     e.preventDefault();
+    
+    // 1. ולידציה עם Zod
+    const validation = loginSchema.safeParse({
+        idNumber: formData.idNumber,
+        password: formData.password
+    });
+
+    if (!validation.success) {
+        showModal('error', 'נתונים שגויים', validation.error.issues[0].message);
+        return;
+    }
+
     setLoading(true);
 
     try {
@@ -108,6 +130,23 @@ export default function Home() {
 
   const handleRegister = async (e: any) => {
     e.preventDefault();
+
+    // 1. ולידציה עם Zod
+    const validation = registerSchema.safeParse({
+        branch: selectedRoleType === 'coordinator' ? formData.branch : undefined,
+        fullName: formData.fullName,
+        phone: formData.phone,
+        idNumber: formData.idNumber,
+        email: formData.email,
+        birthDate: formData.birthDate,
+        password: formData.password
+    });
+
+    if (!validation.success) {
+        showModal('error', 'שגיאה בטופס', validation.error.issues[0].message);
+        return;
+    }
+
     setLoading(true);
 
     try {
@@ -179,7 +218,7 @@ export default function Home() {
           <div className="space-y-4 pt-4 px-6">
             <Button 
                 onClick={() => setView('login')} 
-                className="w-full !bg-[#F1F8E9] border-2 !border-[#8BC34A] !text-[#558B2F] text-lg py-6 rounded-2xl shadow-lg transition-all font-bold justify-center hover:!bg-[#8BC34A] hover:!text-white"
+                className="w-full !bg-[#F1F8E9] border-2 !border-[#8BC34A] !text-[#558B2F] py-4 rounded-2xl shadow-lg transition-all font-bold justify-center hover:!bg-[#8BC34A] hover:!text-white"
             >
               כניסה למערכת
             </Button>
@@ -193,7 +232,8 @@ export default function Home() {
 
                 <Button 
                     onClick={() => setView('dept_selection')} 
-                    className="w-full bg-white border-2 border-[#E91E63] !text-[#E91E63] hover:bg-[#FCE4EC] text-lg py-6 rounded-2xl transition-all font-bold justify-center flex items-center gap-2"
+                    variant="outline" 
+                    className="w-full bg-white border-2 !border-[#E91E63] !text-[#E91E63] hover:!bg-pink-50 py-4 rounded-2xl transition-all font-bold justify-center flex items-center gap-2 shadow-sm hover:shadow-pink-100"
                 >
                     <UserPlus size={20} className="text-[#E91E63]" />
                     <span className="text-[#E91E63]">להרשמה</span>
@@ -213,21 +253,51 @@ export default function Home() {
       <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6">
         <Modal isOpen={modal.isOpen} onClose={() => setModal({...modal, isOpen: false})} type={modal.type} title={modal.title} message={modal.message} />
         
-        <button onClick={() => setView('landing')} className="absolute top-6 right-6 text-gray-400 hover:text-[#00BCD4] transition-colors">
+        <button onClick={() => setView('landing')} className="absolute top-6 right-6 text-gray-400 hover:text-[#E91E63] transition-colors">
             <ArrowLeft size={24} className="rotate-180" />
         </button>
 
         <div className="w-full max-w-sm animate-fadeIn">
             <div className="text-center mb-8">
-                <h2 className="text-2xl font-black text-gray-800">התחברות</h2>
-                <p className="text-gray-400 text-sm mt-1">הזן את פרטיך לכניסה למערכת</p>
+               <h2 className="text-4xl font-black text-[#00BCD4]">התחברות</h2>
+              <p className="text-gray-400 text-sm mt-1">הזן את פרטיך לכניסה למערכת</p>
             </div>
 
             <form onSubmit={handleLogin} className="space-y-5">
-              <Input label="תעודת זהות" name="idNumber" required onChange={handleInputChange} autoFocus />
-              <Input label="סיסמה" type="password" name="password" required onChange={handleInputChange} />
+              <Input 
+                label="תעודת זהות" 
+                name="idNumber" 
+                required 
+                onChange={handleInputChange} 
+                autoFocus 
+                className="focus:!border-[#E91E63] focus:!ring-[#E91E63]/20"
+              />
+              
+              <div className="relative">
+                  <Input 
+                    label="סיסמה" 
+                    type={showPassword ? "text" : "password"} 
+                    name="password" 
+                    required 
+                    onChange={handleInputChange} 
+                    className="pl-10 focus:!border-[#E91E63] focus:!ring-[#E91E63]/20"
+                  />
+                  <button 
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute left-3 top-[38px] z-10 text-gray-400 hover:text-[#E91E63] transition-colors"
+                  >
+                    {showPassword ? <EyeOff size={18}/> : <Eye size={18}/>}
+                  </button>
+              </div>
 
-              <Button type="submit" isLoading={loading} className="w-full mt-4 bg-[#00BCD4] hover:bg-cyan-600">כניסה</Button>
+              <Button 
+                type="submit" 
+                isLoading={loading} 
+                className="w-full mt-4 bg-[#4CAF50] hover:bg-green-600 shadow-green-200 border border-transparent"
+              >
+                כניסה
+              </Button>
             </form>
         </div>
       </div>
@@ -354,24 +424,42 @@ export default function Home() {
             <form onSubmit={handleRegister} className="space-y-4">
               
               {selectedRoleType === 'coordinator' && (
-                <Input label="שם הסניף" name="branch" required onChange={handleInputChange} />
+                <Input label="שם הסניף" name="branch" required onChange={handleInputChange} className="focus:!border-[#E91E63] focus:!ring-[#E91E63]/20" />
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Input label="שם מלא" name="fullName" required onChange={handleInputChange} />
-                <Input label="טלפון נייד" name="phone" type="tel" required onChange={handleInputChange} />
+                <Input label="שם מלא" name="fullName" required onChange={handleInputChange} className="focus:!border-[#E91E63] focus:!ring-[#E91E63]/20" />
+                <Input label="טלפון נייד" name="phone" type="tel" required onChange={handleInputChange} className="focus:!border-[#E91E63] focus:!ring-[#E91E63]/20" />
               </div>
 
-              <Input label="תעודת זהות" name="idNumber" required maxLength={9} onChange={handleInputChange} />
+              <Input label="תעודת זהות" name="idNumber" required maxLength={9} onChange={handleInputChange} className="focus:!border-[#E91E63] focus:!ring-[#E91E63]/20" />
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Input label="אימייל" name="email" type="email" required onChange={handleInputChange} />
-                  <Input label="תאריך לידה" name="birthDate" type="date" required onChange={handleInputChange} />
+                  <Input label="אימייל" name="email" type="email" required onChange={handleInputChange} className="focus:!border-[#E91E63] focus:!ring-[#E91E63]/20" />
+                  <Input label="תאריך לידה" name="birthDate" type="date" required onChange={handleInputChange} className="focus:!border-[#E91E63] focus:!ring-[#E91E63]/20" />
               </div>
 
-              <Input label="סיסמה" name="password" type="password" required minLength={6} placeholder="לפחות 6 תווים" onChange={handleInputChange} />
+              <div className="relative">
+                  <Input 
+                    label="סיסמה" 
+                    name="password" 
+                    type={showPassword ? "text" : "password"} 
+                    required 
+                    minLength={6} 
+                    placeholder="לפחות 6 תווים" 
+                    onChange={handleInputChange} 
+                    className="pl-10 focus:!border-[#E91E63] focus:!ring-[#E91E63]/20"
+                  />
+                  <button 
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute left-3 top-[38px] z-10 text-gray-400 hover:text-[#E91E63] transition-colors"
+                  >
+                    {showPassword ? <EyeOff size={18}/> : <Eye size={18}/>}
+                  </button>
+              </div>
 
-              <Button type="submit" isLoading={loading} variant={isSafety ? 'dark' : 'primary'} className="w-full mt-6 bg-[#4CAF50] hover:bg-green-600">
+              <Button type="submit" isLoading={loading} className="w-full mt-6 bg-[#4CAF50] hover:bg-green-600 shadow-green-200 border border-transparent">
                 סיום הרשמה
               </Button>
             </form>

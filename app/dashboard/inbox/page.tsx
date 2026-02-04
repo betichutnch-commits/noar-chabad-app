@@ -3,13 +3,16 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { Header } from '@/components/layout/Header'
-import { Modal } from '@/components/ui/Modal' // <-- החדש
+import { Modal } from '@/components/ui/Modal'
 import { 
   Bell, CheckCircle, AlertTriangle, Info, X, Clock, MailOpen, Trash2, Send, 
   ChevronDown, ChevronUp, Loader2, MessageCircle, HelpCircle, Wrench
 } from 'lucide-react'
 
-// ... (פונקציות עזר formatDate, parseMessageSubject נשארות אותו דבר)
+// ייבוא Hook
+import { useUser } from '@/hooks/useUser'
+
+// --- פונקציות עזר (ללא שינוי) ---
 const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('he-IL', {
         day: 'numeric', month: 'numeric', year: '2-digit', hour: '2-digit', minute: '2-digit'
@@ -33,7 +36,10 @@ const parseMessageSubject = (originalSubject: string) => {
 };
 
 export default function InboxPage() {
-  const [loading, setLoading] = useState(true);
+  // 1. שימוש ב-Hook
+  const { user, loading: userLoading } = useUser('/');
+
+  const [dataLoading, setDataLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'incoming' | 'outgoing'>('incoming');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   
@@ -43,36 +49,46 @@ export default function InboxPage() {
   // מודל גלובלי
   const [modal, setModal] = useState({
       isOpen: false,
-      type: 'info' as any,
+      type: 'info' as 'success' | 'error' | 'info' | 'confirm',
       title: '',
       message: '',
       onConfirm: undefined as (() => void) | undefined
   });
 
-  const fetchData = async () => {
-    setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { data: incomingData } = await supabase
-      .from('notifications')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
-    setNotifications(incomingData || []);
-
-    const { data: outgoingData } = await supabase
-      .from('contact_messages')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
-    setSentMessages(outgoingData || []);
-    setLoading(false);
-  };
-
+  // 2. טעינת נתונים תלויה ב-User
   useEffect(() => {
-    fetchData();
-  }, []);
+    const fetchData = async () => {
+        if (!user) return;
+
+        try {
+            // טעינת התראות נכנסות
+            const { data: incomingData } = await supabase
+                .from('notifications')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('created_at', { ascending: false });
+            
+            setNotifications(incomingData || []);
+
+            // טעינת הודעות יוצאות
+            const { data: outgoingData } = await supabase
+                .from('contact_messages')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('created_at', { ascending: false });
+            
+            setSentMessages(outgoingData || []);
+        } catch (error) {
+            console.error('Error fetching inbox data:', error);
+        } finally {
+            setDataLoading(false);
+        }
+    };
+
+    if (!userLoading && user) {
+        fetchData();
+    }
+  }, [user, userLoading]);
 
   const markAsRead = async (id: string) => {
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
@@ -89,6 +105,7 @@ export default function InboxPage() {
           onConfirm: async () => {
              setNotifications(prev => prev.filter(n => n.id !== id));
              await supabase.from('notifications').delete().eq('id', id);
+             setModal(prev => ({ ...prev, isOpen: false }));
           }
       });
   };
@@ -104,7 +121,6 @@ export default function InboxPage() {
       }
   };
 
-  // ... (getIcon, getStatusBadge נשארים אותו דבר)
   const getIcon = (type: string) => {
       switch (type) {
           case 'success': return <CheckCircle size={20} className="text-green-500" />;
@@ -128,10 +144,20 @@ export default function InboxPage() {
       );
   };
 
+  // בדיקת טעינה משולבת
+  if (userLoading || dataLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
+
   return (
     <>
       <Header title="הודעות ועדכונים" />
-      <Modal isOpen={modal.isOpen} onClose={() => setModal({...modal, isOpen: false})} type={modal.type} title={modal.title} message={modal.message} onConfirm={modal.onConfirm} />
+      <Modal 
+        isOpen={modal.isOpen} 
+        onClose={() => setModal({...modal, isOpen: false})} 
+        type={modal.type} 
+        title={modal.title} 
+        message={modal.message} 
+        onConfirm={modal.onConfirm} 
+      />
 
       <div className="max-w-5xl mx-auto p-4 md:p-8 animate-fadeIn pb-32">
         
@@ -161,13 +187,7 @@ export default function InboxPage() {
 
         <div className="bg-white rounded-[24px] shadow-sm border border-gray-200 overflow-hidden min-h-[400px]">
             
-            {loading && (
-                <div className="h-full flex items-center justify-center py-20">
-                    <Loader2 className="animate-spin text-[#00BCD4]" size={40}/>
-                </div>
-            )}
-
-            {!loading && activeTab === 'incoming' && (
+            {activeTab === 'incoming' && (
                 notifications.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-20 text-gray-400">
                         <MailOpen size={48} className="opacity-20 mb-4"/>
@@ -214,7 +234,7 @@ export default function InboxPage() {
                 )
             )}
 
-            {!loading && activeTab === 'outgoing' && (
+            {activeTab === 'outgoing' && (
                 sentMessages.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-20 text-gray-400">
                         <Send size={48} className="opacity-20 mb-4"/>
@@ -224,8 +244,9 @@ export default function InboxPage() {
                     <div className="divide-y divide-gray-100">
                         {sentMessages.map((msg) => {
                             const isExpanded = expandedId === msg.id;
-                            const { type, cleanSubject } = parseMessageSubject(msg.subject);
-                            const isBug = type === 'bug';
+                            const { cleanSubject } = parseMessageSubject(msg.subject);
+                            // זיהוי אם זו תקלה לפי הכותרת המקורית במסד הנתונים
+                            const isBug = msg.subject.includes('תקלה');
 
                             return (
                                 <div key={msg.id} className={`transition-all hover:bg-gray-50 relative overflow-hidden ${isExpanded ? 'bg-gray-50' : 'bg-white'}`}>

@@ -6,26 +6,57 @@ import { ManagerHeader } from '@/components/layout/ManagerHeader'
 import { Loader2, Shield, User, MapPin, CheckCircle, XCircle, ChevronDown, ChevronUp } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
+import { useRouter } from 'next/navigation'
+
+// ייבוא Hook
+import { useUser } from '@/hooks/useUser'
 
 export default function UsersManagement() {
-  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+  
+  // 1. שימוש ב-Hook
+  const { user, profile, loading: userLoading } = useUser('/');
+
+  const [loadingUsers, setLoadingUsers] = useState(true);
   const [users, setUsers] = useState<any[]>([]);
   const [filter, setFilter] = useState('pending');
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
 
   // מודל גלובלי
-  const [modal, setModal] = useState({ isOpen: false, type: 'info' as any, title: '', message: '', onConfirm: undefined as (() => void) | undefined });
-  const showModal = (type: string, title: string, msg: string, onConfirm?: () => void) => setModal({ isOpen: true, type: type as any, title, message: msg, onConfirm });
+  const [modal, setModal] = useState({
+      isOpen: false,
+      type: 'info' as 'success' | 'error' | 'info' | 'confirm',
+      title: '',
+      message: '',
+      onConfirm: undefined as (() => void) | undefined
+  });
 
+  const showModal = (type: 'success' | 'error' | 'info' | 'confirm', title: string, msg: string, onConfirm?: () => void) => 
+      setModal({ isOpen: true, type, title, message: msg, onConfirm });
+
+  // 2. טעינת נתונים ובדיקת הרשאות
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    const fetchUsers = async () => {
+        if (!user) return;
 
-  const fetchUsers = async () => {
-    const { data } = await supabase.from('users_management_view').select('*');
-    if (data) setUsers(data);
-    setLoading(false);
-  };
+        // בדיקת הרשאות (רק למנהלים מורשים)
+        // אפשר להוסיף כאן לוגיקה יותר מחמירה אם צריך
+        const isManager = profile?.role === 'admin' || profile?.role === 'safety_admin' || user.user_metadata?.department === 'בטיחות ומפעלים';
+        
+        if (profile && !isManager) {
+             router.push('/dashboard');
+             return;
+        }
+
+        const { data } = await supabase.from('users_management_view').select('*');
+        if (data) setUsers(data);
+        setLoadingUsers(false);
+    };
+
+    if (!userLoading && user) {
+        fetchUsers();
+    }
+  }, [user, userLoading, profile, router]);
 
   const updateUserStatus = (userId: string, newStatus: string) => {
       showModal('confirm', 'שינוי סטטוס משתמש', `האם אתה בטוח שברצונך לשנות את הסטטוס ל-${newStatus === 'approved' ? 'פעיל' : 'חסום'}?`, async () => {
@@ -54,7 +85,8 @@ export default function UsersManagement() {
       return status === filter;
   });
 
-  if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
+  // בדיקת טעינה משולבת
+  if (userLoading || loadingUsers) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
 
   return (
     <>

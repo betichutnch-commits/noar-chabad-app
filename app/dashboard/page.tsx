@@ -12,15 +12,20 @@ import { formatHebrewDate } from '@/lib/dateUtils'
 import { MultiSelectFilter } from '@/components/ui/MultiSelectFilter'
 import { Modal } from '@/components/ui/Modal'
 
+// ייבוא Hook ו-Zod
+import { useUser } from '@/hooks/useUser'
+import { cancellationSchema } from '@/lib/schemas'
+
 export default function DashboardPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
+  const { user, loading: userLoading } = useUser('/');
+
+  const [tripsLoading, setTripsLoading] = useState(true);
   const [trips, setTrips] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   
-  // מודל גלובלי - הגדרת ברירת מחדל
   const [modal, setModal] = useState({
       isOpen: false,
       type: 'info' as 'success' | 'error' | 'info' | 'confirm',
@@ -31,7 +36,6 @@ export default function DashboardPage() {
       cancelText: 'ביטול'
   });
 
-  // מודל מיוחד לביטול (כי צריך שדה טקסט)
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelTripId, setCancelTripId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState('');
@@ -44,26 +48,27 @@ export default function DashboardPage() {
       { id: "אחר", label: "אחר", color: "bg-slate-400" }
   ];
 
-  const fetchTrips = async () => {
-      setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { window.location.href = '/'; return; }
-      
-      try {
-          const { data, error } = await supabase
-              .from('trips')
-              .select('*')
-              .eq('user_id', user.id)
-              .order('start_date', { ascending: false });
-          if (error) throw error;
-          setTrips(data || []);
-      } catch (e) { console.error('Error fetching trips:', e); } 
-      finally { setLoading(false); }
-  };
-
   useEffect(() => {
-    fetchTrips();
-  }, []);
+    const fetchTrips = async () => {
+        if (!user) return;
+        try {
+            const { data, error } = await supabase
+                .from('trips')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('start_date', { ascending: false });
+            
+            if (error) throw error;
+            setTrips(data || []);
+        } catch (e) { 
+            console.error('Error fetching trips:', e); 
+        } finally { 
+            setTripsLoading(false); 
+        }
+    };
+
+    if (!userLoading && user) fetchTrips();
+  }, [user, userLoading]);
 
   const handleDeleteDraftClick = (id: string) => {
       setModal({
@@ -83,7 +88,6 @@ export default function DashboardPage() {
           setTrips(prev => prev.filter(t => t.id !== id));
           setModal(prev => ({...prev, isOpen: false}));
       } else {
-          // תיקון: הוספת כל השדות החסרים
           setModal({
               isOpen: true,
               type: 'error',
@@ -103,7 +107,22 @@ export default function DashboardPage() {
   };
 
   const handleCancelTrip = async () => {
-      if (!cancelTripId || !cancelReason.trim()) return;
+      if (!cancelTripId) return;
+      const validation = cancellationSchema.safeParse({ reason: cancelReason });
+      
+      if (!validation.success) {
+          setModal({
+              isOpen: true,
+              type: 'error',
+              title: 'חסר פירוט',
+              message: validation.error.issues[0].message,
+              confirmText: 'הבנתי',
+              cancelText: '',
+              onConfirm: undefined
+          });
+          return;
+      }
+
       try {
           const trip = trips.find(t => t.id === cancelTripId);
           const updatedDetails = { ...trip.details, cancellationReason: cancelReason };
@@ -114,10 +133,10 @@ export default function DashboardPage() {
           }).eq('id', cancelTripId);
           
           if (error) throw error;
+          
           setTrips(prev => prev.map(t => t.id === cancelTripId ? {...t, status: 'cancelled', cancellation_reason: cancelReason, details: updatedDetails} : t));
           setShowCancelModal(false);
           
-          // תיקון: הוספת כל השדות החסרים
           setModal({
               isOpen: true,
               type: 'success',
@@ -129,7 +148,6 @@ export default function DashboardPage() {
           });
 
       } catch (e: any) { 
-          // תיקון: הוספת כל השדות החסרים
           setModal({
               isOpen: true,
               type: 'error',
@@ -142,7 +160,7 @@ export default function DashboardPage() {
       }
   };
 
-  if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
+  if (userLoading || tripsLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
 
   const today = new Date().toISOString().split('T')[0];
   const upcomingTrip = trips
@@ -185,7 +203,7 @@ export default function DashboardPage() {
 
   return (
     <>
-      <Header title="לוח בקרה" />
+      <Header title="מסך ראשי" />
       <Modal 
         isOpen={modal.isOpen} 
         onClose={() => setModal({...modal, isOpen: false})} 
@@ -209,7 +227,8 @@ export default function DashboardPage() {
           </div>
       )}
 
-      <div className="p-4 md:p-8 space-y-6 animate-fadeIn pb-32 max-w-[100vw] overflow-x-hidden md:max-w-7xl md:mx-auto">
+      {/* תיקון: min-h-screen מבטיח גובה מלא כדי שיהיה מקום לפופאפ */}
+      <div className="p-4 md:p-8 space-y-6 animate-fadeIn pb-32 max-w-[100vw] overflow-x-hidden md:max-w-7xl md:mx-auto min-h-screen">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm relative overflow-hidden group hover:shadow-md transition-all h-full md:col-span-1">
                   <div className="relative z-10">
@@ -232,7 +251,7 @@ export default function DashboardPage() {
                       })}
                   </div>
 
-                  <div className="flex flex-col-reverse md:flex-row gap-2 w-full md:w-auto">
+                  <div className="flex flex-col-reverse md:flex-row gap-2 w-full md:w-auto z-50">
                       <MultiSelectFilter 
                         options={filterOptions}
                         selected={selectedTypes}

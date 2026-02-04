@@ -9,6 +9,8 @@ import {
   LayoutDashboard, CheckSquare, Users, FileBarChart, Settings, LogOut, Mail, UserCircle, X
 } from 'lucide-react'
 
+const ADMIN_EMAIL = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || 'avremihalperin@gmail.com';
+
 interface SidebarProps {
     isOpen?: boolean;
     onClose?: () => void;
@@ -18,10 +20,10 @@ export const ManagerSidebar = ({ isOpen = true, onClose }: SidebarProps) => {
   const pathname = usePathname();
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   
+  // בדיקה מהירה של תפקיד כדי להציג את התפריט הנכון
   useEffect(() => {
     const checkRole = async () => {
         const { data: { user } } = await supabase.auth.getUser();
-        const ADMIN_EMAIL = 'avremihalperin@gmail.com'; 
         if (user?.email === ADMIN_EMAIL || user?.user_metadata?.contact_email === ADMIN_EMAIL) {
             setIsSuperAdmin(true);
         }

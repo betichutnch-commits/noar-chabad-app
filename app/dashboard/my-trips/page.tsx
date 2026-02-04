@@ -3,21 +3,26 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { Header } from '@/components/layout/Header'
-import { Loader2, Search, History, Trash2 } from 'lucide-react' // Trash2 לשימוש במודל אם צריך
+import { Loader2, Search, History, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { TripCard } from '@/components/TripCard' 
 import { MultiSelectFilter } from '@/components/ui/MultiSelectFilter'
-import { Modal } from '@/components/ui/Modal' // <-- החדש
+import { Modal } from '@/components/ui/Modal'
+
+// ייבוא Hook ו-Zod
+import { useUser } from '@/hooks/useUser'
+import { cancellationSchema } from '@/lib/schemas'
 
 export default function MyTripsPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
+  const { user, loading: userLoading } = useUser('/');
+
+  const [tripsLoading, setTripsLoading] = useState(true);
   const [trips, setTrips] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   
-  // --- ניהול מודל מאוחד ---
   const [modal, setModal] = useState({
       isOpen: false,
       type: 'info' as 'success' | 'error' | 'info' | 'confirm',
@@ -28,9 +33,9 @@ export default function MyTripsPage() {
       cancelText: 'ביטול'
   });
 
-  // State עבור סיבת ביטול (מיוחד לביטול)
+  const [showCustomCancelModal, setShowCustomCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
-  const [pendingTripId, setPendingTripId] = useState<string | null>(null); // שומר ID לפעולה
+  const [pendingTripId, setPendingTripId] = useState<string | null>(null);
 
   const filterOptions = [
       { id: "טיול מחוץ לסניף", label: "טיול מחוץ לסניף", color: "bg-[#4DD0E1]" },
@@ -40,28 +45,28 @@ export default function MyTripsPage() {
       { id: "אחר", label: "אחר", color: "bg-slate-400" }
   ];
 
-  const fetchTrips = async () => {
-      setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { window.location.href = '/'; return; }
-      
-      try {
-          const { data, error } = await supabase
-              .from('trips')
-              .select('*')
-              .eq('user_id', user.id)
-              .order('start_date', { ascending: false });
-          if (error) throw error;
-          setTrips(data || []);
-      } catch (e) { console.error('Error fetching trips:', e); } 
-      finally { setLoading(false); }
-  };
-
   useEffect(() => {
-    fetchTrips();
-  }, []);
+    const fetchTrips = async () => {
+        if (!user) return;
+        try {
+            const { data, error } = await supabase
+                .from('trips')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('start_date', { ascending: false });
+            
+            if (error) throw error;
+            setTrips(data || []);
+        } catch (e) { 
+            console.error('Error fetching trips:', e); 
+        } finally { 
+            setTripsLoading(false); 
+        }
+    };
 
-  // --- פעולת מחיקת טיוטה ---
+    if (!userLoading && user) fetchTrips();
+  }, [user, userLoading]);
+
   const handleDeleteDraftClick = (id: string) => {
       setPendingTripId(id);
       setModal({
@@ -81,17 +86,17 @@ export default function MyTripsPage() {
           setTrips(prev => prev.filter(t => t.id !== id));
           setModal(prev => ({...prev, isOpen: false}));
       } else {
-          alert('שגיאה במחיקה: ' + error.message);
+          setModal({
+              isOpen: true,
+              type: 'error',
+              title: 'שגיאה',
+              message: 'שגיאה במחיקה: ' + error.message,
+              confirmText: 'סגור',
+              cancelText: '',
+              onConfirm: undefined
+          });
       }
   };
-
-  // --- פעולת ביטול טיול (דורש טקסט) ---
-  // מכיוון שהמודל הגלובלי לא תומך ב-Textarea, כאן נשתמש בטריק: 
-  // נפתח מודל אישור, ואם מאשרים, נשתמש ב-prompt של הדפדפן או נשאיר את המודל המותאם אישית (עדיף מותאם).
-  // במקרה הזה, נשאיר את המודל המותאם אישית לביטול כי הוא דורש סיבה, 
-  // אבל נשתמש ב-Modal הגלובלי להודעות שגיאה/הצלחה.
-  
-  const [showCustomCancelModal, setShowCustomCancelModal] = useState(false);
 
   const handleCancelClick = (id: string) => {
       setPendingTripId(id);
@@ -100,7 +105,21 @@ export default function MyTripsPage() {
   };
 
   const executeCancelTrip = async () => {
-      if (!pendingTripId || !cancelReason.trim()) return;
+      if (!pendingTripId) return;
+      const validation = cancellationSchema.safeParse({ reason: cancelReason });
+      if (!validation.success) {
+          setModal({
+              isOpen: true,
+              type: 'error',
+              title: 'חסר פירוט',
+              message: validation.error.issues[0].message,
+              confirmText: 'הבנתי',
+              cancelText: '',
+              onConfirm: undefined
+          });
+          return;
+      }
+
       try {
           const trip = trips.find(t => t.id === pendingTripId);
           const updatedDetails = { ...trip.details, cancellationReason: cancelReason };
@@ -116,7 +135,6 @@ export default function MyTripsPage() {
           setTrips(prev => prev.map(t => t.id === pendingTripId ? {...t, status: 'cancelled', cancellation_reason: cancelReason, details: updatedDetails} : t));
           setShowCustomCancelModal(false);
           
-          // הודעת הצלחה עם המודל הגלובלי
           setModal({
               isOpen: true,
               type: 'success',
@@ -128,7 +146,6 @@ export default function MyTripsPage() {
           });
 
       } catch (e: any) { 
-          // הודעת שגיאה
           setModal({
               isOpen: true,
               type: 'error',
@@ -141,7 +158,7 @@ export default function MyTripsPage() {
       }
   };
 
-  if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
+  if (userLoading || tripsLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
 
   const displayTrips = trips.filter(t => {
       const today = new Date();
@@ -166,11 +183,10 @@ export default function MyTripsPage() {
     <>
       <Header title="הטיולים שלי" />
       
-      {/* המודל הגלובלי */}
       <Modal 
         isOpen={modal.isOpen} 
         onClose={() => setModal({...modal, isOpen: false})} 
-        type={modal.type as any} 
+        type={modal.type} 
         title={modal.title} 
         message={modal.message} 
         onConfirm={modal.onConfirm}
@@ -178,7 +194,6 @@ export default function MyTripsPage() {
         cancelText={modal.cancelText}
       />
 
-      {/* מודל מותאם אישית לביטול (כי הוא מכיל Textarea) */}
       {showCustomCancelModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fadeIn">
               <div className="bg-white p-6 rounded-3xl shadow-2xl w-full max-w-sm text-center border-t-4 border-red-500">
@@ -199,7 +214,8 @@ export default function MyTripsPage() {
           </div>
       )}
 
-      <div className="p-4 md:p-8 space-y-6 animate-fadeIn pb-32 max-w-[100vw] overflow-x-hidden md:max-w-7xl md:mx-auto">
+      {/* תיקון: הוספתי min-h-screen כאן */}
+      <div className="p-4 md:p-8 space-y-6 animate-fadeIn pb-32 max-w-[100vw] overflow-x-hidden md:max-w-7xl md:mx-auto min-h-screen">
           <div className="space-y-4 pt-2">
               <div className="flex flex-col md:flex-row justify-between items-end gap-4">
                   <div className="flex gap-2 bg-white p-1.5 rounded-2xl border border-gray-100 w-full md:w-auto overflow-x-auto no-scrollbar shadow-sm">
@@ -213,7 +229,8 @@ export default function MyTripsPage() {
                       })}
                   </div>
 
-                  <div className="flex flex-col-reverse md:flex-row gap-2 w-full md:w-auto">
+                  {/* הוספת z-50 כדי שהפילטר יעלה מעל הכל */}
+                  <div className="flex flex-col-reverse md:flex-row gap-2 w-full md:w-auto z-50">
                       <MultiSelectFilter 
                         options={filterOptions}
                         selected={selectedTypes}

@@ -6,14 +6,29 @@ import { Header } from '@/components/layout/Header'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
-import { Send, CheckCircle, HelpCircle, Image as ImageIcon, X, AlertTriangle, Info } from 'lucide-react'
+import { Send, HelpCircle, Image as ImageIcon, X, AlertTriangle, Info, Loader2 } from 'lucide-react'
+
+// ייבוא Hook ו-Zod
+import { useUser } from '@/hooks/useUser'
+import { contactSchema } from '@/lib/schemas'
 
 export default function ContactPage() {
-  const [loading, setLoading] = useState(false);
+  // 1. שימוש ב-Hook
+  const { user, loading: userLoading } = useUser('/');
+
+  const [submitting, setSubmitting] = useState(false);
   
-  // ניהול מודל גלובלי
-  const [modal, setModal] = useState({ isOpen: false, type: 'info' as any, title: '', message: '' });
-  const showModal = (type: string, title: string, msg: string) => setModal({ isOpen: true, type, title, message: msg });
+  // ניהול מודל מתוקן
+  const [modal, setModal] = useState({
+      isOpen: false,
+      type: 'info' as 'success' | 'error' | 'info' | 'confirm',
+      title: '',
+      message: '',
+      onConfirm: undefined as (() => void) | undefined
+  });
+
+  const showModal = (type: 'success' | 'error' | 'info' | 'confirm', title: string, msg: string) => 
+      setModal({ isOpen: true, type, title, message: msg, onConfirm: undefined });
 
   const [type, setType] = useState<'general' | 'bug'>('general');
   const [screenshot, setScreenshot] = useState<File | null>(null);
@@ -47,14 +62,19 @@ export default function ContactPage() {
   };
 
   const handleSubmit = async () => {
-    if (!formData.subject || !formData.message) {
-        return showModal('error', 'שגיאה', 'נא למלא נושא ותוכן.\nאם זו תקלה, אנא פרט מה ניסית לעשות.');
-    }
-    setLoading(true);
+    // 2. ולידציה עם Zod
+    const validation = contactSchema.safeParse(formData);
 
-    const { data: { user } } = await supabase.auth.getUser();
+    if (!validation.success) {
+        showModal('error', 'חסרים פרטים', validation.error.issues[0].message);
+        return;
+    }
+
+    setSubmitting(true);
+
     let imageUrl = null;
 
+    // העלאת תמונה אם יש
     if (screenshot && user) {
         const fileName = `bugs/${user.id}_${Date.now()}.png`;
         const { error: uploadError } = await supabase.storage.from('trip-files').upload(fileName, screenshot);
@@ -64,6 +84,7 @@ export default function ContactPage() {
         }
     }
     
+    // הרכבת ההודעה הסופית
     const finalMessage = imageUrl 
         ? `${formData.message}\n\n[צורף צילום מסך]: ${imageUrl}`
         : formData.message;
@@ -75,7 +96,7 @@ export default function ContactPage() {
         status: 'new'
     }]);
 
-    setLoading(false);
+    setSubmitting(false);
 
     if (error) {
         showModal('error', 'שגיאה', 'אירעה שגיאה בשליחה: ' + error.message);
@@ -86,10 +107,19 @@ export default function ContactPage() {
     }
   };
 
+  if (userLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
+
   return (
     <>
       <Header title="צור קשר / דיווח על תקלה" />
-      <Modal isOpen={modal.isOpen} onClose={() => setModal({...modal, isOpen: false})} type={modal.type} title={modal.title} message={modal.message} />
+      <Modal 
+        isOpen={modal.isOpen} 
+        onClose={() => setModal({...modal, isOpen: false})} 
+        type={modal.type} 
+        title={modal.title} 
+        message={modal.message} 
+        onConfirm={modal.onConfirm}
+      />
 
       <div className="max-w-3xl mx-auto p-4 md:p-8 animate-fadeIn pb-32">
          <div className="bg-white rounded-[32px] border border-gray-200 p-6 md:p-8 shadow-sm text-center md:text-right">
@@ -127,7 +157,6 @@ export default function ContactPage() {
                     </div>
                  )}
 
-                 {/* תיקון השגיאה: הגדרת ה-type ל-any בתוך ה-onChange */}
                  <Input 
                     label="נושא" 
                     placeholder={type === 'bug' ? "בקצרה: מה הבעיה?" : "בנושא..."}
@@ -168,7 +197,7 @@ export default function ContactPage() {
                  <div className="pt-4 flex flex-col-reverse md:flex-row items-center justify-end gap-4 border-t border-gray-100">
                      <Button 
                         onClick={handleSubmit} 
-                        isLoading={loading}
+                        isLoading={submitting}
                         className={`w-full md:w-auto px-12 shadow-lg h-12 md:h-10 text-base md:text-sm ${type === 'bug' ? 'bg-[#E91E63] hover:bg-pink-600 shadow-pink-100' : 'bg-[#00BCD4] hover:bg-cyan-600 shadow-cyan-100'}`}
                         icon={<Send size={18}/>}
                      >

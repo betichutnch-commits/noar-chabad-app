@@ -5,12 +5,16 @@ import { supabase } from '@/lib/supabaseClient'
 import { Header } from '@/components/layout/Header'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { Modal } from '@/components/ui/Modal' // החדש
+import { Modal } from '@/components/ui/Modal'
 import { 
-  User, Mail, Building2, Save, CheckCircle, Loader2, Camera, 
-  ShieldCheck, Lock, Trash2, Calendar, ArrowRight, Info
+  User, Mail, Building2, Save, Loader2, Camera, 
+  ShieldCheck, Lock, Trash2, Calendar, ArrowRight, Info, MapPin, ExternalLink, Briefcase
 } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
+
+// ייבוא Hook ו-Zod
+import { useUser } from '@/hooks/useUser'
+import { profileSchema } from '@/lib/schemas'
 
 const formatDisplayDate = (dateStr: string) => {
     if (!dateStr) return '-';
@@ -22,14 +26,22 @@ function ProfileContent() {
   const searchParams = useSearchParams();
   const returnUrl = searchParams.get('returnUrl');
 
-  const [loading, setLoading] = useState(true);
+  // 1. שימוש ב-Hook
+  const { user, profile, loading: userLoading, refresh } = useUser('/');
+
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [user, setUser] = useState<any>(null);
   
-  // מודל גלובלי
-  const [modal, setModal] = useState({ isOpen: false, type: 'info' as any, title: '', message: '', onConfirm: undefined as (() => void) | undefined });
-  const showModal = (type: string, title: string, msg: string, onConfirm?: () => void) => setModal({ isOpen: true, type: type as any, title, message: msg, onConfirm });
+  const [modal, setModal] = useState({
+      isOpen: false,
+      type: 'info' as 'success' | 'error' | 'info' | 'confirm',
+      title: '',
+      message: '',
+      onConfirm: undefined as (() => void) | undefined
+  });
+
+  const showModal = (type: 'success' | 'error' | 'info' | 'confirm', title: string, msg: string, onConfirm?: () => void) => 
+      setModal({ isOpen: true, type, title, message: msg, onConfirm });
 
   const [formData, setFormData] = useState({
     officialName: '', 
@@ -41,6 +53,7 @@ function ProfileContent() {
     contactEmail: '',
     phone: '',
     branchAddress: '',
+    zipCode: '', 
     startYear: '', 
     studentCount: '',
     staffCount: '',
@@ -48,57 +61,80 @@ function ProfileContent() {
     profileImage: null as string | null
   });
 
-  const isHQ = user?.user_metadata?.branch === 'מטה' || !user?.user_metadata?.branch;
+  // הגדרות תפקיד ומחלקה
+  const role = user?.user_metadata?.role;
+  const isHQ = role === 'dept_staff' || role === 'safety_admin' || role === 'admin';
+  const branchName = user?.user_metadata?.branch_name || user?.user_metadata?.branch || '';
+  const department = user?.user_metadata?.department || '';
 
-  useEffect(() => {
-    const getUser = async () => {
-      const { data, error } = await supabase.auth.getUser();
+  // פונקציה לקביעת תואר מגדרי לרכז - תוקנה לזיהוי מדויק יותר
+  const getRoleTitle = () => {
+      let title = 'רכז/ת סניף'; // ברירת מחדל (מועדונים וכו')
       
-      if (error || !data?.user) {
-          await supabase.auth.signOut();
-          window.location.href = '/'; 
-          return;
+      const deptName = department.trim();
+
+      // בדיקת מחלקות גבריות (הוספנו גם 'תמים' וגם 'התמים')
+      const maleKeywords = ['הפנסאים', 'פנסאים', 'התמים', 'תמים', 'בני חב"ד', 'בני חב״ד'];
+      
+      // בדיקת מחלקות נשיות
+      const femaleKeywords = ['בת מלך', 'בנות חב"ד', 'בנות חב״ד'];
+
+      if (maleKeywords.some(d => deptName.includes(d))) {
+          title = 'רכז סניף';
+      } 
+      else if (femaleKeywords.some(d => deptName.includes(d))) {
+          title = 'רכזת סניף';
       }
 
-      const currentUser = data.user;
-      setUser(currentUser);
+      return title;
+  };
 
-      const { data: profile } = await supabase.from('profiles').select('*').eq('id', currentUser.id).single();
-      const meta = currentUser.user_metadata || {};
-      
-      setFormData({
-        officialName: profile?.official_name || meta.official_name || '',
-        lastName: profile?.last_name || meta.last_name || '',
-        idNumber: profile?.identity_number || meta.identity_number || '', 
-        birthDate: profile?.birth_date || meta.birth_date || '',
-        nickname: meta.nickname || '', 
-        fullNameAndMother: meta.full_name_mother || '',
-        contactEmail: profile?.email || meta.contact_email || currentUser.email || '', 
-        phone: profile?.phone || meta.phone || '',
-        branchAddress: meta.branch_address || '',
-        startYear: profile?.start_year || meta.start_year || '', 
-        studentCount: meta.student_count || '',
-        staffCount: meta.staff_count || '',
-        additionalStaff: meta.additional_staff || '',
-        profileImage: profile?.avatar_url || meta.avatar_url || null
-      });
-      setLoading(false);
-    };
-    getUser();
-  }, []);
+  // בניית הכותרת המלאה (למעלה)
+  const fullRoleString = isHQ 
+    ? `צוות מטה | ${department}` 
+    : `${department} | ${getRoleTitle()} ${branchName}`;
+
+  // בניית תיאור התפקיד (עבור הנתונים המערכתיים)
+  const systemRoleDescription = isHQ 
+    ? (role === 'safety_admin' ? 'מנהל בטיחות ומפעלים' : `מטה ${department}`)
+    : `${getRoleTitle()} ${branchName}`;
+
+  useEffect(() => {
+    if (user && !userLoading) {
+        const meta = user.user_metadata || {};
+        
+        setFormData({
+            officialName: profile?.official_name || meta.official_name || '',
+            lastName: profile?.last_name || meta.last_name || '',
+            idNumber: profile?.identity_number || meta.identity_number || '', 
+            birthDate: profile?.birth_date || meta.birth_date || '',
+            nickname: meta.nickname || '', 
+            fullNameAndMother: meta.full_name_mother || '',
+            contactEmail: profile?.email || meta.contact_email || user.email || '', 
+            phone: profile?.phone || meta.phone || '',
+            branchAddress: meta.branch_address || '',
+            zipCode: meta.zip_code || '', 
+            startYear: profile?.start_year || meta.start_year || '', 
+            studentCount: meta.student_count || '',
+            staffCount: meta.staff_count || '',
+            additionalStaff: meta.additional_staff || '',
+            profileImage: profile?.avatar_url || meta.avatar_url || null
+        });
+    }
+  }, [user, profile, userLoading]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || !e.target.files[0]) return;
     const file = e.target.files[0];
     setUploading(true);
     try {
-      if (!user) throw new Error("User not found");
-      const fileExt = file.name.split('.').pop();
-      const fileName = `avatars/${user.id}_${Date.now()}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage.from('trip-files').upload(fileName, file, { upsert: true });
-      if (uploadError) throw uploadError;
-      const { data: { publicUrl } } = supabase.storage.from('trip-files').getPublicUrl(fileName);
-      setFormData(prev => ({ ...prev, profileImage: publicUrl }));
+        if (!user) throw new Error("User not found");
+        const fileExt = file.name.split('.').pop();
+        const fileName = `avatars/${user.id}_${Date.now()}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage.from('trip-files').upload(fileName, file, { upsert: true });
+        if (uploadError) throw uploadError;
+        const { data: { publicUrl } } = supabase.storage.from('trip-files').getPublicUrl(fileName);
+        setFormData(prev => ({ ...prev, profileImage: publicUrl }));
     } catch (error: any) { showModal('error', 'שגיאה', 'שגיאה בהעלאת תמונה: ' + error.message); } 
     finally { setUploading(false); }
   };
@@ -111,6 +147,28 @@ function ProfileContent() {
   };
 
   const handleSave = async () => {
+    const validation = profileSchema.safeParse({
+        officialName: formData.officialName,
+        lastName: formData.lastName,
+        idNumber: formData.idNumber,
+        phone: formData.phone,
+        email: formData.contactEmail,
+        birthDate: formData.birthDate,
+        nickname: formData.nickname,
+        fullNameAndMother: formData.fullNameAndMother,
+        branchAddress: formData.branchAddress,
+        zipCode: formData.zipCode,
+        startYear: formData.startYear,
+        studentCount: formData.studentCount,
+        staffCount: formData.staffCount,
+        additionalStaff: formData.additionalStaff,
+    });
+
+    if (!validation.success) {
+        showModal('error', 'שגיאה בטופס', validation.error.issues[0].message);
+        return;
+    }
+
     setSaving(true);
     try {
       await supabase.auth.updateUser({
@@ -126,6 +184,7 @@ function ProfileContent() {
           full_name_mother: formData.fullNameAndMother,
           contact_email: formData.contactEmail,
           branch_address: formData.branchAddress,
+          zip_code: formData.zipCode,
           student_count: formData.studentCount,
           staff_count: formData.staffCount,
           additional_staff: formData.additionalStaff,
@@ -144,11 +203,13 @@ function ProfileContent() {
               full_name: `${formData.officialName} ${formData.lastName}`.trim(),
               avatar_url: formData.profileImage,
               start_year: formData.startYear, 
+              zip_code: formData.zipCode,
               updated_at: new Date()
           };
           await supabase.from('profiles').upsert(updates);
       }
 
+      refresh();
       showModal('success', 'הפרטים נשמרו', 'העדכון בוצע בהצלחה!');
       
       if (returnUrl) {
@@ -159,7 +220,7 @@ function ProfileContent() {
     finally { setSaving(false); }
   };
 
-  if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
+  if (userLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
 
   return (
     <>
@@ -209,8 +270,9 @@ function ProfileContent() {
                     {formData.nickname && <span className="text-lg text-gray-400 font-bold">({formData.nickname})</span>}
                 </div>
                 <div className="flex flex-wrap justify-center md:justify-start gap-3 mt-2">
-                    <span className="bg-cyan-50 text-[#00BCD4] border border-cyan-100 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2"><Building2 size={16}/> {user?.user_metadata?.department} • {user?.user_metadata?.branch || 'מטה'}</span>
-                    {formData.startYear && <span className="bg-orange-50 text-orange-600 border border-orange-100 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2"><Calendar size={16}/> משנת {formData.startYear}</span>}
+                    <span className="bg-cyan-50 text-[#00BCD4] border border-cyan-100 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2">
+                        <Building2 size={16}/> {fullRoleString}
+                    </span>
                 </div>
             </div>
         </section>
@@ -219,6 +281,7 @@ function ProfileContent() {
             <section className="bg-[#F1F8E9] rounded-[32px] border border-green-100 p-8 shadow-inner lg:col-span-1 h-fit">
                 <div className="flex items-center gap-2 mb-6 text-[#8BC34A] font-bold text-sm uppercase tracking-wider"><Lock size={14}/> נתונים מערכתיים (תצוגה)</div>
                 <div className="space-y-6">
+                    <div><label className="text-xs font-bold text-gray-400 block mb-1">תפקיד</label><div className="font-bold text-gray-800 text-base border-b border-green-200/50 pb-2">{systemRoleDescription}</div></div>
                     <div><label className="text-xs font-bold text-gray-400 block mb-1">שם (לפי ת"ז)</label><div className="font-bold text-gray-800 text-lg border-b border-green-200/50 pb-2">{formData.officialName || '-'}</div></div>
                     <div><label className="text-xs font-bold text-gray-400 block mb-1">שם משפחה</label><div className="font-bold text-gray-800 text-lg border-b border-green-200/50 pb-2">{formData.lastName || '-'}</div></div>
                     <div><label className="text-xs font-bold text-gray-400 block mb-1">תעודת זהות</label><div className="font-bold text-gray-800 text-lg border-b border-green-200/50 pb-2 tracking-wider">{formData.idNumber || '-'}</div></div>
@@ -241,19 +304,41 @@ function ProfileContent() {
                         <Input label="תעודת זהות" value={formData.idNumber} onChange={(e: any) => setFormData({...formData, idNumber: e.target.value})}/>
                         <Input label="תאריך לידה" type="date" value={formData.birthDate} onChange={(e: any) => setFormData({...formData, birthDate: e.target.value})}/>
                     </div>
-                    <Input label="טלפון נייד" value={formData.phone} onChange={(e: any) => setFormData({...formData, phone: e.target.value})}/>
+                    
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <Input label="טלפון נייד" value={formData.phone} onChange={(e: any) => setFormData({...formData, phone: e.target.value})}/>
                         <Input label="אימייל ליצירת קשר" value={formData.contactEmail} onChange={(e: any) => setFormData({...formData, contactEmail: e.target.value})} icon={<Mail size={18}/>} placeholder="example@gmail.com"/>
-                        <Input label="שנת הצטרפות לצוות" type="number" value={formData.startYear} onChange={(e: any) => setFormData({...formData, startYear: e.target.value})} placeholder="לדוגמה: 2020"/>
                     </div>
-                    <Input label={isHQ ? "כתובת מגורים" : "כתובת הסניף למשלוח דואר"} value={formData.branchAddress} onChange={(e: any) => setFormData({...formData, branchAddress: e.target.value})} placeholder="רחוב, מספר, עיר..."/>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+                        <div className="md:col-span-2">
+                            <Input label={isHQ ? "כתובת מגורים" : "כתובת הסניף"} value={formData.branchAddress} onChange={(e: any) => setFormData({...formData, branchAddress: e.target.value})} placeholder="רחוב, מספר, עיר..."/>
+                        </div>
+                        <div>
+                            <div className="flex justify-between items-end mb-1.5">
+                                <label className="text-xs font-bold text-gray-500">מיקוד</label>
+                                <a href="https://doar.israelpost.co.il/locatezip" target="_blank" rel="noreferrer" className="text-[10px] font-bold text-[#E91E63] flex items-center gap-1 hover:underline">
+                                    <ExternalLink size={10} /> איתור מיקוד
+                                </a>
+                            </div>
+                            <Input value={formData.zipCode} onChange={(e: any) => setFormData({...formData, zipCode: e.target.value})} placeholder="1234567" icon={<MapPin size={16}/>}/>
+                        </div>
+                    </div>
+
                     <div className="h-px bg-gray-100 my-2"></div>
+                    
                     {!isHQ && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fadeIn">
-                            <Input label="כמות חניכים" type="number" value={formData.studentCount} onChange={(e: any) => setFormData({...formData, studentCount: e.target.value})}/>
-                            <Input label="כמות אנשי צוות" type="number" value={formData.staffCount} onChange={(e: any) => setFormData({...formData, staffCount: e.target.value})}/>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fadeIn">
+                            <Input label="שנת הצטרפות לארגון" type="number" value={formData.startYear} onChange={(e: any) => setFormData({...formData, startYear: e.target.value})} placeholder="2020"/>
+                            <Input label="כמות חניכים בסניף" type="number" value={formData.studentCount} onChange={(e: any) => setFormData({...formData, studentCount: e.target.value})}/>
+                            <Input label="כמות אנשי צוות בסניף" type="number" value={formData.staffCount} onChange={(e: any) => setFormData({...formData, staffCount: e.target.value})}/>
                         </div>
                     )}
+                    
+                    {isHQ && (
+                         <Input label="שנת הצטרפות לצוות" type="number" value={formData.startYear} onChange={(e: any) => setFormData({...formData, startYear: e.target.value})} placeholder="2020"/>
+                    )}
+                    
                     <div className="bg-cyan-50/50 p-6 rounded-2xl border border-cyan-100">
                         <label className="text-sm font-bold text-gray-600 block mb-2">{isHQ ? 'שמות חברי מטה נוספים' : 'שמות רכזים נוספים בסניף'}</label>
                         <textarea className="w-full p-4 rounded-xl bg-white border border-gray-200 outline-none focus:border-[#00BCD4] min-h-[80px] resize-none text-sm font-medium" placeholder="הזן שמות מופרדים בפסיקים..." value={formData.additionalStaff} onChange={e => setFormData({...formData, additionalStaff: e.target.value})}></textarea>

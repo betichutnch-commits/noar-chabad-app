@@ -6,6 +6,7 @@ import { Menu, Bell, X, Mail } from 'lucide-react';
 import Image from 'next/image';
 import { supabase } from '@/lib/supabaseClient';
 import Link from 'next/link';
+import { useUser } from '@/hooks/useUser';
 
 const DEPT_LOGOS: any = {
     'בת מלך': '/logos/bat-melech.png',
@@ -16,45 +17,52 @@ const DEPT_LOGOS: any = {
 };
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  // 1. שימוש ב-Hook
+  const { user } = useUser();
+  
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [user, setUser] = useState<any>(null);
   const [unreadNotifications, setUnreadNotifications] = useState<any[]>([]);
   const [isBellOpen, setIsBellOpen] = useState(false);
 
-  useEffect(() => {
-      const initData = async () => {
-          const { data: { user } } = await supabase.auth.getUser();
-          if (user) {
-              setUser(user);
-              fetchNotifications(user.id);
-          }
-      };
-      initData();
-
-      const channel = supabase.channel('layout_notifications')
-          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, () => {
-              if (user?.id) fetchNotifications(user.id);
-          })
-          .subscribe();
-
-      return () => { supabase.removeChannel(channel); }
-  }, []);
-
-  const fetchNotifications = async (userId: string) => {
-      const { data } = await supabase.from('notifications')
-          .select('id, title, is_read')
-          .eq('user_id', userId)
-          .eq('is_read', false)
-          .order('created_at', { ascending: false })
-          .limit(5);
-      setUnreadNotifications(data || []);
-  };
-
+  // נתונים נגזרים
   const deptLogo = user ? (DEPT_LOGOS[user.user_metadata?.department] || '/logo.png') : '/logo.png';
+  const fullName = user?.user_metadata?.full_name || '';
+  const avatarUrl = user?.user_metadata?.avatar_url || null;
+
+  // 2. ניהול התראות
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchNotifications = async () => {
+        const { data } = await supabase.from('notifications')
+            .select('id, title, is_read')
+            .eq('user_id', user.id)
+            .eq('is_read', false)
+            .order('created_at', { ascending: false })
+            .limit(5);
+        setUnreadNotifications(data || []);
+    };
+
+    fetchNotifications();
+
+    const channel = supabase.channel('layout_notifications')
+        .on('postgres_changes', { 
+            event: 'INSERT', 
+            schema: 'public', 
+            table: 'notifications',
+            filter: `user_id=eq.${user.id}` 
+        }, () => {
+            fetchNotifications();
+        })
+        .subscribe();
+
+    return () => { supabase.removeChannel(channel); }
+  }, [user]);
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] dir-rtl text-right font-sans">
       
+      {/* Mobile Header */}
       <div className="md:hidden flex items-center justify-between p-3 bg-white/95 backdrop-blur-md border-b border-gray-200 sticky top-0 z-40 shadow-sm h-16">
           <div className="flex items-center gap-3">
               <button 
@@ -68,25 +76,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </div>
               <div className="h-5 w-px bg-gray-200"></div>
               <div className="w-8 h-8 relative">
-                 <Image src={deptLogo} alt="Dept" fill className="object-contain"/>
+                 <Image 
+                    src={deptLogo} 
+                    alt="Dept" 
+                    fill 
+                    className="object-contain"
+                    onError={(e) => { (e.target as HTMLImageElement).src = '/logo.png'; }}
+                 />
               </div>
           </div>
           
           <Link href="/dashboard/profile" className="flex items-center gap-2 bg-gray-50 p-1 pl-1 pr-3 rounded-full border border-gray-100 shadow-sm">
               <div className="flex flex-col items-end">
                   <span className="text-xs font-bold text-gray-800 leading-none truncate max-w-[80px]">
-                      {user?.user_metadata?.full_name?.split(' ')[0]}
+                      {fullName.split(' ')[0]}
                   </span>
                   <span className="text-[9px] text-gray-500 leading-none truncate max-w-[80px] mt-0.5">
                       {user?.user_metadata?.branch || 'מטה'}
                   </span>
               </div>
               <div className="w-8 h-8 rounded-full bg-cyan-100 border border-white overflow-hidden relative">
-                  {user?.user_metadata?.avatar_url ? (
-                      <Image src={user.user_metadata.avatar_url} alt="User" fill className="object-cover" />
+                  {avatarUrl ? (
+                      <Image src={avatarUrl} alt="User" fill className="object-cover" />
                   ) : (
                       <div className="w-full h-full flex items-center justify-center text-cyan-600 font-bold text-xs">
-                          {user?.user_metadata?.full_name?.[0]}
+                          {fullName?.[0]}
                       </div>
                   )}
               </div>
@@ -99,7 +113,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {children}
       </div>
 
-      {/* תיקון: md:hidden - מוסתר במחשב, מוצג רק במובייל */}
+      {/* Mobile Floating Action Button (Notifications) */}
       <div className="fixed bottom-6 left-6 z-50 flex flex-col items-end gap-2 md:hidden">
           {isBellOpen && (
               <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 w-72 mb-2 overflow-hidden animate-fadeIn">

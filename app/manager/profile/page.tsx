@@ -8,15 +8,28 @@ import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
 import { Save, User, Mail, Lock, ShieldCheck, Camera, Loader2 } from 'lucide-react'
 
+// ייבוא Hook ו-Zod
+import { useUser } from '@/hooks/useUser'
+import { profileSchema } from '@/lib/schemas'
+
 export default function ManagerProfile() {
-  const [loading, setLoading] = useState(true);
+  // 1. שימוש ב-Hook
+  const { user, profile, loading: userLoading, refresh } = useUser('/');
+
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [user, setUser] = useState<any>(null);
 
   // מודל גלובלי
-  const [modal, setModal] = useState({ isOpen: false, type: 'info' as any, title: '', message: '' });
-  const showModal = (type: string, title: string, msg: string) => setModal({ isOpen: true, type: type as any, title, message: msg });
+  const [modal, setModal] = useState({
+      isOpen: false,
+      type: 'info' as 'success' | 'error' | 'info' | 'confirm',
+      title: '',
+      message: '',
+      onConfirm: undefined as (() => void) | undefined
+  });
+
+  const showModal = (type: 'success' | 'error' | 'info' | 'confirm', title: string, msg: string) => 
+      setModal({ isOpen: true, type, title, message: msg, onConfirm: undefined });
 
   const [formData, setFormData] = useState({
     officialName: '', 
@@ -30,14 +43,12 @@ export default function ManagerProfile() {
     profileImage: null as string | null
   });
 
+  // 2. טעינת נתונים
   useEffect(() => {
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        setUser(user);
+    if (user && !userLoading) {
         const meta = user.user_metadata || {};
         
-        let extractedId = meta.id_number || '';
+        let extractedId = profile?.identity_number || meta.id_number || '';
         if (!extractedId && user.email?.includes('@')) {
             const possibleId = user.email.split('@')[0];
             if (/^\d+$/.test(possibleId)) extractedId = possibleId;
@@ -47,21 +58,18 @@ export default function ManagerProfile() {
         const fallbackLastName = meta.full_name?.split(' ').slice(1).join(' ') || '';
 
         setFormData({
-            officialName: meta.official_name || meta.first_name || fallbackFirstName,
-            lastName: meta.last_name || fallbackLastName,
+            officialName: profile?.official_name || meta.official_name || meta.first_name || fallbackFirstName,
+            lastName: profile?.last_name || meta.last_name || fallbackLastName,
             idNumber: extractedId,
-            birthDate: meta.birth_date || '', 
+            birthDate: profile?.birth_date || meta.birth_date || '', 
             nickname: meta.nickname || '',
             fullNameAndMother: meta.full_name_mother || '', 
-            email: meta.contact_email || user.email || '',
-            phone: meta.phone || '',
-            profileImage: meta.avatar_url || null
+            email: profile?.email || meta.contact_email || user.email || '',
+            phone: profile?.phone || meta.phone || '',
+            profileImage: profile?.avatar_url || meta.avatar_url || null
         });
-      }
-      setLoading(false);
-    };
-    getUser();
-  }, []);
+    }
+  }, [user, profile, userLoading]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || !e.target.files[0]) return;
@@ -83,6 +91,23 @@ export default function ManagerProfile() {
   };
 
   const handleSave = async () => {
+      // 3. ולידציה עם Zod
+      const validation = profileSchema.safeParse({
+          officialName: formData.officialName,
+          lastName: formData.lastName,
+          idNumber: formData.idNumber,
+          phone: formData.phone,
+          email: formData.email,
+          birthDate: formData.birthDate,
+          nickname: formData.nickname,
+          fullNameAndMother: formData.fullNameAndMother,
+      });
+
+      if (!validation.success) {
+          showModal('error', 'שגיאה בטופס', validation.error.issues[0].message);
+          return;
+      }
+
       setSaving(true);
       
       const { error } = await supabase.auth.updateUser({
@@ -100,17 +125,33 @@ export default function ManagerProfile() {
           }
       });
 
+      // עדכון גם בטבלת פרופילים אם צריך
+      if (!error && user) {
+          await supabase.from('profiles').upsert({
+              id: user.id,
+              official_name: formData.officialName,
+              last_name: formData.lastName,
+              identity_number: formData.idNumber,
+              birth_date: formData.birthDate,
+              phone: formData.phone,
+              email: formData.email,
+              full_name: `${formData.officialName} ${formData.lastName}`.trim(),
+              avatar_url: formData.profileImage,
+              updated_at: new Date()
+          });
+      }
+
       setSaving(false);
       
       if (error) {
           showModal('error', 'שגיאה', error.message);
       } else {
+          refresh(); // רענון הנתונים הגלובליים
           showModal('success', 'נשמר', 'הפרופיל עודכן בהצלחה');
-          setTimeout(() => window.location.reload(), 1500); 
       }
   };
 
-  if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-gray-400"/></div>;
+  if (userLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-gray-400"/></div>;
 
   return (
     <>

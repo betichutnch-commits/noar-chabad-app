@@ -97,7 +97,6 @@ export const TripCard = ({ trip, onDeleteDraft, onCancelTrip }: TripCardProps) =
     const isCancelled = trip.status === 'cancelled';
     
     const smartDate = getSmartDateDisplay(trip.start_date, d.endDate);
-    // שימוש בפונקציה החדשה למובייל
     const mobileDateString = getMobileDateString(trip.start_date, d.endDate);
     const dateRangeHeb = formatHebrewDateRange(trip.start_date, d.endDate);
 

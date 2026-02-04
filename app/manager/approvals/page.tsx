@@ -7,25 +7,36 @@ import { Loader2, MapPin, Search, Eye, Calendar, User, Clock, CheckCircle, XCirc
 import Link from 'next/link'
 import { Input } from '@/components/ui/Input'
 
+// ייבוא Hook לניהול משתמש (לוודא שאנחנו מחוברים)
+import { useUser } from '@/hooks/useUser'
+
 export default function ApprovalsPage() {
-  const [loading, setLoading] = useState(true);
+  // 1. שימוש ב-Hook
+  const { user, loading: userLoading } = useUser('/');
+
+  const [loadingTrips, setLoadingTrips] = useState(true);
   const [trips, setTrips] = useState<any[]>([]);
   const [filter, setFilter] = useState('pending');
   const [searchTerm, setSearchTerm] = useState('');
 
+  // 2. טעינת נתונים
   useEffect(() => {
-    fetchTrips();
-  }, []);
+    const fetchTrips = async () => {
+        if (!user) return;
 
-  const fetchTrips = async () => {
-    const { data } = await supabase
-      .from('trips')
-      .select('*')
-      .order('created_at', { ascending: false });
+        const { data, error } = await supabase
+            .from('trips')
+            .select('*')
+            .order('created_at', { ascending: false });
 
-    if (data) setTrips(data);
-    setLoading(false);
-  };
+        if (data) setTrips(data);
+        setLoadingTrips(false);
+    };
+
+    if (!userLoading && user) {
+        fetchTrips();
+    }
+  }, [user, userLoading]);
 
   const filteredTrips = trips.filter(trip => {
       const matchesStatus = filter === 'all' ? true : trip.status === filter;
@@ -53,7 +64,8 @@ export default function ApprovalsPage() {
       );
   };
 
-  if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
+  // בדיקת טעינה משולבת
+  if (userLoading || loadingTrips) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
 
   return (
     <>
@@ -64,7 +76,7 @@ export default function ApprovalsPage() {
             {/* סרגל כלים וחיפוש */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                 
-                {/* פילטרים - בטלפון הם יהיו בגלילה אופקית אם צריך */}
+                {/* פילטרים */}
                 <div className="flex bg-white p-1 rounded-xl border border-gray-200 shadow-sm w-full md:w-auto overflow-x-auto">
                     {['pending', 'approved', 'rejected', 'all'].map((f) => (
                         <button

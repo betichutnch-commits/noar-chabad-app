@@ -4,44 +4,67 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { Bell, X, UserPlus, Users } from 'lucide-react';
 import Link from 'next/link';
+import { useUser } from '@/hooks/useUser';
 
 export const ManagerHeader = ({ title }: { title: string }) => {
-  const [user, setUser] = useState<any>(null);
+  // 1. שימוש ב-Hook
+  const { user } = useUser();
+  
   const [counts, setCounts] = useState({ newUsers: 0, newMessages: 0 });
   const [isBellOpen, setIsBellOpen] = useState(false);
   const [isUsersOpen, setIsUsersOpen] = useState(false);
 
+  // 2. טעינת נתונים והאזנה לשינויים
   useEffect(() => {
-    const fetchData = async () => {
-      const { data: userData } = await supabase.auth.getUser();
-      setUser(userData.user);
+    const fetchCounts = async () => {
+        // ספירת משתמשים חדשים
+        const { count: pendingUsersCount } = await supabase
+            .from('profiles') // בודקים בטבלת פרופילים אם יש כאלה בסטטוס pending
+            .select('*', { count: 'exact', head: true })
+            // הערה: הלוגיקה של 'pending' במשתמשים תלויה באיך שומרים את זה.
+            // אם זה ב-metadata, צריך להשתמש ב-rpc או view.
+            // כאן אני מניח שיצרנו view כמו בקוד המקורי, או שנשתמש בשאילתה פשוטה אם אפשר.
+            // לבינתיים, נשחזר את הלוגיקה המקורית שעבדה על users_management_view
+            .eq('status', 'pending'); // הנחה: יש עמודת status ב-profiles או ב-view
 
-      // ספירת משתמשים חדשים
-      const { data: usersData } = await supabase.from('users_management_view').select('raw_user_meta_data');
-      const pendingUsersCount = usersData?.filter((u: any) => {
-          const status = u.raw_user_meta_data?.status;
-          return !status || status === 'pending';
-      }).length || 0;
+        // ספירת הודעות חדשות
+        const { count: pendingMessagesCount } = await supabase
+            .from('contact_messages')
+            .select('*', { count: 'exact', head: true })
+            .neq('status', 'treated');
 
-      // ספירת הודעות חדשות
-      const { count: pendingMessagesCount } = await supabase
-        .from('contact_messages')
-        .select('*', { count: 'exact', head: true })
-        .neq('status', 'treated');
+        // אם אין View, נשתמש בפתרון הקודם (פחות יעיל אבל עובד)
+        let finalUsersCount = 0;
+        const { data: usersData } = await supabase.from('users_management_view').select('raw_user_meta_data');
+        if (usersData) {
+             finalUsersCount = usersData.filter((u: any) => {
+                const status = u.raw_user_meta_data?.status;
+                return !status || status === 'pending';
+            }).length;
+        }
 
-      setCounts({
-        newUsers: pendingUsersCount,
-        newMessages: pendingMessagesCount || 0
-      });
+        setCounts({
+            newUsers: finalUsersCount,
+            newMessages: pendingMessagesCount || 0
+        });
     };
 
-    fetchData();
+    fetchCounts();
+
+    // האזנה לשינויים בזמן אמת (רק להודעות כרגע, משתמשים זה מורכב יותר בגלל auth)
+    const channel = supabase.channel('manager_header')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'contact_messages' }, () => {
+            fetchCounts();
+        })
+        .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   return (
     <header className="hidden md:flex h-24 sticky top-0 z-40 px-8 items-center justify-between transition-all bg-[#F8F9FA]/90 backdrop-blur-md border-b border-gray-200">
       
-      {/* צד ימין: כותרת בלבד (ללא לוגו מחלקה) */}
+      {/* צד ימין: כותרת בלבד */}
       <div>
           <h1 className="text-3xl font-bold text-gray-800 tracking-tight leading-none">
               {title}

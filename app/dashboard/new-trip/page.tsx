@@ -3,13 +3,12 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { Header } from '@/components/layout/Header'
-import { Modal } from '@/components/ui/Modal' // <-- החדש
-import { Input } from '@/components/ui/Input' // <-- החדש
-import { useUser } from '@/hooks/useUser'
+import { Modal } from '@/components/ui/Modal'
+import { Input } from '@/components/ui/Input'
 import { 
   Calendar, MapPin, AlertTriangle, Save, CheckCircle, FileUp, 
   Flag, ChevronDown, ChevronUp, Lock, Unlock, Check, Trash2, Loader2, Link as LinkIcon,
-  Home, Info, ArrowRight, FileEdit, HelpCircle, MessageSquare, User, Phone, CreditCard, Mail, Hash, Plus, X, Briefcase, UserPlus, Settings, Edit2
+  Home, ArrowRight, FileEdit, User, Phone, CreditCard, Mail, Plus, X, Briefcase, UserPlus, Edit2, MessageSquare
 } from 'lucide-react'
 import { useSearchParams, useRouter } from 'next/navigation'
 
@@ -19,13 +18,17 @@ import {
 } from '@/lib/constants'
 import { getHebrewDateString } from '@/lib/dateUtils'
 
+// ייבוא Hook ו-Zod
+import { useUser } from '@/hooks/useUser'
+import { tripGeneralSchema, tripLineSchema, staffSchema } from '@/lib/schemas'
+
 function NewTripContent() {
-  // --- להדביק את זה במקום ---
   const router = useRouter();
-  // שימוש ב-Hook החדש:
+  
+  // 1. שימוש ב-Hook
   const { user, profile, loading: userLoading } = useUser('/'); 
 
-  const [loading, setLoading] = useState(false); // זה ה-loading של שמירת הטופס
+  const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(0); 
   const [userGender, setUserGender] = useState<'male' | 'female' | 'mixed'>('mixed');
   const searchParams = useSearchParams();
@@ -34,26 +37,27 @@ function NewTripContent() {
   const [isOtherSelected, setIsOtherSelected] = useState(false);
   const [tempOtherType, setTempOtherType] = useState('');
 
-  // --- Modal State החדש ---
+  // מודל גלובלי
   const [modal, setModal] = useState({
       isOpen: false,
       type: 'info' as 'success' | 'error' | 'info' | 'confirm',
+      title: '', 
       message: '',
       onConfirm: undefined as (() => void) | undefined
   });
 
-  const showModal = (type: 'success' | 'error' | 'info' | 'confirm', msg: string, onConfirm?: () => void) => {
-      setModal({ isOpen: true, type, message: msg, onConfirm });
+  const showModal = (type: 'success' | 'error' | 'info' | 'confirm', title: string, msg: string, onConfirm?: () => void) => {
+      setModal({ isOpen: true, type, title, message: msg, onConfirm });
   };
 
-  // --- State לקבצים ונעילת שורות ---
+  // State לקבצים ונעילת שורות
   const [uploadingFileId, setUploadingFileId] = useState<string | null>(null); 
   const [isUploadingLicense, setIsUploadingLicense] = useState(false);
   const [isUploadingInsurance, setIsUploadingInsurance] = useState(false);
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
   const [isRowsLocked, setIsRowsLocked] = useState(false);
   
-  // --- State להצעות מיקום וקטגוריות ---
+  // State להצעות מיקום וקטגוריות
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [showSubCategoryDropdown, setShowSubCategoryDropdown] = useState(false);
@@ -64,7 +68,7 @@ function NewTripContent() {
   const endDateRef = useRef<HTMLInputElement>(null);
   const endTimeRef = useRef<HTMLInputElement>(null);
 
-  // --- State ראשי של הטיול ---
+  // State ראשי של הטיול
   const [generalInfo, setGeneralInfo] = useState({ 
       name: '', 
       tripType: '', 
@@ -73,8 +77,8 @@ function NewTripContent() {
       startTime: '08:00', 
       endDate: '', 
       endTime: '18:00', 
-      gradeFrom: 'א', 
-      gradeTo: 'ח', 
+      gradeFrom: '', 
+      gradeTo: '', 
       chanichimCount: '', 
       totalTravelers: '', 
       staffAges: [] as string[], 
@@ -90,17 +94,10 @@ function NewTripContent() {
       secondaryStaffObj: null as any 
   });
 
-  // --- State לטופס הוספת אחראי נוסף ---
+  // State לטופס הוספת אחראי נוסף
   const [showAddStaffForm, setShowAddStaffForm] = useState(false);
   const [isVerifyingStaff, setIsVerifyingStaff] = useState(false);
-  const [newStaffData, setNewStaffData] = useState({
-      name: '',
-      role: '',
-      idNumber: '',
-      dob: '',
-      phone: '',
-      email: ''
-  });
+  const [newStaffData, setNewStaffData] = useState({ name: '', role: '', idNumber: '', dob: '', phone: '', email: '' });
 
   const [timeline, setTimeline] = useState<any[]>([]);
   const [currentLine, setCurrentLine] = useState({ 
@@ -130,24 +127,24 @@ function NewTripContent() {
       return dict[key]?.[userGender] || key;
   };
 
-  // --- להדביק את זה במקום ---
-useEffect(() => {
-  if (user && !userLoading) {
-      setUserGender(checkGender(user.user_metadata?.department));
-      
-      // אם זה טיול חדש (לא עריכה), נמלא את פרטי האחראי אוטומטית מהפרופיל
-      if (!editId && profile) {
-          setGeneralInfo(prev => ({
-              ...prev,
-              coordName: `${profile.official_name} ${profile.last_name}`,
-              coordId: profile.identity_number || '',
-              coordPhone: profile.phone || '',
-              coordEmail: profile.email || '',
-              coordDob: profile.birth_date || ''
-          }));
-      }
-  }
-}, [user, profile, userLoading, editId]);
+  // מילוי אוטומטי של פרטי המשתמש
+  useEffect(() => {
+    if (user && !userLoading) {
+        setUserGender(checkGender(user.user_metadata?.department));
+        
+        // אם זה טיול חדש (לא עריכה), נמלא את פרטי האחראי אוטומטית מהפרופיל
+        if (!editId && profile) {
+            setGeneralInfo(prev => ({
+                ...prev,
+                coordName: `${profile.official_name} ${profile.last_name}`,
+                coordId: profile.identity_number || '',
+                coordPhone: profile.phone || '',
+                coordEmail: profile.email || '',
+                coordDob: profile.birth_date || ''
+            }));
+        }
+    }
+  }, [user, profile, userLoading, editId]);
 
   useEffect(() => {
       const fetchTrip = async () => {
@@ -211,7 +208,7 @@ useEffect(() => {
   };
 
   const submitOtherType = () => {
-      if (!tempOtherType.trim()) return showModal('error', 'נא לפרט את סוג הפעילות');
+      if (!tempOtherType.trim()) return showModal('error', 'שגיאה', 'נא לפרט את סוג הפעילות');
       setGeneralInfo(prev => ({ ...prev, tripType: 'אחר', tripTypeOther: tempOtherType }));
       setStep(1); window.scrollTo(0,0);
   };
@@ -219,21 +216,23 @@ useEffect(() => {
   const handleEndDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const newEnd = e.target.value;
       if (generalInfo.startDate && newEnd < generalInfo.startDate) {
-          showModal('error', 'תאריך הסיום לא יכול להיות לפני תאריך ההתחלה.');
+          showModal('error', 'תאריך שגוי', 'תאריך הסיום לא יכול להיות לפני תאריך ההתחלה.');
           setGeneralInfo(prev => ({ ...prev, endDate: '' }));
       } else setGeneralInfo(prev => ({ ...prev, endDate: newEnd }));
   };
 
   const handleSaveStaff = async () => {
-      if (!newStaffData.name || !newStaffData.role || !newStaffData.idNumber || !newStaffData.dob || !newStaffData.phone || !newStaffData.email) {
-          return showModal('error', 'יש למלא את כל השדות של האחראי.');
+      const validation = staffSchema.safeParse(newStaffData);
+      if (!validation.success) {
+          return showModal('error', 'פרטים חסרים', validation.error.issues[0].message);
       }
+
       setIsVerifyingStaff(true);
       try {
           const { data: existingUser, error } = await supabase.from('profiles').select('id, official_name, last_name').eq('identity_number', newStaffData.idNumber).single();
           if (error || !existingUser) {
               setIsVerifyingStaff(false);
-              return showModal('error', 'שגיאה: תעודת הזהות אינה קיימת במערכת.\nניתן להוסיף כאחראי רק משתמש רשום.');
+              return showModal('error', 'שגיאה', 'תעודת הזהות אינה קיימת במערכת.\nניתן להוסיף כאחראי רק משתמש רשום.');
           }
           setGeneralInfo(prev => ({
               ...prev,
@@ -246,7 +245,7 @@ useEffect(() => {
           setShowAddStaffForm(false);
           setNewStaffData({ name: '', role: '', idNumber: '', dob: '', phone: '', email: '' });
       } catch (err) {
-          showModal('error', 'אירעה שגיאה באימות הנתונים.');
+          showModal('error', 'שגיאה', 'אירעה שגיאה באימות הנתונים.');
       } finally {
           setIsVerifyingStaff(false);
       }
@@ -257,11 +256,18 @@ useEffect(() => {
   };
 
   const handleAddLine = () => {
-    if (!currentLine.category) return showModal('error', 'נא לבחור קטגוריה');
-    if (!currentLine.subCategory) return showModal('error', 'נא לבחור פעילות');
-    if (currentLine.locationType !== 'branch' && !currentLine.locationValue) return showModal('error', 'נא להזין מיקום');
-    if (currentLine.subCategory === 'אחר' && !currentLine.otherDetail) return showModal('error', 'נא לפרט בשדה "אחר"');
-    if (currentLine.subCategory === 'לינת מבנה' && !currentLine.otherDetail) return showModal('error', 'חובה להזין כתובת/שם מקום ללינה');
+    const lineToValidate = {
+        date: currentLine.date,
+        category: currentLine.category,
+        subCategory: currentLine.subCategory,
+        locationValue: currentLine.locationType === 'branch' ? 'בסניף הקבוע' : currentLine.locationValue,
+        otherDetail: currentLine.otherDetail
+    };
+
+    const validation = tripLineSchema.safeParse(lineToValidate);
+    if (!validation.success) {
+        return showModal('error', 'חסרים פרטים בלו"ז', validation.error.issues[0].message);
+    }
 
     let nextDate = currentLine.date;
     let didDateChange = false;
@@ -269,7 +275,7 @@ useEffect(() => {
     if (currentLine.category === 'sleeping') {
         const calculatedNextDate = getNextDate(currentLine.date);
         if (new Date(calculatedNextDate) > new Date(generalInfo.endDate)) {
-            return showModal('error', `לא ניתן להוסיף לינה בתאריך זה.\nהטיול מוגדר להסתיים ב-${generalInfo.endDate.split('-').reverse().join('/')}.\nיש לעדכן את תאריכי הטיול בפרטים הכלליים למעלה.`);
+            return showModal('error', 'תאריך שגוי', `לא ניתן להוסיף לינה בתאריך זה.\nהטיול מוגדר להסתיים ב-${generalInfo.endDate.split('-').reverse().join('/')}.\nיש לעדכן את תאריכי הטיול בפרטים הכלליים למעלה.`);
         }
         nextDate = calculatedNextDate;
         didDateChange = true;
@@ -289,7 +295,7 @@ useEffect(() => {
     
     setTimeline([...timeline, newLine]);
     setExpandedItem(null);
-    if (didDateChange) showModal('info', 'הוספת לינה: התאריך בשורה הבאה עודכן אוטומטית ליום המחרת.');
+    if (didDateChange) showModal('info', 'שימו לב', 'הוספת לינה: התאריך בשורה הבאה עודכן אוטומטית ליום המחרת.');
     
     setCurrentLine({ 
         date: nextDate, locationType: 'custom', locationValue: '', category: '', subCategory: '', 
@@ -314,7 +320,7 @@ useEffect(() => {
         
         if (itemId) setTimeline(prev => prev.map(item => item.id === itemId ? { ...item, [type === 'license' ? 'licenseFile' : 'insuranceFile']: fileObj } : item));
         else setCurrentLine(prev => ({ ...prev, [type === 'license' ? 'licenseFile' : 'insuranceFile']: fileObj }));
-    } catch (e: any) { showModal('error', 'שגיאה בהעלאה: ' + e.message); } 
+    } catch (e: any) { showModal('error', 'שגיאה', 'שגיאה בהעלאה: ' + e.message); } 
     finally { 
         if (itemId) setUploadingFileId(null); 
         else { if(type === 'license') setIsUploadingLicense(false); else setIsUploadingInsurance(false); } 
@@ -331,7 +337,7 @@ useEffect(() => {
   const handleLockToggle = () => {
       const config = TRIP_LOGIC[generalInfo.tripType] || TRIP_LOGIC['אחר'];
       const minRows = config.minRows || 2;
-      if (!isRowsLocked && timeline.length < minRows) return showModal('error', `לא ניתן לסיים הוספת שורות. בסוג פעילות זה נדרשות לפחות ${minRows} שורות בלו"ז.`);
+      if (!isRowsLocked && timeline.length < minRows) return showModal('error', 'שגיאה', `לא ניתן לסיים הוספת שורות. בסוג פעילות זה נדרשות לפחות ${minRows} שורות בלו"ז.`);
       setIsRowsLocked(!isRowsLocked);
   };
 
@@ -364,10 +370,10 @@ useEffect(() => {
         if (error) throw error;
         
         if (status === 'draft') return newId;
-        else showModal('success', 'הטיול נשלח בהצלחה! תוך 48 שעות תתקבל תשובה.');
+        else showModal('success', 'הטיול נשלח', 'הטיול נשלח בהצלחה! תוך 48 שעות תתקבל תשובה.');
 
     } catch(e: any) { 
-        showModal('error', 'שגיאה: ' + e.message); 
+        showModal('error', 'שגיאה', 'שגיאה: ' + e.message); 
         throw e;
     } finally { 
         setLoading(false); 
@@ -377,37 +383,36 @@ useEffect(() => {
   const handleSubmit = async () => {
     if (isUrgentError) return;
     
-    if (!generalInfo.coordName || !generalInfo.coordId) {
-        return showModal('error', 'חסרים פרטי אחראי טיול (יש לוודא שהפרופיל האישי מעודכן).');
+    // 4. ולידציה עם Zod (פרטים כלליים)
+    const validation = tripGeneralSchema.safeParse(generalInfo);
+    if (!validation.success) {
+        return showModal('error', 'פרטים חסרים/שגויים', validation.error.issues[0].message);
     }
 
-    if (!generalInfo.tripType || !generalInfo.name || !generalInfo.startDate || !generalInfo.endDate || !generalInfo.chanichimCount || !generalInfo.totalTravelers) {
-        return showModal('error', 'נא למלא את כל שדות החובה בפרטים הכלליים');
-    }
-    if (timeline.length === 0) return showModal('error', 'יש להוסיף לפחות שורה אחת בפירוט הטיול');
+    if (timeline.length === 0) return showModal('error', 'לו"ז ריק', 'יש להוסיף לפחות שורה אחת בפירוט הטיול');
     
     const config = TRIP_LOGIC[generalInfo.tripType] || TRIP_LOGIC['אחר'];
     const minRows = config.minRows || 2;
-    if (timeline.length < minRows) return showModal('error', `נדרשות לפחות ${minRows} שורות בלו"ז.`);
+    if (timeline.length < minRows) return showModal('error', 'לו"ז קצר', `נדרשות לפחות ${minRows} שורות בלו"ז.`);
     
     if (timeline.some(item => item.requiresLicense && (!item.licenseFile || !item.insuranceFile))) {
-        showModal('confirm', 'יש פעילויות הדורשות אישורים שחסרים להן מסמכים. לשלוח בכל זאת?', () => executeSubmission('pending'));
+        showModal('confirm', 'חסרים מסמכים', 'יש פעילויות הדורשות אישורים שחסרים להן מסמכים. לשלוח בכל זאת?', () => executeSubmission('pending'));
         return;
     }
     executeSubmission('pending');
   };
 
   const handleSaveDraft = async () => {
-      if (!generalInfo.tripType) return showModal('error', 'כדי לשמור טיוטה חובה לבחור לפחות את סוג הטיול');
+      if (!generalInfo.tripType) return showModal('error', 'שגיאה', 'כדי לשמור טיוטה חובה לבחור לפחות את סוג הטיול');
       const res = await executeSubmission('draft');
-      if (res) showModal('success', 'הטיוטה נשמרה בהצלחה!');
+      if (res) showModal('success', 'נשמר', 'הטיוטה נשמרה בהצלחה!');
   };
 
   const handleGoToProfile = async () => {
-      if (!generalInfo.tripType) return showModal('error', 'כדי לשמור טיוטה ולעבור לפרופיל, בחר קודם סוג פעילות.');
+      if (!generalInfo.tripType) return showModal('error', 'שגיאה', 'כדי לשמור טיוטה ולעבור לפרופיל, בחר קודם סוג פעילות.');
       const newId = await executeSubmission('draft');
       if (newId) {
-          showModal('info', 'הטיול נשמר כטיוטה.\nמעביר אותך לעדכון פרטים בפרופיל...', () => {
+          showModal('info', 'העברה לפרופיל', 'הטיול נשמר כטיוטה.\nמעביר אותך לעדכון פרטים בפרופיל...', () => {
               router.push(`/dashboard/profile?returnUrl=/dashboard/new-trip?id=${newId}`);
           });
       }
@@ -418,7 +423,6 @@ useEffect(() => {
 
   const getStaffTitle = (type: 'title' | 'additional') => {
       const isTrip = generalInfo.tripType === 'טיול מחוץ לסניף';
-      const base = isTrip ? 'טיול' : 'הפעילות';
       const isFemale = userGender === 'female';
 
       if (type === 'title') {
@@ -432,15 +436,17 @@ useEffect(() => {
       return '';
   };
 
+  if (userLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
+
   return (
     <>
       <Header title={step === 0 ? t('select_type') : (editId ? "עריכת טיול" : "הגשת טיול חדש")} />
 
-      {/* שימוש במודל הגלובלי החדש */}
       <Modal 
         isOpen={modal.isOpen} 
         onClose={() => setModal({ ...modal, isOpen: false })} 
         type={modal.type} 
+        title={modal.title}
         message={modal.message} 
         onConfirm={modal.onConfirm}
       />
@@ -465,6 +471,7 @@ useEffect(() => {
                                             onChange={(e: any) => setTempOtherType(e.target.value)}
                                             placeholder="נא לפרט..." 
                                             autoFocus
+                                            className="focus:!border-[#E91E63] focus:!ring-0"
                                         />
                                         <button onClick={submitOtherType} className="bg-[#E91E63] text-white px-4 rounded-xl font-bold text-sm shadow-sm hover:bg-pink-600 transition-colors">המשך</button>
                                     </div>
@@ -519,19 +526,20 @@ useEffect(() => {
                                       onChange={(e: any) => setGeneralInfo({...generalInfo, name: e.target.value})} 
                                       placeholder={currentLogic.namePlaceholder} 
                                       autoFocus 
+                                      className="focus:!border-[#E91E63] focus:!ring-0"
                                   />
                             </div>
 
                             <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
                                 <div>
                                     <label className="block text-[10px] md:text-xs font-bold text-gray-500 mb-1.5 mr-1">התחלה</label>
-                                    <div className="bg-white rounded-xl border border-gray-200 flex items-center h-[50px] md:h-[60px] focus-within:border-[#E91E63] focus-within:ring-1 focus-within:ring-[#E91E63] transition-colors overflow-hidden cursor-pointer" onClick={() => startDateRef.current?.showPicker()}>
-                                         <div className="flex-1 px-3 border-l border-gray-100 relative h-full flex flex-col justify-center">
+                                    <div className="bg-gray-50 rounded-xl border border-gray-200 flex items-center h-[52px] focus-within:!border-[#E91E63] focus-within:!ring-0 transition-all overflow-hidden cursor-pointer" onClick={() => startDateRef.current?.showPicker()}>
+                                         <div className="flex-1 px-3 border-l border-gray-200 relative h-full flex flex-col justify-center">
                                              <input ref={startDateRef} type="date" className="w-full bg-transparent text-xs font-bold text-gray-800 outline-none z-10 relative" 
                                                  value={generalInfo.startDate} onChange={(e) => setGeneralInfo({...generalInfo, startDate: e.target.value})} onClick={(e) => e.stopPropagation()} />
                                              <div className="text-[9px] text-[#00BCD4] font-bold leading-none mt-0.5 truncate">{startHebrewDate || '-'}</div>
                                          </div>
-                                         <div className="w-20 h-full flex items-center justify-center bg-gray-50 relative z-20 hover:bg-gray-100 transition-colors" onClick={(e) => { e.stopPropagation(); startTimeRef.current?.showPicker(); }}>
+                                         <div className="w-20 h-full flex items-center justify-center bg-gray-100 relative z-20 hover:bg-gray-200 transition-colors" onClick={(e) => { e.stopPropagation(); startTimeRef.current?.showPicker(); }}>
                                              <input ref={startTimeRef} type="time" step="900" className="w-full h-full bg-transparent text-xs font-bold text-gray-800 outline-none text-center cursor-pointer" 
                                                  value={generalInfo.startTime} onChange={(e) => setGeneralInfo({...generalInfo, startTime: e.target.value})} />
                                          </div>
@@ -539,13 +547,13 @@ useEffect(() => {
                                 </div>
                                 <div>
                                     <label className="block text-[10px] md:text-xs font-bold text-gray-500 mb-1.5 mr-1">סיום</label>
-                                    <div className="bg-white rounded-xl border border-gray-200 flex items-center h-[50px] md:h-[60px] focus-within:border-[#E91E63] focus-within:ring-1 focus-within:ring-[#E91E63] transition-colors overflow-hidden cursor-pointer" onClick={() => endDateRef.current?.showPicker()}>
-                                         <div className="flex-1 px-3 border-l border-gray-100 relative h-full flex flex-col justify-center">
+                                    <div className="bg-gray-50 rounded-xl border border-gray-200 flex items-center h-[52px] focus-within:!border-[#E91E63] focus-within:!ring-0 transition-all overflow-hidden cursor-pointer" onClick={() => endDateRef.current?.showPicker()}>
+                                         <div className="flex-1 px-3 border-l border-gray-200 relative h-full flex flex-col justify-center">
                                              <input ref={endDateRef} type="date" className="w-full bg-transparent text-xs font-bold text-gray-800 outline-none z-10 relative" 
                                                  value={generalInfo.endDate} onChange={handleEndDateChange} onClick={(e) => e.stopPropagation()}/>
                                              <div className="text-[9px] text-[#00BCD4] font-bold leading-none mt-0.5 truncate">{endHebrewDate || '-'}</div>
                                          </div>
-                                         <div className="w-20 h-full flex items-center justify-center bg-gray-50 relative z-20 hover:bg-gray-100 transition-colors" onClick={(e) => { e.stopPropagation(); endTimeRef.current?.showPicker(); }}>
+                                         <div className="w-20 h-full flex items-center justify-center bg-gray-100 relative z-20 hover:bg-gray-200 transition-colors" onClick={(e) => { e.stopPropagation(); endTimeRef.current?.showPicker(); }}>
                                              <input ref={endTimeRef} type="time" step="900" className="w-full h-full bg-transparent text-xs font-bold text-gray-800 outline-none text-center cursor-pointer" 
                                                  value={generalInfo.endTime} onChange={(e) => setGeneralInfo({...generalInfo, endTime: e.target.value})} />
                                          </div>
@@ -566,15 +574,29 @@ useEffect(() => {
 
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
                         <div className="md:col-span-3 w-full">
-                            <label className="text-xs font-bold text-gray-500 block mb-1.5">שכבות גיל</label>
-                            <div className="flex items-center gap-2 bg-white p-1 rounded-xl border border-gray-200 h-[50px] md:h-[60px] focus-within:border-[#E91E63] focus-within:ring-1 focus-within:ring-[#E91E63] transition-colors">
-                                <select className="bg-transparent text-xs p-1 outline-none font-bold w-full cursor-pointer h-full text-gray-700" value={generalInfo.gradeFrom} onChange={(e) => setGeneralInfo({...generalInfo, gradeFrom: e.target.value})}>
-                                    <option value="">מכיתה...</option>{GRADES.map(g => <option key={g} value={g}>כיתה {g}</option>)}
-                                </select>
-                                <span className="text-gray-300">-</span>
-                                <select className="bg-transparent text-xs p-1 outline-none font-bold w-full cursor-pointer h-full text-gray-700" value={generalInfo.gradeTo} onChange={(e) => setGeneralInfo({...generalInfo, gradeTo: e.target.value})}>
-                                    <option value="">עד כיתה...</option>{GRADES.map(g => <option key={g} value={g}>כיתה {g}</option>)}
-                                </select>
+                            <label className="text-xs font-bold text-gray-500 block mb-1.5 mr-1">שכבות גיל</label>
+                            <div className="flex gap-2">
+                                {/* שימוש במיכל שדומה לקומפוננטת Input */}
+                                <div className="relative w-full">
+                                    <select 
+                                        className="w-full bg-gray-50 text-gray-800 text-sm font-bold border border-gray-200 rounded-xl px-4 py-3.5 outline-none appearance-none focus:bg-white focus:!border-[#E91E63] focus:!ring-0 cursor-pointer"
+                                        value={generalInfo.gradeFrom} 
+                                        onChange={(e) => setGeneralInfo({...generalInfo, gradeFrom: e.target.value})}
+                                    >
+                                        <option value="">מכיתה...</option>{GRADES.map(g => <option key={g} value={g}>כיתה {g}</option>)}
+                                    </select>
+                                    <ChevronDown size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"/>
+                                </div>
+                                <div className="relative w-full">
+                                    <select 
+                                        className="w-full bg-gray-50 text-gray-800 text-sm font-bold border border-gray-200 rounded-xl px-4 py-3.5 outline-none appearance-none focus:bg-white focus:!border-[#E91E63] focus:!ring-0 cursor-pointer"
+                                        value={generalInfo.gradeTo} 
+                                        onChange={(e) => setGeneralInfo({...generalInfo, gradeTo: e.target.value})}
+                                    >
+                                        <option value="">עד כיתה...</option>{GRADES.map(g => <option key={g} value={g}>כיתה {g}</option>)}
+                                    </select>
+                                    <ChevronDown size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"/>
+                                </div>
                             </div>
                         </div>
 
@@ -584,12 +606,13 @@ useEffect(() => {
                                 type="number" 
                                 value={generalInfo.chanichimCount} 
                                 onChange={(e: any) => setGeneralInfo({...generalInfo, chanichimCount: e.target.value})} 
+                                className="focus:!border-[#E91E63] focus:!ring-0"
                             />
                         </div>
 
-                        <div className="md:col-span-5 w-full bg-white rounded-xl border border-gray-200 p-2 flex flex-col justify-center group hover:border-[#E91E63] transition-all min-h-[74px]">
+                        <div className="md:col-span-5 w-full bg-white rounded-xl border border-gray-200 p-2 flex flex-col justify-center group hover:!border-[#E91E63] transition-all min-h-[74px]">
                             <div className="flex items-center gap-2 px-1 mb-1">
-                                <label className="text-xs font-bold text-gray-500 group-hover:text-[#E91E63] transition-colors">
+                                <label className="text-xs font-bold text-gray-500 group-hover:!text-[#E91E63] transition-colors">
                                     {currentLogic.staffLabel}
                                 </label>
                                 <span className="text-[10px] text-gray-400 font-normal">(ניתן לבחור מס' אפשרויות)</span>
@@ -611,7 +634,7 @@ useEffect(() => {
                                     <input 
                                         type="text" 
                                         placeholder="נא לפרט כאן..." 
-                                        className="w-full p-2 text-xs border border-gray-200 focus:border-[#E91E63] outline-none bg-gray-50 rounded-lg" 
+                                        className="w-full p-2 text-xs border border-gray-200 focus:!border-[#E91E63] outline-none bg-gray-50 rounded-lg" 
                                         value={generalInfo.staffOther} 
                                         onChange={(e) => setGeneralInfo({...generalInfo, staffOther: e.target.value})} 
                                         autoFocus 
@@ -624,7 +647,7 @@ useEffect(() => {
                             <Input 
                                 label='ס"ה משתתפים' 
                                 type="number" 
-                                className="bg-[#E0F7FA] font-bold text-[#00BCD4]"
+                                className="bg-[#E0F7FA] font-bold text-[#00BCD4] focus:!border-[#E91E63] focus:!ring-0"
                                 placeholder="חניכים + צוות" 
                                 value={generalInfo.totalTravelers} 
                                 onChange={(e: any) => setGeneralInfo({...generalInfo, totalTravelers: e.target.value})} 
@@ -649,7 +672,7 @@ useEffect(() => {
                           const isMissingLicense = item.requiresLicense && (!item.licenseFile || !item.insuranceFile);
 
                           return (
-                            <div key={item.id} className={`border rounded-xl overflow-hidden bg-white transition-all group shadow-sm hover:shadow-md ${isMissingLicense ? 'border-red-300 ring-1 ring-red-100' : 'border-gray-200 hover:border-[#E91E63]'}`}>
+                            <div key={item.id} className={`border rounded-xl overflow-hidden bg-white transition-all group shadow-sm hover:shadow-md ${isMissingLicense ? 'border-red-300 ring-1 ring-red-100' : 'border-gray-200 hover:!border-[#E91E63]'}`}>
                                 <div className="flex flex-col md:flex-row items-start md:items-center gap-4 p-4 cursor-pointer" onClick={() => setExpandedItem(isExpanded ? null : item.id)}>
                                     <div className="flex items-center gap-4 w-full md:w-auto">
                                         <div className={`p-3 rounded-xl text-white shadow-sm`} style={{backgroundColor: colorClass}}><CatIcon size={20} /></div>
@@ -674,7 +697,7 @@ useEffect(() => {
                                         <span>{(item.licenseFile && item.insuranceFile) ? 'יש אישורים' : 'חסרים אישורים'}</span>
                                      </div>
                                     )}
-                                    <div className="hidden md:block text-gray-300 group-hover:text-[#E91E63] transition-colors">{isExpanded ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}</div>
+                                    <div className="hidden md:block text-gray-300 group-hover:!text-[#E91E63] transition-colors">{isExpanded ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}</div>
                                 </div>
 
                                 {isExpanded && (
@@ -697,7 +720,7 @@ useEffect(() => {
                                                          <span className="block font-bold text-gray-500 mb-0.5">רישוי עסק:</span>
                                                          {item.licenseFile ? <a href={item.licenseFile.url} target="_blank" rel="noreferrer" className="text-green-700 font-bold hover:underline flex items-center gap-1"><LinkIcon size={12}/> {item.licenseFile.name}</a> : <span className="text-red-500 font-bold">חסר קובץ!</span>}
                                                      </div>
-                                                     <label className="cursor-pointer p-2 bg-white border border-gray-200 rounded-lg hover:border-[#E91E63] text-gray-400 hover:text-[#E91E63] transition-colors shadow-sm">
+                                                     <label className="cursor-pointer p-2 bg-white border border-gray-200 rounded-lg hover:!border-[#E91E63] text-gray-400 hover:!text-[#E91E63] transition-colors shadow-sm">
                                                          {uploadingFileId === `${item.id}_license` ? <Loader2 size={16} className="animate-spin"/> : <FileUp size={16}/>}
                                                          <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => handleExistingLineDualUpload(e, item.id, 'license')} disabled={!!uploadingFileId} />
                                                      </label>
@@ -708,15 +731,15 @@ useEffect(() => {
                                                          <span className="block font-bold text-gray-500 mb-0.5">ביטוח:</span>
                                                          {item.insuranceFile ? <a href={item.insuranceFile.url} target="_blank" rel="noreferrer" className="text-green-700 font-bold hover:underline flex items-center gap-1"><LinkIcon size={12}/> {item.insuranceFile.name}</a> : <span className="text-red-500 font-bold">חסר קובץ!</span>}
                                                      </div>
-                                                     <label className="cursor-pointer p-2 bg-white border border-gray-200 rounded-lg hover:border-[#E91E63] text-gray-400 hover:text-[#E91E63] transition-colors shadow-sm">
+                                                     <label className="cursor-pointer p-2 bg-white border border-gray-200 rounded-lg hover:!border-[#E91E63] text-gray-400 hover:!text-[#E91E63] transition-colors shadow-sm">
                                                          {isUploadingInsurance ? <Loader2 size={16} className="animate-spin" /> : <FileUp size={16}/>}
-                                                         <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => handleExistingLineDualUpload(e, item.id, 'insurance')} disabled={!!uploadingFileId} />
+                                                         <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => handleUpload(e.target.files![0], 'insurance')} disabled={isUploadingInsurance} />
                                                      </label>
                                                  </div>
                                             </div>
                                         </div>
                                       )}
-                                      <div className="mt-4 flex justify-end"><button onClick={(e) => handleRemoveLine(item.id, e)} className="text-[#E91E63] text-xs font-bold flex items-center gap-1 hover:bg-pink-50 px-3 py-1.5 rounded-lg transition-colors border border-transparent hover:border-pink-100"><Trash2 size={16} /> הסר שורה</button></div>
+                                      <div className="mt-4 flex justify-end"><button onClick={(e) => handleRemoveLine(item.id, e)} className="text-red-500 text-xs font-bold flex items-center gap-1 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors border border-transparent hover:border-red-100"><Trash2 size={16} /> הסר שורה</button></div>
                                     </div>
                                 )}
                             </div>
@@ -724,12 +747,12 @@ useEffect(() => {
                       })}
 
                       {!isRowsLocked && (
-                        <div className="bg-white p-5 rounded-2xl border-2 border-[#E91E63] border-dashed shadow-sm animate-fadeIn mt-4 relative z-20">
-                            <div className="absolute -top-3 right-4 bg-white px-2 text-xs font-bold text-[#E91E63]">הוספת שורה חדשה</div>
+                        <div className="bg-white p-5 rounded-2xl border-2 !border-[#E91E63] border-dashed shadow-sm animate-fadeIn mt-4 relative z-20">
+                            <div className="absolute -top-3 right-4 bg-white px-2 text-xs font-bold !text-[#E91E63]">הוספת שורה חדשה</div>
                             <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
                                 <div className="md:col-span-1 w-full">
-                                    <label className="text-[10px] font-bold text-gray-400 mb-1 block">תאריך</label>
-                                    <div className="w-full text-xs p-2 rounded-lg border border-gray-200 bg-gray-50 text-gray-500 h-[50px] md:h-[60px] flex items-center justify-center font-bold select-none cursor-default whitespace-nowrap overflow-hidden text-ellipsis">
+                                    <label className="text-xs font-bold text-gray-400 mb-1 block">תאריך</label>
+                                    <div className="w-full text-xs p-2 rounded-lg border border-gray-200 bg-gray-50 text-gray-500 h-[52px] flex items-center justify-center font-bold select-none cursor-default whitespace-nowrap overflow-hidden text-ellipsis">
                                         {currentLine.date ? `${currentLine.date.split('-')[2]}/${currentLine.date.split('-')[1]}/${currentLine.date.split('-')[0]}` : '-'}
                                     </div>
                                 </div>
@@ -742,6 +765,7 @@ useEffect(() => {
                                         onFocus={() => { if (currentLine.locationType !== 'branch') setShowLocationSuggestions(true); }}
                                         onChange={(e: any) => { setCurrentLine({...currentLine, locationValue: e.target.value, locationType: 'custom'}); setShowLocationSuggestions(true); }}
                                         onBlur={() => setTimeout(() => setShowLocationSuggestions(false), 200)}
+                                        className="focus:!border-[#E91E63] focus:!ring-0"
                                     />
                                     {currentLine.locationType === 'branch' && (
                                         <div onClick={() => setCurrentLine({...currentLine, locationValue: '', locationType: 'custom'})} className="absolute top-full right-0 mt-1 text-[10px] text-red-400 font-bold cursor-pointer hover:text-red-600 hover:underline z-10 w-full text-center">לחץ להזנת מיקום אחר</div>
@@ -755,8 +779,8 @@ useEffect(() => {
                                 </div>
                                 <div className="md:col-span-5 flex flex-col md:flex-row gap-2 w-full">
                                     <div className="flex-1 relative">
-                                        <label className="text-[10px] font-bold text-gray-400 mb-1.5 block">התרחשות</label>
-                                        <div className="w-full text-xs p-2 rounded-lg border border-gray-200 hover:border-[#E91E63] bg-white cursor-pointer h-[50px] md:h-[60px] flex items-center justify-between px-3 transition-all" onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}>
+                                        <label className="text-xs font-bold text-gray-400 mb-1.5 block">התרחשות</label>
+                                        <div className="w-full text-xs p-2 rounded-lg border border-gray-200 hover:!border-[#E91E63] bg-white cursor-pointer h-[52px] flex items-center justify-between px-3 transition-all" onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}>
                                             <span className={`font-bold ${currentLine.category ? 'text-gray-800' : 'text-gray-400'}`}>{CATEGORIES[currentLine.category]?.label || 'בחר...'}</span><ChevronDown size={16} className="text-gray-400" />
                                         </div>
                                         {showCategoryDropdown && (
@@ -770,11 +794,11 @@ useEffect(() => {
                                         {showCategoryDropdown && <div className="fixed inset-0 z-[90] cursor-default" onClick={() => setShowCategoryDropdown(false)}></div>}
                                     </div>
                                     <div className="flex-[1.5] relative">
-                                        <label className="text-[10px] font-bold text-gray-400 mb-1.5 block">פירוט ההתרחשות</label>
+                                        <label className="text-xs font-bold text-gray-400 mb-1.5 block">פירוט ההתרחשות</label>
                                         {currentLine.subCategory === 'אחר' ? (
-                                            <div className="relative"><Input placeholder="פרט..." autoFocus value={currentLine.otherDetail} onChange={(e: any) => setCurrentLine({...currentLine, otherDetail: e.target.value})} /><div className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 cursor-pointer font-bold" onClick={() => setCurrentLine({...currentLine, subCategory: ''})}>X</div></div>
+                                            <div className="relative"><Input placeholder="פרט..." autoFocus value={currentLine.otherDetail} onChange={(e: any) => setCurrentLine({...currentLine, otherDetail: e.target.value})} className="focus:!border-[#E91E63] focus:!ring-0" /><div className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 cursor-pointer font-bold" onClick={() => setCurrentLine({...currentLine, subCategory: ''})}>X</div></div>
                                         ) : (
-                                            <><div className={`w-full text-xs p-2 rounded-lg border border-gray-200 h-[50px] md:h-[60px] flex items-center justify-between px-3 transition-all ${!currentLine.category ? 'bg-gray-100 cursor-not-allowed opacity-50' : 'hover:border-[#E91E63] bg-white cursor-pointer'}`} onClick={() => { if(currentLine.category) setShowSubCategoryDropdown(!showSubCategoryDropdown) }}><span className={`font-bold ${currentLine.subCategory ? 'text-gray-800' : 'text-gray-400'}`}>{currentLine.subCategory || (currentLine.category ? 'בחר פירוט...' : '-')}</span><ChevronDown size={16} className="text-gray-400" /></div>
+                                            <><div className={`w-full text-xs p-2 rounded-lg border border-gray-200 h-[52px] flex items-center justify-between px-3 transition-all ${!currentLine.category ? 'bg-gray-100 cursor-not-allowed opacity-50' : 'hover:!border-[#E91E63] bg-white cursor-pointer'}`} onClick={() => { if(currentLine.category) setShowSubCategoryDropdown(!showSubCategoryDropdown) }}><span className={`font-bold ${currentLine.subCategory ? 'text-gray-800' : 'text-gray-400'}`}>{currentLine.subCategory || (currentLine.category ? 'בחר פירוט...' : '-')}</span><ChevronDown size={16} className="text-gray-400" /></div>
                                             {showSubCategoryDropdown && currentLine.category && (
                                                 <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-2xl z-[100] overflow-hidden max-h-48 overflow-y-auto">{CATEGORIES[currentLine.category]?.options.map((opt: any) => (<div key={opt.label} className="p-3 text-xs text-gray-700 hover:bg-pink-50 hover:text-[#E91E63] cursor-pointer border-b border-gray-50 font-bold transition-colors" onClick={() => { setCurrentLine({...currentLine, subCategory: opt.label}); setShowSubCategoryDropdown(false); }}>{opt.label}</div>))}</div>
                                             )}
@@ -785,17 +809,17 @@ useEffect(() => {
                                 <div className="md:col-span-4 flex gap-2 items-end w-full">
                                     {currentLine.subCategory === 'לינת מבנה' ? (
                                         <div className="flex-grow flex flex-col md:flex-row gap-2">
-                                            <div className="flex-1"><Input label="שם המקום/כתובת (חובה)" placeholder="שם המקום/כתובת" value={currentLine.otherDetail} onChange={(e: any) => setCurrentLine({...currentLine, otherDetail: e.target.value})} /></div>
-                                            <div className="flex-1"><Input label="פרטים נוספים" placeholder="הערות..." value={currentLine.details} onChange={(e: any) => setCurrentLine({...currentLine, details: e.target.value})} /></div>
+                                            <div className="flex-1"><Input label="שם המקום/כתובת (חובה)" placeholder="שם המקום/כתובת" value={currentLine.otherDetail} onChange={(e: any) => setCurrentLine({...currentLine, otherDetail: e.target.value})} className="focus:!border-[#E91E63] focus:!ring-0" /></div>
+                                            <div className="flex-1"><Input label="פרטים נוספים" placeholder="הערות..." value={currentLine.details} onChange={(e: any) => setCurrentLine({...currentLine, details: e.target.value})} className="focus:!border-[#E91E63] focus:!ring-0" /></div>
                                         </div>
                                     ) : (
                                         <div className="flex-grow relative w-full">
-                                            <div className="flex justify-between items-end mb-1.5"><label className="text-[10px] font-bold text-gray-400 block">{currentLine.category === 'hiking' ? 'פירוט המסלול' : 'פרטים נוספים'}</label>{currentLine.category === 'hiking' && (<a href="https://mokedteva.co.il/InfoCenter/TrackWizard" target="_blank" rel="noreferrer" className="text-[10px] font-bold text-[#E91E63] flex items-center gap-1 hover:underline"><LinkIcon size={10} />לכניסה לאשף המסלולים של מוקד טבע</a>)}</div>
-                                            <Input placeholder={currentLine.category === 'hiking' ? 'מס\' המסלול וכו\'' : 'פרטים נוספים...'} value={currentLine.details} onChange={(e: any) => setCurrentLine({...currentLine, details: e.target.value})} />
+                                            <div className="flex justify-between items-end mb-1.5"><label className="text-xs font-bold text-gray-400 block">{currentLine.category === 'hiking' ? 'פירוט המסלול' : 'פרטים נוספים'}</label>{currentLine.category === 'hiking' && (<a href="https://mokedteva.co.il/InfoCenter/TrackWizard" target="_blank" rel="noreferrer" className="text-[10px] font-bold text-[#E91E63] flex items-center gap-1 hover:underline"><LinkIcon size={10} />לכניסה לאשף המסלולים של מוקד טבע</a>)}</div>
+                                            <Input placeholder={currentLine.category === 'hiking' ? 'מס\' המסלול וכו\'' : 'פרטים נוספים...'} value={currentLine.details} onChange={(e: any) => setCurrentLine({...currentLine, details: e.target.value})} className="focus:!border-[#E91E63] focus:!ring-0" />
                                         </div>
                                     )}
                                     <div className="w-full md:w-auto mt-2 md:mt-0">
-                                        <button onClick={handleAddLine} className="bg-[#8BC34A] hover:bg-[#7CB342] text-white h-[50px] md:h-[60px] w-full md:w-[60px] rounded-lg flex items-center justify-center shadow-lg transition-all active:scale-95 flex-shrink-0 mb-[1px]" title="לאישור השורה ופתיחת שורה חדשה">
+                                        <button onClick={handleAddLine} className="bg-[#8BC34A] hover:bg-[#7CB342] text-white h-[52px] w-full md:w-[60px] rounded-lg flex items-center justify-center shadow-lg transition-all active:scale-95 flex-shrink-0 mb-[1px]" title="לאישור השורה ופתיחת שורה חדשה">
                                             <Check size={28} strokeWidth={3} />
                                             <span className="md:hidden mr-2 font-bold">הוסף שורה ללו"ז</span>
                                         </button>
@@ -833,7 +857,6 @@ useEffect(() => {
                    </div>
                 </section>
 
-                {/* --- אזור הוספת אחראי (הוזז לפה) --- */}
                 <section className="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-visible relative z-10 mb-8 animate-fadeIn">
                     <div className="bg-[#00BCD4] text-white h-12 flex items-center px-6 font-bold text-lg shadow-sm gap-2 rounded-t-3xl">
                        <UserPlus size={20} />
@@ -841,10 +864,8 @@ useEffect(() => {
                     </div>
                     <div className="p-6">
                         
-                        {/* פרטי האחראי הראשי (קריאה בלבד + לינק לעריכה) */}
                         <div className="mb-6">
                             <div className="flex items-center justify-between mb-3">
-                                {/* בוטל הכיתוב "אחראי ראשי" לבקשתך */}
                                 <div className="text-xs text-gray-400 font-bold">הפרטים נשאבים מהפרופיל האישי</div>
                                 <button 
                                     onClick={handleGoToProfile} 
@@ -854,18 +875,16 @@ useEffect(() => {
                                 </button>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-                                <Input label="שם מלא (כפי שמופיע בת.ז.)" value={generalInfo.coordName} readOnly icon={<User size={14}/>} />
-                                <Input label="תעודת זהות" value={generalInfo.coordId} readOnly icon={<CreditCard size={14}/>} />
-                                <Input label="תאריך לידה" type="date" value={generalInfo.coordDob} readOnly />
-                                <Input label="טלפון" type="tel" value={generalInfo.coordPhone} readOnly icon={<Phone size={14}/>} />
-                                <Input label="אימייל" type="email" value={generalInfo.coordEmail} readOnly icon={<Mail size={14}/>} className="text-left" dir="ltr" />
+                                <Input label="שם מלא" value={generalInfo.coordName} readOnly icon={<User size={14}/>} className="!bg-gray-100 !text-gray-500 !border-gray-200 focus:ring-0 cursor-default" />
+                                <Input label="תעודת זהות" value={generalInfo.coordId} readOnly icon={<CreditCard size={14}/>} className="!bg-gray-100 !text-gray-500 !border-gray-200 focus:ring-0 cursor-default" />
+                                <Input label="תאריך לידה" type="date" value={generalInfo.coordDob} readOnly className="!bg-gray-100 !text-gray-500 !border-gray-200 focus:ring-0 cursor-default" />
+                                <Input label="טלפון" type="tel" value={generalInfo.coordPhone} readOnly icon={<Phone size={14}/>} className="!bg-gray-100 !text-gray-500 !border-gray-200 focus:ring-0 cursor-default" />
+                                <Input label="אימייל" type="email" value={generalInfo.coordEmail} readOnly icon={<Mail size={14}/>} className="!bg-gray-100 !text-gray-500 !border-gray-200 focus:ring-0 cursor-default text-left" dir="ltr" />
                             </div>
                         </div>
 
-                        {/* קו מפריד */}
                         <div className="h-px bg-gray-100 my-6"></div>
 
-                        {/* אחראי נוסף */}
                         {generalInfo.secondaryStaffObj ? (
                             <div className="bg-green-50 p-4 rounded-xl border border-green-100 flex items-center justify-between">
                                 <div className="flex items-center gap-4">
@@ -886,9 +905,11 @@ useEffect(() => {
                             </div>
                         ) : (
                             !showAddStaffForm ? (
-                                <button onClick={() => setShowAddStaffForm(true)} className="w-full py-4 border border-dashed border-gray-300 rounded-xl text-gray-400 font-bold hover:border-[#E91E63] hover:text-[#E91E63] hover:bg-pink-50 transition-all flex items-center justify-center gap-2 group text-sm">
-                                    <Plus size={18}/> {getStaffTitle('additional')} (אופציונלי)
-                                </button>
+                                <div className="flex justify-center">
+                                    <button onClick={() => setShowAddStaffForm(true)} className="text-xs flex items-center gap-2 px-6 py-2 rounded-full border transition-all font-bold bg-white text-[#E91E63] border-[#E91E63] hover:bg-[#E91E63] hover:text-white">
+                                        <Plus size={14}/> {getStaffTitle('additional')} (אופציונלי)
+                                    </button>
+                                </div>
                             ) : (
                                 <div className="bg-gray-50 p-5 rounded-xl border border-gray-200 animate-fadeIn">
                                     <div className="flex justify-between items-center mb-4">
@@ -897,15 +918,15 @@ useEffect(() => {
                                     </div>
                                     
                                     <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
-                                        <Input label="שם מלא" icon={<User size={14}/>} value={newStaffData.name} onChange={(e: any) => setNewStaffData({...newStaffData, name: e.target.value})} />
-                                        <Input label="תפקיד בארגון" icon={<Briefcase size={14}/>} value={newStaffData.role} onChange={(e: any) => setNewStaffData({...newStaffData, role: e.target.value})} />
-                                        <Input label="תעודת זהות" icon={<CreditCard size={14}/>} value={newStaffData.idNumber} onChange={(e: any) => setNewStaffData({...newStaffData, idNumber: e.target.value})} />
-                                        <Input label="תאריך לידה" type="date" value={newStaffData.dob} onChange={(e: any) => setNewStaffData({...newStaffData, dob: e.target.value})} />
-                                        <Input label="טלפון" icon={<Phone size={14}/>} type="tel" value={newStaffData.phone} onChange={(e: any) => setNewStaffData({...newStaffData, phone: e.target.value})} />
-                                        <Input label="אימייל" icon={<Mail size={14}/>} type="email" value={newStaffData.email} onChange={(e: any) => setNewStaffData({...newStaffData, email: e.target.value})} className="text-left" dir="ltr"/>
+                                        <Input label="שם מלא" icon={<User size={14}/>} value={newStaffData.name} onChange={(e: any) => setNewStaffData({...newStaffData, name: e.target.value})} className="focus:!border-[#E91E63] focus:!ring-0" />
+                                        <Input label="תפקיד בארגון" icon={<Briefcase size={14}/>} value={newStaffData.role} onChange={(e: any) => setNewStaffData({...newStaffData, role: e.target.value})} className="focus:!border-[#E91E63] focus:!ring-0" />
+                                        <Input label="תעודת זהות" icon={<CreditCard size={14}/>} value={newStaffData.idNumber} onChange={(e: any) => setNewStaffData({...newStaffData, idNumber: e.target.value})} className="focus:!border-[#E91E63] focus:!ring-0" />
+                                        <Input label="תאריך לידה" type="date" value={newStaffData.dob} onChange={(e: any) => setNewStaffData({...newStaffData, dob: e.target.value})} className="focus:!border-[#E91E63] focus:!ring-0" />
+                                        <Input label="טלפון" icon={<Phone size={14}/>} type="tel" value={newStaffData.phone} onChange={(e: any) => setNewStaffData({...newStaffData, phone: e.target.value})} className="focus:!border-[#E91E63] focus:!ring-0" />
+                                        <Input label="אימייל" icon={<Mail size={14}/>} type="email" value={newStaffData.email} onChange={(e: any) => setNewStaffData({...newStaffData, email: e.target.value})} className="text-left focus:!border-[#E91E63] focus:!ring-0" dir="ltr"/>
                                     </div>
                                     <div className="flex justify-end">
-                                        <button onClick={handleSaveStaff} disabled={isVerifyingStaff} className="bg-[#E91E63] text-white px-6 py-3 rounded-lg font-bold hover:bg-pink-600 transition-colors shadow-md text-xs flex items-center gap-2 h-[60px]">
+                                        <button onClick={handleSaveStaff} disabled={isVerifyingStaff} className="bg-[#E91E63] text-white px-6 py-3 rounded-lg font-bold hover:bg-pink-600 transition-colors shadow-md text-xs flex items-center gap-2 h-[52px]">
                                             {isVerifyingStaff ? <Loader2 size={16} className="animate-spin"/> : <CheckCircle size={16}/>}
                                             {isVerifyingStaff ? 'בודק...' : 'שמור אחראי'}
                                         </button>
@@ -923,11 +944,10 @@ useEffect(() => {
                     </div>
                     <div className="p-6">
                          <label className="block text-sm font-bold text-gray-700 mb-2">משהו שחשוב לך שנדע</label>
-                         <textarea className="w-full p-4 rounded-xl bg-white border border-gray-200 outline-none focus:border-[#E91E63] focus:ring-1 focus:ring-[#E91E63] min-h-[100px] resize-y" placeholder="דגשים מיוחדים, בקשות וכו'..." value={generalInfo.generalComments} onChange={(e) => setGeneralInfo({...generalInfo, generalComments: e.target.value})}></textarea>
+                         <textarea className="w-full p-4 rounded-xl bg-white border border-gray-200 outline-none focus:!border-[#E91E63] focus:!ring-0 min-h-[100px] resize-y" placeholder="דגשים מיוחדים, בקשות וכו'..." value={generalInfo.generalComments} onChange={(e) => setGeneralInfo({...generalInfo, generalComments: e.target.value})}></textarea>
                     </div>
                 </section>
                 
-                {/* Footer Actions */}
                 <div className="fixed bottom-0 left-0 right-0 md:right-56 bg-white/90 backdrop-blur-md border-t border-gray-100 p-4 z-40 transition-all">
                     <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-end gap-3">
                         {isUrgentError && <div className="bg-red-50 text-red-600 px-4 py-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-2"><AlertTriangle size={16}/> תאריך היציאה קרוב מדי!</div>}
@@ -935,7 +955,7 @@ useEffect(() => {
                             {loading ? <Loader2 size={20} className="animate-spin" /> : <FileEdit size={20} />}
                             <span>{t('save_draft')}</span>
                         </button>
-                        <button onClick={handleSubmit} disabled={loading || isUrgentError} className={`bg-[#8BC34A] hover:bg-[#7CB342] text-white px-8 py-3.5 rounded-2xl font-black text-lg shadow-lg hover:shadow-green-200 transition-all flex items-center justify-center gap-3 transform hover:-translate-y-1 ${loading || isUrgentError ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}>
+                        <button onClick={handleSubmit} disabled={loading || isUrgentError} className={`bg-[#8BC34A] hover:bg-[#7CB342] text-white px-8 py-3.5 rounded-2xl font-bold text-lg shadow-lg hover:shadow-green-200 transition-all flex items-center justify-center gap-3 transform hover:-translate-y-1 ${loading || isUrgentError ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}>
                             {loading ? 'שולח...' : (<><span>{t('submit')}</span><Save size={20} /></>)}
                         </button>
                     </div>
