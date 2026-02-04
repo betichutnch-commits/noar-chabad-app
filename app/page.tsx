@@ -205,13 +205,13 @@ export default function Home() {
           </div>
 
           <div className="space-y-3">
-            <h1 className="text-3xl md:text-4xl font-black text-[#00BCD4] leading-tight drop-shadow-sm">
+            <h1 className="text-4xl md:text-4xl font-black text-[#00BCD4] leading-tight drop-shadow-sm">
                 מערכת הטיולים והאירועים
                 <span className="block text-2xl md:text-3xl text-gray-800 mt-1">של ארגון נוער חב"ד</span>
             </h1>
             
             <p className="text-gray-500 font-medium text-lg px-4">
-                פלטפורמת הניהול לתכנון, אישור ובקרה
+                  פלטפורמת הניהול לתכנון, אישור ובקרה של פעילויות שוברות שגרה
             </p>
           </div>
 
@@ -292,12 +292,13 @@ export default function Home() {
               </div>
 
               <Button 
-                type="submit" 
-                isLoading={loading} 
-                className="w-full mt-4 bg-[#4CAF50] hover:bg-green-600 shadow-green-200 border border-transparent"
-              >
-                כניסה
-              </Button>
+  type="submit" 
+  isLoading={loading} 
+  // שיניתי את הצבע ל-#8BC34A (הירוק של המותג) ואת ה-Hover ל-#7CB342
+  className="w-full mt-4 bg-[#8BC34A] hover:bg-[#7CB342] shadow-lg shadow-green-100 border border-transparent text-white"
+>
+  כניסה
+</Button>
             </form>
         </div>
       </div>
