@@ -251,7 +251,8 @@ export default function DashboardPage() {
                       })}
                   </div>
 
-                  <div className="flex flex-col-reverse md:flex-row gap-2 w-full md:w-auto z-50">
+                  {/* תיקון: z-30 מבטיח שהתפריט יעלה על הכרטיסים, אבל השורה כולה תיכנס מתחת להיידר (z-50) */}
+                  <div className="flex flex-col-reverse md:flex-row gap-2 w-full md:w-auto z-30">
                       <MultiSelectFilter 
                         options={filterOptions}
                         selected={selectedTypes}

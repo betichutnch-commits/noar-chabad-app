@@ -10,9 +10,9 @@ import {
 } from 'lucide-react'
 import { TRIP_TYPES_CONFIG, CATEGORY_STYLES } from '@/lib/constants'
 import { formatHebrewDateRange, formatHebrewDate } from '@/lib/dateUtils'
-import { Button } from '@/components/ui/Button' // הנחה שקיים, אם לא נשתמש ב-HTML רגיל
+import { Button } from '@/components/ui/Button' 
 
-// --- פונקציות עזר ---
+// ... פונקציות עזר (ללא שינוי) ...
 const formatDateShortYear = (dateStr: string) => {
     if (!dateStr) return '';
     const date = new Date(dateStr);
@@ -58,7 +58,6 @@ const DateBox = ({ dateStr }: { dateStr: string }) => {
     );
 };
 
-// --- Props ---
 interface TripDetailsViewProps {
     trip: any;
     profile?: any;
@@ -86,14 +85,12 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
     const d = trip.details || {};
     const timeline = d.timeline || [];
     const typeConfig = TRIP_TYPES_CONFIG.find(t => t.id === d.tripType) || TRIP_TYPES_CONFIG[4];
-    
-    // חישובים לביטול
     const isPast = new Date(trip.start_date) < new Date(new Date().setHours(0,0,0,0));
     const isCancelled = trip.status === 'cancelled';
 
-    // זיהוי מגדר ומחלקות
-    const deptName = trip.department || '';
-    const isFemale = deptName.includes('בת מלך') || deptName.includes('בנות חב"ד') || deptName.includes('בנות חב״ד');
+    // חישוב מגדרי
+    const rawDept = trip.department || profile?.department || '';
+    const isFemale = rawDept.includes('בת מלך') || rawDept.includes('בנות חב"ד') || rawDept.includes('בנות חב״ד');
     
     const participantsTitle = isFemale ? 'סה"כ משתתפות' : 'סה"כ משתתפים'; 
     const traineesLabel = isFemale ? 'חניכות' : 'חניכים';
@@ -102,25 +99,39 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
     const secondStaffTitle = isFemale ? 'אחראית נוספת' : 'אחראי נוסף';
     const namePlaceholder = "שם מלא כפי שמופיע בתעודת זהות";
 
+    // --- לוגיקה חכמה לתצוגת תפקיד (עם Fallback לפרופיל) ---
     // --- לוגיקה משופרת לתצוגת תפקיד (Role Display) ---
-    let subRoleDisplay = '';
-    const isBranchHQ = trip.branch === 'מטה' || (trip.branch || '').includes('הנהלה');
-    const isProfileHQ = profile?.role === 'admin' || profile?.role === 'dept_staff' || profile?.role === 'safety_admin';
+  const getCoordinatorRoleDisplay = () => {
+      const branch = trip.branch || profile?.branch || profile?.branch_name || '';
+      const department = trip.department || profile?.department || '';
+      
+      // בדיקה אם זה מטה - לפי שם הסניף או תפקיד בפרופיל
+      const isBranchHQ = branch === 'מטה' || branch === 'הנהלה';
+      // בדיקה אם הפרופיל (של היוצר) הוא מטה - רלוונטי בדפי שיתוף או בצפייה עצמית
+      const isProfileHQ = profile?.role === 'dept_staff' || profile?.role === 'safety_admin' || profile?.role === 'admin';
 
-    if (isBranchHQ || isProfileHQ) {
-        subRoleDisplay = `צוות מטה • ${trip.department || ''}`;
-    } else {
-        const roleBase = isFemale ? 'רכזת סניף' : 'רכז סניף';
-        const branchName = trip.branch || '';
-        // הוספת שם המחלקה לתצוגה
-        subRoleDisplay = `${roleBase} ${branchName} | ${trip.department || ''}`;
-    }
+      // אם זה מוגדר כמטה, או שזה איש מטה שלא הגדיר סניף ספציפי
+      if (isBranchHQ || (isProfileHQ && (!branch || branch === 'מטה'))) {
+          return `צוות מטה | ${department}`;
+      }
 
-    // --- טקסטים לכפתורים ---
+      // חישוב תואר מגדרי לרכזים
+      let roleTitle = 'רכז/ת סניף';
+      const deptCheck = department.trim();
+      const maleDepts = ['הפנסאים', 'פנסאים', 'התמים', 'תמים', 'בני חב"ד', 'בני חב״ד'];
+      const femaleDepts = ['בת מלך', 'בנות חב"ד', 'בנות חב״ד'];
+
+      if (maleDepts.some(d => deptCheck.includes(d))) roleTitle = 'רכז סניף';
+      else if (femaleDepts.some(d => deptCheck.includes(d))) roleTitle = 'רכזת סניף';
+
+      if (!branch && !department) return '';
+
+      return `${roleTitle} ${branch} | ${department}`;
+  };
+
     const isTripType = d.tripType === 'טיול מחוץ לסניף';
     const editButtonText = isTripType ? 'עריכת פרטי הטיול' : 'עריכת פרטי הפעילות';
     const cancelButtonText = isTripType ? 'ביטול הטיול' : 'ביטול הפעילות';
-
     const missingDocsCount = timeline.filter((t: any) => t.requiresLicense && (!t.licenseFile || !t.insuranceFile)).length;
     const durationDays = calculateDuration(trip.start_date, d.endDate);
 
@@ -208,7 +219,21 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                     </div>
                     <div className="text-center md:text-right px-2 flex flex-col justify-center pt-2 md:pt-0"><span className="text-xs font-bold text-gray-400 block mb-1">שכבות</span><div className="font-black text-gray-800 text-lg md:text-xl">כיתות {d.gradeFrom}-{d.gradeTo}</div></div>
                     <div className="text-center md:text-right px-2 flex flex-col justify-center pt-2 md:pt-0"><span className="text-xs font-bold text-gray-400 block mb-1">סה"כ {traineesLabel}</span><div className="font-black text-gray-800 text-lg md:text-xl flex items-center gap-2 justify-center md:justify-start"><Users size={18} className="text-[#00BCD4] shrink-0"/>{d.chanichimCount || '0'}</div></div>
-                    <div className="text-center md:text-right px-2 md:col-span-1 flex flex-col justify-center pt-2 md:pt-0"><span className="text-xs font-bold text-gray-400 block mb-1">הרכב צוות</span><div className="flex flex-wrap gap-1 justify-center md:justify-start">{d.staffAges?.map((s: string, i: number) => (<span key={i} className="text-[10px] font-bold bg-gray-50 text-gray-500 px-1.5 py-0.5 rounded border border-gray-100 truncate max-w-full">{s}</span>))}</div></div>
+                    <div className="text-center md:text-right px-2 md:col-span-1 flex flex-col justify-center pt-2 md:pt-0">
+    <span className="text-xs font-bold text-gray-400 block mb-1">הרכב צוות</span>
+    <div className="flex flex-wrap gap-1 justify-center md:justify-start">
+        {d.staffAges?.map((s: string, i: number) => {
+            // תיקון: אם הערך הוא 'אחר' ויש פירוט ב-staffOther, מציגים את הפירוט
+            const displayText = (s === 'אחר' || s === 'אחר...') && d.staffOther ? d.staffOther : s;
+            
+            return (
+                <span key={i} className="text-[10px] font-bold bg-gray-50 text-gray-500 px-1.5 py-0.5 rounded border border-gray-100 truncate max-w-full">
+                    {displayText}
+                </span>
+            );
+        })}
+    </div>
+</div>
                     <div className="text-center md:text-right px-2 flex flex-col justify-center pt-2 md:pt-0"><span className="text-xs font-bold text-gray-400 block mb-1">{participantsTitle}</span><div className="font-black text-gray-800 text-lg md:text-xl flex items-center gap-2 justify-center md:justify-start"><Users size={18} className="text-[#00BCD4] shrink-0"/>{d.totalTravelers}</div><div className="text-[10px] text-gray-400 mt-0.5">כולל צוות</div></div>
                     
                     <div className="col-span-2 md:col-span-1 text-center md:text-right pr-0 md:pr-4 flex flex-row md:flex-col justify-center gap-2 print:hidden pt-2 md:pt-0">
@@ -271,13 +296,18 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                         <div className="flex flex-col gap-0 text-sm">
                             <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-t-xl border-b border-white">
                                 <User size={16} className="text-gray-400"/>
-                                <div><span className="block font-black text-[#00BCD4] text-lg">{trip.coordinator_name}</span><span className="text-xs font-bold text-gray-500">{subRoleDisplay}</span></div>
+                                <div>
+                                    <span className="block font-black text-[#00BCD4] text-lg">{trip.coordinator_name}</span>
+                                    {/* התיקון: שימוש בפונקציה החדשה */}
+                                    <span className="text-xs font-bold text-gray-500">{getCoordinatorRoleDisplay()}</span>
+                                </div>
                             </div>
                             
                             {(!isPublic && profile?.official_name) && (<div className="flex items-center gap-3 p-3 bg-gray-50 border-b border-white"><CreditCard size={16} className="text-gray-400"/><div><span className="text-[10px] text-gray-400 block font-bold">שם מלא (ת.ז)</span><span className="block font-bold text-gray-700">{profile.official_name} {profile.last_name}</span></div></div>)}
                             {(!isPublic && profile?.identity_number) && (<div className="flex items-center gap-3 p-3 bg-gray-50 border-b border-white"><Hash size={16} className="text-gray-400"/><div><span className="text-[10px] text-gray-400 block font-bold">תעודת זהות</span><span className="block font-bold text-gray-800">{profile.identity_number}</span></div></div>)}
                             
-                            <div className="flex items-center gap-3 p-3 bg-gray-50 border-b border-white"><Phone size={16} className="text-gray-400"/><div><span className="text-[10px] text-gray-400 block font-bold">טלפון</span><span className="block font-bold text-gray-800">{d.phone || profile?.phone || '-'}</span></div></div>
+                            {/* תיקון: שימוש ב-d.coordPhone ו fallback לפרופיל */}
+                            <div className="flex items-center gap-3 p-3 bg-gray-50 border-b border-white"><Phone size={16} className="text-gray-400"/><div><span className="text-[10px] text-gray-400 block font-bold">טלפון</span><span className="block font-bold text-gray-800">{d.coordPhone || d.phone || profile?.phone || '-'}</span></div></div>
                             
                             {!isPublic && (
                                 <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-b-xl overflow-hidden"><Mail size={16} className="text-gray-400 shrink-0"/><div className="overflow-hidden"><span className="text-[10px] text-gray-400 block font-bold">אימייל</span><span className="block font-bold text-gray-800 truncate">{profile?.email || '-'}</span></div></div>
@@ -332,7 +362,6 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                     <div className="bg-white rounded-3xl border border-gray-200 p-6 shadow-sm">
                         <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2 border-b border-gray-100 pb-2"><Paperclip size={18} className="text-[#E91E63]"/>קבצים ומסמכים</h3>
                         {missingDocsCount > 0 ? (
-                            // תיקון: שינוי הטקסט מ-"חסרים מסמכים" ל-"חסר רישוי עסק וביטוח"
                             <div className="bg-red-50 border border-red-100 rounded-xl p-4 flex gap-3 items-start"><AlertTriangle size={20} className="text-red-500 mt-0.5 shrink-0"/><div><span className="block text-sm font-bold text-red-700">חסר רישוי עסק וביטוח</span><span className="text-xs text-red-600 block mt-1">יש להשלים {missingDocsCount} אישורים.</span></div></div>
                         ) : (
                             <div className="bg-green-50 border border-green-100 rounded-xl p-4 flex gap-3 items-center"><CheckCircle size={20} className="text-green-600 shrink-0"/><div><span className="block text-sm font-bold text-green-700">הכל תקין</span><span className="text-xs text-green-600">כל האישורים הנדרשים הועלו.</span></div></div>
@@ -350,9 +379,9 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                         {isEditable && onEditTrip && (
                             <button 
                                 onClick={onEditTrip}
-                                className="flex-1 h-12 bg-[#00BCD4] hover:bg-cyan-600 text-white rounded-2xl font-bold shadow-lg shadow-cyan-100 transition-all active:scale-95 flex items-center justify-center gap-2 text-sm"
+                                className="flex-1 h-10 bg-[#00BCD4] hover:bg-cyan-600 text-white rounded-xl font-bold shadow-lg shadow-cyan-100 transition-all active:scale-95 flex items-center justify-center gap-2 text-xs"
                             >
-                                <Edit2 size={16} />
+                                <Edit2 size={14} />
                                 {editButtonText}
                             </button>
                         )}
@@ -360,9 +389,9 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                         {isEditable && onCancelTrip && !isPast && !isCancelled && (
                             <button 
                                 onClick={onCancelTrip}
-                                className="flex-1 h-12 bg-red-50 border border-red-100 text-red-600 hover:bg-red-100 rounded-2xl font-bold transition-all active:scale-95 flex items-center justify-center gap-2 text-sm"
+                                className="flex-1 h-10 bg-red-50 border border-red-100 text-red-600 hover:bg-red-100 rounded-xl font-bold transition-all active:scale-95 flex items-center justify-center gap-2 text-xs"
                             >
-                                <Trash2 size={16} />
+                                <Trash2 size={14} />
                                 {cancelButtonText}
                             </button>
                         )}

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Rubik } from "next/font/google";
 import "./globals.css";
+import AutoLogout from "@/components/AutoLogout";
 
 const rubik = Rubik({
   subsets: ["hebrew", "latin"],
@@ -18,12 +19,11 @@ export const metadata: Metadata = {
   },
 };
 
-// הגדרות תצוגה למובייל (PWA) בנפרד - לפי התקן החדש
 export const viewport: Viewport = {
   themeColor: '#00BCD4',
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1, // מונע זום אוטומטי מעצבן בשדות קלט בטלפון
+  maximumScale: 1,
   userScalable: false,
 };
 
@@ -35,6 +35,9 @@ export default function RootLayout({
   return (
     <html lang="he" dir="rtl">
       <body className={`${rubik.variable} bg-[#F8F9FA] text-[#263238] font-sans antialiased`}>
+        {/* רכיב הניתוק האוטומטי */}
+        <AutoLogout />
+        
         <main className="min-h-screen flex flex-col">
            {children}
         </main>

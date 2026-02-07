@@ -1,252 +1,272 @@
 "use client"
 
-import React, { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabaseClient'
-import { ManagerHeader } from '@/components/layout/ManagerHeader'
-import { Button } from '@/components/ui/Button'
-import { Modal } from '@/components/ui/Modal'
-import { Loader2, HelpCircle, Bug, Reply, Send, X, User, CheckCircle } from 'lucide-react'
+import React, { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabaseClient';
+import { ManagerHeader } from '@/components/layout/ManagerHeader';
+import { 
+  Mail, CheckCircle, Clock, Search, AlertTriangle, 
+  User, Phone, Calendar, ChevronLeft, Filter, Loader2, MessageCircle
+} from 'lucide-react';
 
-// ייבוא Hook ו-Zod
-import { useUser } from '@/hooks/useUser'
-import { managerReplySchema } from '@/lib/schemas'
+// טיפוס נתונים להודעה
+interface Message {
+  id: string;
+  created_at: string;
+  subject: string;
+  message: string;
+  status: 'new' | 'treated';
+  category: 'general' | 'bug';
+  user_id: string;
+  // נתונים שיגיעו מה-Join עם טבלת הפרופילים
+  profiles?: {
+    full_name: string;
+    phone: string;
+    avatar_url: string;
+    email: string; // אם קיים בפרופיל
+  };
+}
 
-const SUPER_ADMIN_EMAIL = 'avremihalperin@gmail.com';
+export default function InboxPage() {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<'new' | 'treated'>('new');
+  const [selectedMsg, setSelectedMsg] = useState<Message | null>(null);
+  const [isTechAdmin, setIsTechAdmin] = useState(false);
 
-export default function ManagerInbox() {
-  // 1. שימוש ב-Hook
-  const { user, loading: userLoading } = useUser('/');
+  // טעינת נתונים
+  // טעינת נתונים
+  const fetchMessages = async () => {
+    setLoading(true);
+    console.log("מתחיל טעינת הודעות...");
+    
+    // 1. זיהוי המשתמש וההרשאות שלו
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
 
-  const [messagesLoading, setMessagesLoading] = useState(true);
-  const [messages, setMessages] = useState<any[]>([]);
-  
-  // מודל גלובלי
-  const [modal, setModal] = useState({
-      isOpen: false,
-      type: 'info' as 'success' | 'error' | 'info' | 'confirm',
-      title: '',
-      message: '',
-      onConfirm: undefined as (() => void) | undefined
-  });
+    const { data: profile } = await supabase.from('profiles')
+      .select('is_tech_admin')
+      .eq('id', user.id)
+      .single();
+    
+    const techAdmin = profile?.is_tech_admin || false;
+    setIsTechAdmin(techAdmin);
+    console.log("האם מנהל טכני?", techAdmin);
 
-  const showModal = (type: 'success' | 'error' | 'info' | 'confirm', title: string, msg: string) => 
-      setModal({ isOpen: true, type, title, message: msg, onConfirm: undefined });
+    // 2. בניית השאילתה - תיקון התחביר
+    // שינינו מ-profiles:user_id ל-profiles בלבד, זה יותר בטוח
+    let query = supabase
+      .from('contact_messages')
+      .select(`
+        *,
+        profiles (full_name, phone, avatar_url)
+      `)
+      .order('created_at', { ascending: false });
 
-  // ניהול תגובה
-  const [replyingTo, setReplyingTo] = useState<string | null>(null);
-  const [replyText, setReplyText] = useState('');
-  const [sendingReply, setSendingReply] = useState(false);
+    // 3. סינון לפי סטטוס (חדש/טופל)
+    query = query.eq('status', filter);
 
-  // 2. טעינת הודעות
-  useEffect(() => {
-    const fetchMessages = async () => {
-        if (!user) return;
-
-        const { data } = await supabase
-            .from('contact_messages')
-            .select('*, user:user_id ( email, raw_user_meta_data )') 
-            .order('created_at', { ascending: false });
-        
-        if (data) setMessages(data);
-        setMessagesLoading(false);
-    };
-
-    if (!userLoading && user) {
-        fetchMessages();
+    // 4. סינון אבטחה (אם לא טכני - אל תראה באגים)
+    if (!techAdmin) {
+      query = query.neq('category', 'bug');
     }
-  }, [user, userLoading]);
 
-  // חישוב הרשאות (מבוסס על ה-User מה-Hook)
-  const isSuperAdmin = user?.email === SUPER_ADMIN_EMAIL || user?.user_metadata?.contact_email === SUPER_ADMIN_EMAIL;
-
-  const refreshMessages = async () => {
-      const { data } = await supabase
-          .from('contact_messages')
-          .select('*, user:user_id ( email, raw_user_meta_data )') 
-          .order('created_at', { ascending: false });
-      if (data) setMessages(data);
+    const { data, error } = await query;
+    
+    if (error) {
+        console.error("שגיאה בשליפת הודעות:", error);
+    } else {
+        console.log("הודעות שנמצאו:", data);
+        setMessages(data as any);
+    }
+    setLoading(false);
   };
 
+  useEffect(() => {
+    fetchMessages();
+  }, [filter]); // רענון כשמחליפים טאב
+
+  // פונקציה לסימון הודעה כטופלה
   const markAsTreated = async (id: string) => {
-      await supabase.from('contact_messages').update({ status: 'treated' }).eq('id', id);
-      refreshMessages();
+    const { error } = await supabase
+      .from('contact_messages')
+      .update({ status: 'treated' })
+      .eq('id', id);
+
+    if (!error) {
+      // עדכון מהיר של הממשק (מחיקה מהרשימה)
+      setMessages(prev => prev.filter(m => m.id !== id));
+      setSelectedMsg(null);
+    }
   };
-
-  const sendReply = async (originalMsg: any) => {
-      // 3. ולידציה עם Zod
-      const validation = managerReplySchema.safeParse({ replyText });
-      if (!validation.success) {
-          showModal('error', 'שגיאה', validation.error.issues[0].message);
-          return;
-      }
-
-      setSendingReply(true);
-
-      try {
-          // שליחת התראה למשתמש
-          await supabase.from('notifications').insert([{
-              user_id: originalMsg.user_id,
-              title: `תשובה לפנייתך: ${originalMsg.subject}`,
-              message: `מטה בטיחות ענה:\n"${replyText}"`,
-              type: 'info',
-              link: '/dashboard/inbox' // מפנה לדואר הנכנס של המשתמש
-          }]);
-
-          // עדכון הודעה מקורית עם התשובה ושינוי סטטוס
-          await supabase.from('contact_messages').update({ 
-              status: 'treated',
-              admin_reply: replyText 
-          }).eq('id', originalMsg.id);
-          
-          await refreshMessages();
-          
-          setReplyingTo(null);
-          setReplyText('');
-          showModal('success', 'נשלח', 'התשובה נשלחה בהצלחה והמשתמש קיבל התראה.');
-
-      } catch (e) {
-          showModal('error', 'שגיאה', 'שגיאה בשליחה');
-      } finally {
-          setSendingReply(false);
-      }
-  };
-
-  if (userLoading || messagesLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
 
   return (
-    <>
-      <ManagerHeader title="דואר נכנס והודעות" />
-      
-      <Modal 
-        isOpen={modal.isOpen} 
-        onClose={() => setModal({...modal, isOpen: false})} 
-        type={modal.type} 
-        title={modal.title} 
-        message={modal.message} 
-      />
+    <div className="min-h-screen bg-[#F8F9FA] pb-12">
+      <ManagerHeader title="דואר נכנס ופניות" />
 
-      <div className="p-4 md:p-8 animate-fadeIn max-w-[100vw] overflow-x-hidden pb-32">
-          
-          <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-right hidden md:table">
-                    <thead className="bg-gray-50 text-gray-500 text-xs font-bold uppercase border-b border-gray-100">
-                        <tr>
-                            <th className="p-5">נושא</th>
-                            <th className="p-5">מאת</th>
-                            <th className="p-5">תוכן</th>
-                            <th className="p-5">סטטוס</th>
-                            <th className="p-5 text-left">פעולות</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                        {messages.map((msg) => {
-                            const isBug = msg.subject?.includes('תקלה') || msg.subject?.includes('באג');
-                            // סינון באגים אם לא סופר-אדמין
-                            if (isBug && !isSuperAdmin) return null;
-                            
-                            const isReplying = replyingTo === msg.id;
-                            const senderName = msg.user?.raw_user_meta_data?.full_name || 'משתמש לא ידוע';
+      <main className="max-w-6xl mx-auto p-4 md:p-8 animate-fadeIn">
+        
+        {/* --- טאבים ומסננים --- */}
+        <div className="flex flex-col md:flex-row items-center justify-between mb-8 gap-4">
+            
+            <div className="bg-white p-1 rounded-2xl border border-gray-200 shadow-sm flex items-center w-full md:w-auto">
+                <button 
+                  onClick={() => setFilter('new')}
+                  className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${filter === 'new' ? 'bg-[#E91E63] text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
+                >
+                    <Mail size={16}/> ממתינים לטיפול
+                </button>
+                <button 
+                  onClick={() => setFilter('treated')}
+                  className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${filter === 'treated' ? 'bg-[#00BCD4] text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
+                >
+                    <CheckCircle size={16}/> ארכיון וטופלו
+                </button>
+            </div>
 
-                            return (
-                                <React.Fragment key={msg.id}>
-                                    <tr className={`transition-colors ${isReplying ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
-                                        <td className="p-5 font-bold text-gray-800 flex items-center gap-2">
-                                            {isBug ? <Bug size={16} className="text-red-500"/> : <HelpCircle size={16} className="text-blue-500"/>}
-                                            {msg.subject}
-                                        </td>
-                                        <td className="p-5 text-sm text-gray-600">
-                                            <div className="font-bold">{senderName}</div>
-                                            <div className="text-xs text-gray-400">{new Date(msg.created_at).toLocaleDateString('he-IL')}</div>
-                                        </td>
-                                        <td className="p-5 text-sm text-gray-600 max-w-xs truncate cursor-pointer" title={msg.message} onClick={() => showModal('info', 'תוכן ההודעה', msg.message)}>
-                                            {msg.message}
-                                        </td>
-                                        <td className="p-5">
-                                            {msg.status === 'treated' 
-                                                ? <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold border border-green-200">טופל</span>
-                                                : <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-bold border border-yellow-200">חדש</span>
-                                            }
-                                        </td>
-                                        <td className="p-5 text-left flex justify-end gap-2">
-                                            {msg.status !== 'treated' && !isReplying && (
-                                                <>
-                                                    <Button variant="primary" onClick={() => setReplyingTo(msg.id)} className="h-8 px-4 text-xs" icon={<Reply size={14}/>}>ענה</Button>
-                                                    <Button variant="ghost" onClick={() => markAsTreated(msg.id)} className="h-8 px-2 text-green-600 hover:bg-green-50"><CheckCircle size={18}/></Button>
-                                                </>
-                                            )}
-                                        </td>
-                                    </tr>
-                                    {isReplying && (
-                                        <tr className="bg-blue-50/50 animate-fadeIn">
-                                            <td colSpan={5} className="p-5">
-                                                <div className="bg-white border border-blue-100 rounded-xl p-4 shadow-sm max-w-2xl mr-auto">
-                                                    <p className="text-xs font-bold text-blue-600 mb-2">תגובה ל: {senderName}</p>
-                                                    <textarea 
-                                                        className="w-full p-3 border border-gray-200 rounded-lg text-sm focus:border-blue-500 outline-none"
-                                                        placeholder="כתוב את תשובתך כאן..."
-                                                        rows={3}
-                                                        value={replyText}
-                                                        onChange={e => setReplyText(e.target.value)}
-                                                    ></textarea>
-                                                    <div className="flex justify-end gap-2 mt-2">
-                                                        <Button variant="secondary" onClick={() => setReplyingTo(null)} className="bg-gray-200 text-gray-600 h-8 px-4"><X size={14}/></Button>
-                                                        <Button onClick={() => sendReply(msg)} isLoading={sendingReply} icon={<Send size={14}/>} className="bg-blue-600 h-8 px-6 text-xs">שלח תשובה וסגור</Button>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                        </tr>
+            <div className="text-sm text-gray-400 font-medium">
+                מציג <span className="font-bold text-gray-800">{messages.length}</span> פניות
+            </div>
+        </div>
+
+        {/* --- תוכן ראשי: רשימה + תצוגה מקדימה --- */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-250px)]">
+            
+            {/* צד ימין: רשימת הודעות */}
+            <div className="lg:col-span-1 bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
+                <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex items-center gap-2 text-gray-400 text-xs font-bold uppercase tracking-wider">
+                    <Search size={14}/> רשימת פניות
+                </div>
+                
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2">
+                    {loading ? (
+                        <div className="p-8 text-center"><Loader2 className="animate-spin text-[#00BCD4] mx-auto"/></div>
+                    ) : messages.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center h-64 text-gray-400 text-center p-6">
+                            <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-3">
+                                <CheckCircle size={32} className="text-gray-300"/>
+                            </div>
+                            <p className="text-sm font-bold">הכל נקי!</p>
+                            <p className="text-xs">אין הודעות בסטטוס הזה</p>
+                        </div>
+                    ) : (
+                        messages.map(msg => (
+                            <div 
+                                key={msg.id}
+                                onClick={() => setSelectedMsg(msg)}
+                                className={`p-4 rounded-2xl cursor-pointer border transition-all hover:shadow-md group relative
+                                ${selectedMsg?.id === msg.id ? 'bg-cyan-50 border-[#00BCD4] ring-1 ring-[#00BCD4]/30' : 'bg-white border-gray-100 hover:border-gray-200'}`}
+                            >
+                                <div className="flex justify-between items-start mb-2">
+                                    <div className="flex items-center gap-2">
+                                        {msg.category === 'bug' ? (
+                                            <span className="bg-red-100 text-red-600 p-1 rounded-lg"><AlertTriangle size={14}/></span>
+                                        ) : (
+                                            <span className="bg-blue-100 text-blue-600 p-1 rounded-lg"><Mail size={14}/></span>
+                                        )}
+                                        <span className="text-xs font-bold text-gray-800">
+                                            {msg.profiles?.full_name || 'רכז לא מזוהה'}
+                                        </span>
+                                    </div>
+                                    <span className="text-[10px] text-gray-400 font-medium">
+                                        {new Date(msg.created_at).toLocaleDateString('he-IL')}
+                                    </span>
+                                </div>
+                                <h4 className="text-sm font-bold text-gray-700 line-clamp-1 mb-1 group-hover:text-[#00BCD4] transition-colors">
+                                    {msg.subject}
+                                </h4>
+                                <p className="text-xs text-gray-400 line-clamp-2 leading-relaxed">
+                                    {msg.message}
+                                </p>
+                            </div>
+                        ))
+                    )}
+                </div>
+            </div>
+
+            {/* צד שמאל: תצוגה מלאה */}
+            <div className="lg:col-span-2 bg-white rounded-3xl border border-gray-200 shadow-lg flex flex-col relative overflow-hidden">
+                {selectedMsg ? (
+                    <>
+                        {/* Header הודעה */}
+                        <div className="p-6 border-b border-gray-100 bg-gray-50/30 flex justify-between items-start">
+                            <div className="flex gap-4">
+                                <div className="w-12 h-12 rounded-2xl bg-gray-200 overflow-hidden border border-white shadow-sm">
+                                    {selectedMsg.profiles?.avatar_url ? (
+                                        <img src={selectedMsg.profiles.avatar_url} className="w-full h-full object-cover"/>
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-gray-500 font-bold">{selectedMsg.profiles?.full_name?.[0]}</div>
                                     )}
-                                </React.Fragment>
-                            )
-                        })}
-                    </tbody>
-                </table>
-              </div>
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-black text-gray-800 leading-tight mb-1">
+                                        {selectedMsg.subject}
+                                    </h2>
+                                    <div className="flex items-center gap-3 text-xs text-gray-500">
+                                        <span className="flex items-center gap-1 bg-white px-2 py-0.5 rounded-full border border-gray-100 shadow-sm">
+                                            <User size={12}/> {selectedMsg.profiles?.full_name}
+                                        </span>
+                                        <span className="flex items-center gap-1 bg-white px-2 py-0.5 rounded-full border border-gray-100 shadow-sm">
+                                            <Phone size={12}/> {selectedMsg.profiles?.phone || 'לא זמין'}
+                                        </span>
+                                        <span className="flex items-center gap-1 bg-white px-2 py-0.5 rounded-full border border-gray-100 shadow-sm">
+                                            <Calendar size={12}/> {new Date(selectedMsg.created_at).toLocaleString('he-IL')}
+                                        </span>
+                                        {selectedMsg.category === 'bug' && (
+                                            <span className="bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold animate-pulse">
+                                                תקלה טכנית
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
 
-              {/* מובייל קארדס */}
-              <div className="md:hidden space-y-4 p-4">
-                  {messages.map((msg) => {
-                       const isBug = msg.subject?.includes('תקלה') || msg.subject?.includes('באג');
-                       if (isBug && !isSuperAdmin) return null;
-                       const isReplying = replyingTo === msg.id;
-                       const senderName = msg.user?.raw_user_meta_data?.full_name || 'משתמש לא ידוע';
+                            {filter === 'new' && (
+                                <button 
+                                    onClick={() => markAsTreated(selectedMsg.id)}
+                                    className="bg-green-50 text-green-600 hover:bg-green-100 hover:text-green-700 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border border-green-200"
+                                >
+                                    <CheckCircle size={16}/> סמן כטופל
+                                </button>
+                            )}
+                        </div>
 
-                       return (
-                           <div key={msg.id} className={`bg-white p-5 rounded-2xl border shadow-sm ${isReplying ? 'border-blue-300 ring-2 ring-blue-50' : 'border-gray-200'}`}>
-                               <div className="flex justify-between items-start mb-3">
-                                   <div className="flex items-start gap-2">
-                                       {isBug ? <Bug size={18} className="text-red-500 mt-1"/> : <HelpCircle size={18} className="text-blue-500 mt-1"/>}
-                                       <div>
-                                           <h3 className="font-bold text-gray-800 text-sm leading-tight">{msg.subject}</h3>
-                                           <div className="flex items-center gap-2 mt-1">
-                                               <span className="text-xs text-gray-500 flex items-center gap-1"><User size={12}/> {senderName}</span>
-                                           </div>
-                                       </div>
-                                   </div>
-                               </div>
-                               <div className="bg-gray-50 p-3 rounded-xl text-sm text-gray-700 mb-4 border border-gray-100">{msg.message}</div>
-                               {msg.status !== 'treated' && !isReplying && (
-                                   <div className="flex gap-2">
-                                       <Button onClick={() => setReplyingTo(msg.id)} className="flex-1 h-10 text-sm" icon={<Reply size={16}/>}>השב</Button>
-                                       <Button variant="secondary" onClick={() => markAsTreated(msg.id)} className="h-10 w-12 flex justify-center"><CheckCircle size={18}/></Button>
-                                   </div>
-                               )}
-                               {isReplying && (
-                                   <div className="animate-fadeIn mt-2 pt-2 border-t border-blue-100">
-                                       <textarea className="w-full p-3 border border-gray-200 rounded-xl text-sm focus:border-blue-500 outline-none bg-blue-50/30" placeholder="הקלד תשובה..." rows={3} value={replyText} onChange={e => setReplyText(e.target.value)}></textarea>
-                                       <div className="flex gap-2 mt-3">
-                                           <Button variant="secondary" onClick={() => setReplyingTo(null)} className="bg-gray-100 text-gray-500 h-10 px-0 w-12 flex items-center justify-center"><X size={18}/></Button>
-                                           <Button onClick={() => sendReply(msg)} isLoading={sendingReply} icon={<Send size={16}/>} className="bg-blue-600 h-10 text-sm flex-1">שלח</Button>
-                                       </div>
-                                   </div>
-                               )}
-                           </div>
-                       )
-                  })}
-              </div>
-          </div>
-      </div>
-    </>
-  )
+                        {/* תוכן ההודעה */}
+                        <div className="flex-1 p-8 overflow-y-auto bg-white">
+                            <div className="prose max-w-none text-gray-700 whitespace-pre-wrap leading-relaxed">
+                                {selectedMsg.message}
+                            </div>
+                        </div>
+
+                        {/* Footer פעולות */}
+                        <div className="p-4 border-t border-gray-100 bg-gray-50 flex gap-3 justify-end">
+                            <a 
+                                href={`mailto:?subject=תשובה לפנייתך: ${selectedMsg.subject}&body=שלום ${selectedMsg.profiles?.full_name},%0D%0A%0D%0Aבהמשך לפנייתך בנושא "${selectedMsg.subject}"...`}
+                                className="flex items-center gap-2 px-5 py-2.5 bg-white border border-gray-200 text-gray-700 hover:text-[#00BCD4] hover:border-[#00BCD4] rounded-xl text-sm font-bold transition-all shadow-sm"
+                            >
+                                <Mail size={16}/> השב במייל
+                            </a>
+                            {selectedMsg.profiles?.phone && (
+                                <a 
+                                    href={`https://wa.me/${selectedMsg.profiles.phone.replace(/\D/g,'')}?text=שלום ${selectedMsg.profiles.full_name}, אני פונה אליך לגבי הפנייה: ${selectedMsg.subject}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="flex items-center gap-2 px-5 py-2.5 bg-[#25D366] text-white hover:bg-[#128C7E] rounded-xl text-sm font-bold transition-all shadow-md"
+                                >
+                                    <MessageCircle size={16}/> השב בווצאפ
+                                </a>
+                            )}
+                        </div>
+                    </>
+                ) : (
+                    <div className="flex-1 flex flex-col items-center justify-center text-gray-300">
+                        <Mail size={64} className="mb-4 opacity-20"/>
+                        <p className="text-lg font-bold">בחר הודעה לצפייה</p>
+                    </div>
+                )}
+            </div>
+
+        </div>
+      </main>
+    </div>
+  );
 }

@@ -20,7 +20,7 @@ export const Sidebar = ({ isOpen = true, onClose }: SidebarProps) => {
   const menuItems = [
     { label: 'ראשי', href: '/dashboard', icon: Home, exact: true },
     { label: 'הודעות ועדכונים', href: '/dashboard/inbox', icon: Bell },
-    { label: 'טיול חדש', href: '/dashboard/new-trip', icon: PlusCircle },
+    { label: 'בקשת פש"ש חדשה', href: '/dashboard/new-trip', icon: PlusCircle },
     { label: 'הטיולים שלי', href: '/dashboard/my-trips', icon: FileText },
     { label: 'פרופיל אישי', href: '/dashboard/profile', icon: User },
     { label: 'עזרה ותמיכה', href: '/dashboard/contact', icon: MessageSquare }

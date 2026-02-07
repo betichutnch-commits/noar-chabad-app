@@ -7,18 +7,13 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
 import { Send, HelpCircle, Image as ImageIcon, X, AlertTriangle, Info, Loader2 } from 'lucide-react'
-
-// ייבוא Hook ו-Zod
 import { useUser } from '@/hooks/useUser'
 import { contactSchema } from '@/lib/schemas'
 
 export default function ContactPage() {
-  // 1. שימוש ב-Hook
   const { user, loading: userLoading } = useUser('/');
-
   const [submitting, setSubmitting] = useState(false);
   
-  // ניהול מודל מתוקן
   const [modal, setModal] = useState({
       isOpen: false,
       type: 'info' as 'success' | 'error' | 'info' | 'confirm',
@@ -62,7 +57,6 @@ export default function ContactPage() {
   };
 
   const handleSubmit = async () => {
-    // 2. ולידציה עם Zod
     const validation = contactSchema.safeParse(formData);
 
     if (!validation.success) {
@@ -74,7 +68,6 @@ export default function ContactPage() {
 
     let imageUrl = null;
 
-    // העלאת תמונה אם יש
     if (screenshot && user) {
         const fileName = `bugs/${user.id}_${Date.now()}.png`;
         const { error: uploadError } = await supabase.storage.from('trip-files').upload(fileName, screenshot);
@@ -84,15 +77,16 @@ export default function ContactPage() {
         }
     }
     
-    // הרכבת ההודעה הסופית
     const finalMessage = imageUrl 
         ? `${formData.message}\n\n[צורף צילום מסך]: ${imageUrl}`
         : formData.message;
 
+    // השינוי החשוב: שליחת הקטגוריה לעמודה הייעודית
     const { error } = await supabase.from('contact_messages').insert([{
         user_id: user?.id,
-        subject: `[${type === 'bug' ? 'תקלה' : 'פנייה'}] ${formData.subject}`,
+        subject: formData.subject, // שולחים את הנושא נקי
         message: finalMessage,
+        category: type, // שומרים 'bug' או 'general' בעמודה החדשה
         status: 'new'
     }]);
 

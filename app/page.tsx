@@ -248,11 +248,13 @@ export default function Home() {
   }
 
   // --- View: Login ---
+  // --- View: Login ---
   if (view === 'login') {
     return (
-      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6">
+      // שינוי: במובייל מתחיל מלמעלה (justify-start pt-24), במחשב ממורכז (md:justify-center)
+      <div className="min-h-screen bg-white flex flex-col items-center justify-start pt-24 md:justify-center md:pt-0 p-6 transition-all">
         <Modal isOpen={modal.isOpen} onClose={() => setModal({...modal, isOpen: false})} type={modal.type} title={modal.title} message={modal.message} />
-        
+          
         <button onClick={() => setView('landing')} className="absolute top-6 right-6 text-gray-400 hover:text-[#E91E63] transition-colors">
             <ArrowLeft size={24} className="rotate-180" />
         </button>
@@ -294,8 +296,8 @@ export default function Home() {
               <Button 
   type="submit" 
   isLoading={loading} 
-  // שיניתי את הצבע ל-#8BC34A (הירוק של המותג) ואת ה-Hover ל-#7CB342
-  className="w-full mt-4 bg-[#8BC34A] hover:bg-[#7CB342] shadow-lg shadow-green-100 border border-transparent text-white"
+  variant="secondary" // זה מבטיח שהכפתור יישאר ירוק גם בטעינה
+  className="w-full mt-4"
 >
   כניסה
 </Button>
@@ -460,7 +462,7 @@ export default function Home() {
                   </button>
               </div>
 
-              <Button type="submit" isLoading={loading} className="w-full mt-6 bg-[#4CAF50] hover:bg-green-600 shadow-green-200 border border-transparent">
+              <Button type="submit" isLoading={loading} className="w-full mt-6 bg-[#8BC34A] hover:bg-green-600 shadow-green-200 border border-transparent">
                 סיום הרשמה
               </Button>
             </form>

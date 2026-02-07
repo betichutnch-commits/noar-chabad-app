@@ -229,15 +229,15 @@ export default function MyTripsPage() {
                       })}
                   </div>
 
-                  {/* הוספת z-50 כדי שהפילטר יעלה מעל הכל */}
-                  <div className="flex flex-col-reverse md:flex-row gap-2 w-full md:w-auto z-50">
+                  {/* תיקון: z-30 במקום z-50 כדי למנוע דריסת ההיידר */}
+                  <div className="flex flex-col-reverse md:flex-row gap-2 w-full md:w-auto z-30">
                       <MultiSelectFilter 
                         options={filterOptions}
                         selected={selectedTypes}
                         onChange={setSelectedTypes}
                       />
                       <div className="relative flex-1 md:w-64">
-                          <input type="text" placeholder="חיפוש..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-4 pr-10 py-3 bg-white border border-gray-200 rounded-2xl text-sm font-bold focus:border-[#00BCD4] outline-none transition-all shadow-sm focus:ring-4 focus:ring-cyan-50"/>
+                          <input type="text" placeholder="חיפוש לפי שם..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-4 pr-10 py-3 bg-white border border-gray-200 rounded-2xl text-sm font-bold focus:border-[#00BCD4] outline-none transition-all shadow-sm focus:ring-4 focus:ring-cyan-50"/>
                           <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={18}/>
                       </div>
                   </div>
