@@ -5,14 +5,29 @@ import { supabase } from '@/lib/supabaseClient'
 import { Header } from '@/components/layout/Header'
 import { Modal } from '@/components/ui/Modal'
 import { 
-  Bell, CheckCircle, AlertTriangle, Info, X, Clock, MailOpen, Trash2, Send, 
-  ChevronDown, ChevronUp, Loader2, MessageCircle, HelpCircle, Wrench
+  Bell, CheckCircle, AlertTriangle, Info, X, MailOpen, Trash2, Send, 
+  ChevronDown, ChevronUp, Loader2, MessageCircle, HelpCircle, Wrench, ImageIcon
 } from 'lucide-react'
-
-// ייבוא Hook
 import { useUser } from '@/hooks/useUser'
+import { useSignedUrl } from '@/hooks/useSignedUrl';
+import { parseMessageContent, isBugCategory, normalizeMessageStatus } from '@/lib/inbox';
+import Image from 'next/image';
 
-// --- פונקציות עזר (ללא שינוי) ---
+// רכיב לתצוגת תמונה מאובטחת
+const SecureImage = ({ path }: { path: string }) => {
+    // אם הנתיב הוא URL מלא (תמיכה לאחור), נשתמש בו כמו שהוא
+    const imagePath = path.startsWith('http') ? path : path;
+    const signedUrl = useSignedUrl(imagePath);
+
+    if (!signedUrl) return <div className="h-40 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 text-xs gap-1"><Loader2 size={12} className="animate-spin"/> טוען תמונה...</div>;
+
+    return (
+        <a href={signedUrl} target="_blank" rel="noreferrer">
+            <Image src={signedUrl} alt="Screenshot" width={1200} height={800} className="max-h-48 w-auto rounded-lg border border-gray-200 shadow-sm hover:opacity-90 transition-opacity" unoptimized/>
+        </a>
+    );
+};
+
 const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('he-IL', {
         day: 'numeric', month: 'numeric', year: '2-digit', hour: '2-digit', minute: '2-digit'
@@ -35,18 +50,36 @@ const parseMessageSubject = (originalSubject: string) => {
     return { type, cleanSubject };
 };
 
+// פונקציה לפירוק התוכן (טקסט + תמונה)
 export default function InboxPage() {
-  // 1. שימוש ב-Hook
   const { user, loading: userLoading } = useUser('/');
+
+  type NotificationItem = {
+    id: string;
+    is_read?: boolean;
+    type?: string;
+    title?: string;
+    created_at?: string;
+    message?: string;
+    link?: string;
+  };
+  type SentMessageItem = {
+    id: string;
+    subject?: string;
+    category?: string | null;
+    message?: string;
+    status?: string;
+    created_at?: string;
+    admin_response?: string | null;
+  };
 
   const [dataLoading, setDataLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'incoming' | 'outgoing'>('incoming');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   
-  const [notifications, setNotifications] = useState<any[]>([]); 
-  const [sentMessages, setSentMessages] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]); 
+  const [sentMessages, setSentMessages] = useState<SentMessageItem[]>([]);
 
-  // מודל גלובלי
   const [modal, setModal] = useState({
       isOpen: false,
       type: 'info' as 'success' | 'error' | 'info' | 'confirm',
@@ -55,13 +88,12 @@ export default function InboxPage() {
       onConfirm: undefined as (() => void) | undefined
   });
 
-  // 2. טעינת נתונים תלויה ב-User
   useEffect(() => {
     const fetchData = async () => {
         if (!user) return;
 
         try {
-            // טעינת התראות נכנסות
+            // התראות
             const { data: incomingData } = await supabase
                 .from('notifications')
                 .select('*')
@@ -70,7 +102,7 @@ export default function InboxPage() {
             
             setNotifications(incomingData || []);
 
-            // טעינת הודעות יוצאות
+            // הודעות יוצאות
             const { data: outgoingData } = await supabase
                 .from('contact_messages')
                 .select('*')
@@ -131,20 +163,21 @@ export default function InboxPage() {
   };
 
   const getStatusBadge = (status: string) => {
-      const styles: any = {
+      const s = (status || 'new').toLowerCase();
+      const styles: Record<string, string> = {
           new: "bg-blue-50 text-blue-600 border-blue-200",
+          treated: "bg-green-50 text-green-600 border-green-200",
           in_progress: "bg-orange-50 text-orange-600 border-orange-200",
-          closed: "bg-green-50 text-green-600 border-green-200"
+          closed: "bg-gray-100 text-gray-600 border-gray-200"
       };
-      const labels: any = { new: 'נשלח', in_progress: 'בטיפול', closed: 'טופל' };
+      const labels: Record<string, string> = { new: 'נשלח', in_progress: 'בטיפול', closed: 'סגור', treated: 'טופל' };
       return (
-          <span className={`px-2 py-0.5 rounded text-xs font-bold border ${styles[status] || styles.new}`}>
-              {labels[status] || 'נשלח'}
+          <span className={`px-2 py-0.5 rounded text-xs font-bold border ${styles[s] || styles.new}`}>
+              {labels[s] || 'נשלח'}
           </span>
       );
   };
 
-  // בדיקת טעינה משולבת
   if (userLoading || dataLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
 
   return (
@@ -203,13 +236,13 @@ export default function InboxPage() {
                                         onClick={() => toggleExpand(note.id, note.is_read)}
                                         className={`p-4 flex items-center gap-4 cursor-pointer ${!note.is_read ? 'bg-cyan-50/30' : ''}`}
                                     >
-                                        <div className="shrink-0">{getIcon(note.type)}</div>
+                                        <div className="shrink-0">{getIcon(note.type || 'info')}</div>
                                         <div className="flex-1 min-w-0 grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 items-center">
                                             <div className={`md:col-span-8 text-sm truncate ${!note.is_read ? 'text-gray-900 font-bold' : 'text-gray-600'}`}>
                                                 {note.title}
                                             </div>
                                             <div className="md:col-span-4 text-xs text-gray-400 flex items-center justify-end gap-2">
-                                                <span>{formatDate(note.created_at)}</span>
+                                                <span>{formatDate(note.created_at || '')}</span>
                                                 {isExpanded ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
                                             </div>
                                         </div>
@@ -244,9 +277,9 @@ export default function InboxPage() {
                     <div className="divide-y divide-gray-100">
                         {sentMessages.map((msg) => {
                             const isExpanded = expandedId === msg.id;
-                            const { cleanSubject } = parseMessageSubject(msg.subject);
-                            // זיהוי אם זו תקלה לפי הכותרת המקורית במסד הנתונים
-                            const isBug = msg.subject.includes('תקלה');
+                            const { cleanSubject } = parseMessageSubject(msg.subject || '');
+                            const isBug = isBugCategory({ category: (msg.category as string) || null, subject: String(msg.subject || '') });
+                            const content = parseMessageContent(String(msg.message || ''));
 
                             return (
                                 <div key={msg.id} className={`transition-all hover:bg-gray-50 relative overflow-hidden ${isExpanded ? 'bg-gray-50' : 'bg-white'}`}>
@@ -263,7 +296,7 @@ export default function InboxPage() {
                                         className="p-4 flex items-start gap-3 cursor-pointer"
                                     >
                                         <div className="shrink-0 w-16 mt-6">
-                                            {getStatusBadge(msg.status)}
+                                            {getStatusBadge(msg.status || 'new')}
                                         </div>
                                         
                                         <div className="flex-1 min-w-0 grid grid-cols-1 md:grid-cols-12 gap-1 md:gap-4 items-center mt-6">
@@ -271,7 +304,7 @@ export default function InboxPage() {
                                                 {cleanSubject}
                                             </div>
                                             <div className="md:col-span-4 text-xs text-gray-400 flex items-center justify-end gap-2">
-                                                <span>{formatDate(msg.created_at)}</span>
+                                                <span>{formatDate(msg.created_at || '')}</span>
                                                 {isExpanded ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
                                             </div>
                                         </div>
@@ -281,19 +314,25 @@ export default function InboxPage() {
                                         <div className="px-4 pb-6 pt-2 pl-4 md:pl-12 border-t border-gray-100 animate-fadeIn space-y-4">
                                             <div className="bg-white p-4 rounded-xl border border-gray-100 relative">
                                                 <div className="text-xs font-bold text-gray-400 mb-1">הודעה שלך:</div>
-                                                <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{msg.message}</p>
+                                                <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{content.text}</p>
+                                                {content.imagePath && (
+                                                    <div className="mt-3">
+                                                        <div className="text-[10px] font-bold text-gray-400 mb-1 flex items-center gap-1"><ImageIcon size={10}/> צילום מסך:</div>
+                                                        <SecureImage path={content.imagePath} />
+                                                    </div>
+                                                )}
                                             </div>
 
-                                            {msg.admin_reply && (
+                                            {msg.admin_response && (
                                                 <div className="bg-green-50 p-4 rounded-xl border border-green-100">
                                                     <div className="flex items-center gap-2 text-green-800 text-xs font-bold mb-2">
                                                         <MessageCircle size={14}/> תשובת המערכת:
                                                     </div>
-                                                    <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{msg.admin_reply}</p>
+                                                    <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{msg.admin_response}</p>
                                                 </div>
                                             )}
                                             
-                                            {!msg.admin_reply && msg.status !== 'closed' && (
+                                            {!msg.admin_response && normalizeMessageStatus(String(msg.status || 'new')) !== 'closed' && normalizeMessageStatus(String(msg.status || 'new')) !== 'treated' && (
                                                 <div className="text-xs text-gray-400 italic flex items-center gap-1">
                                                     <Loader2 size={12} className="animate-spin"/>
                                                     הפנייה בטיפול, טרם התקבלה תשובה.

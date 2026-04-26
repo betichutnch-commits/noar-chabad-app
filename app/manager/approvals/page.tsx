@@ -6,16 +6,18 @@ import { ManagerHeader } from '@/components/layout/ManagerHeader'
 import { Loader2, MapPin, Search, Eye, Calendar, User, Clock, CheckCircle, XCircle } from 'lucide-react'
 import Link from 'next/link'
 import { Input } from '@/components/ui/Input'
+import { isManagerUser } from '@/lib/auth'
+import type { TripRecord } from '@/lib/types'
 
 // ייבוא Hook לניהול משתמש (לוודא שאנחנו מחוברים)
 import { useUser } from '@/hooks/useUser'
 
 export default function ApprovalsPage() {
   // 1. שימוש ב-Hook
-  const { user, loading: userLoading } = useUser('/');
+  const { user, profile, loading: userLoading } = useUser('/');
 
   const [loadingTrips, setLoadingTrips] = useState(true);
-  const [trips, setTrips] = useState<any[]>([]);
+  const [trips, setTrips] = useState<TripRecord[]>([]);
   const [filter, setFilter] = useState('pending');
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -24,9 +26,15 @@ export default function ApprovalsPage() {
     const fetchTrips = async () => {
         if (!user) return;
 
-        const { data, error } = await supabase
+        const isManager = isManagerUser(user, profile);
+        if (!isManager) {
+            window.location.href = '/dashboard';
+            return;
+        }
+
+        const { data } = await supabase
             .from('trips')
-            .select('*')
+            .select('id, user_id, name, branch, coordinator_name, start_date, status, details')
             .order('created_at', { ascending: false });
 
         if (data) setTrips(data);
@@ -36,7 +44,7 @@ export default function ApprovalsPage() {
     if (!userLoading && user) {
         fetchTrips();
     }
-  }, [user, userLoading]);
+  }, [user, userLoading, profile]);
 
   const filteredTrips = trips.filter(trip => {
       const matchesStatus = filter === 'all' ? true : trip.status === filter;
@@ -47,13 +55,13 @@ export default function ApprovalsPage() {
   });
 
   const getStatusBadge = (status: string) => {
-      const styles: any = {
+      const styles: Record<string, string> = {
           approved: "bg-green-100 text-green-700 border-green-200",
           pending: "bg-orange-100 text-orange-700 border-orange-200",
           rejected: "bg-red-100 text-red-700 border-red-200"
       };
-      const labels: any = { approved: 'אושר', pending: 'ממתין', rejected: 'נדחה' };
-      const icons: any = { approved: CheckCircle, pending: Clock, rejected: XCircle };
+      const labels: Record<string, string> = { approved: 'אושר', pending: 'ממתין', rejected: 'נדחה' };
+      const icons: Record<string, React.ElementType> = { approved: CheckCircle, pending: Clock, rejected: XCircle };
       const Icon = icons[status] || Clock;
 
       return (
@@ -94,7 +102,7 @@ export default function ApprovalsPage() {
                     <Input 
                         placeholder="חיפוש..." 
                         value={searchTerm}
-                        onChange={(e: any) => setSearchTerm(e.target.value)}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
                         icon={<Search size={18}/>}
                     />
                 </div>

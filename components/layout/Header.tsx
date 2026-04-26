@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { Bell, X, Mail } from 'lucide-react';
 import { useUser } from '@/hooks/useUser';
 
-const DEPT_LOGOS: any = {
+const DEPT_LOGOS: Record<string, string> = {
     'בת מלך': '/logos/bat-melech.png',
     'בנות חב״ד': '/logos/bnos-chabad.png',
     'הפנסאים': '/logos/hapanasim.png',
@@ -23,7 +23,7 @@ const getSimpleGreeting = (name: string) => {
 export const Header = ({ title }: { title: string }) => {
   const { user } = useUser();
   
-  const [unreadNotifications, setUnreadNotifications] = useState<any[]>([]);
+  const [unreadNotifications, setUnreadNotifications] = useState<Array<{ id: string; title: string }>>([]);
   const [isBellOpen, setIsBellOpen] = useState(false);
 
   // חישוב תצוגת התפקיד והסניף
@@ -136,6 +136,7 @@ export const Header = ({ title }: { title: string }) => {
             <div className="relative">
                 <button 
                     onClick={() => setIsBellOpen(!isBellOpen)}
+                    aria-label="פתיחת התראות"
                     className="text-gray-400 hover:text-[#00BCD4] transition-colors relative p-3 bg-white rounded-2xl shadow-sm border border-gray-100 hover:border-[#00BCD4] group"
                 >
                     <Bell size={22} className="group-hover:rotate-12 transition-transform" />
@@ -148,7 +149,7 @@ export const Header = ({ title }: { title: string }) => {
                     <div className="absolute top-full left-0 mt-4 bg-white rounded-2xl shadow-2xl border border-gray-100 w-80 overflow-hidden animate-fadeIn z-50">
                         <div className="bg-[#00BCD4] p-3 flex justify-between items-center text-white">
                             <span className="text-sm font-bold">הודעות חדשות</span>
-                            <button onClick={() => setIsBellOpen(false)}><X size={16}/></button>
+                            <button onClick={() => setIsBellOpen(false)} aria-label="סגירת התראות"><X size={16}/></button>
                         </div>
                         <div className="max-h-60 overflow-y-auto">
                             {unreadNotifications.length === 0 ? (
@@ -186,7 +187,7 @@ export const Header = ({ title }: { title: string }) => {
                 
                 <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#00BCD4] to-cyan-400 flex items-center justify-center text-white font-bold text-2xl shadow-lg shadow-cyan-100 border-[3px] border-white ring-1 ring-gray-100 shrink-0 overflow-hidden relative">
                 {userDisplayInfo.avatarUrl ? (
-                    <img src={userDisplayInfo.avatarUrl} alt="Profile" className="w-full h-full object-cover" />
+                    <Image src={userDisplayInfo.avatarUrl} alt="Profile" fill className="object-cover" unoptimized />
                 ) : (
                     userDisplayInfo.fullName?.[0]
                 )}

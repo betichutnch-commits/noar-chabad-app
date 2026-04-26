@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { X, CheckCircle, AlertTriangle, Info, AlertCircle } from 'lucide-react';
 import { Button } from './Button';
 
@@ -21,20 +21,24 @@ export const Modal: React.FC<ModalProps> = ({
   isOpen, onClose, type = 'info', title, message, onConfirm, 
   confirmText = 'אישור', cancelText = 'ביטול' 
 }) => {
-  const [show, setShow] = useState(false);
-
   useEffect(() => {
-    if (isOpen) {
-        setShow(true);
-        document.body.style.overflow = 'hidden';
-    } else {
-        const timer = setTimeout(() => setShow(false), 300);
-        document.body.style.overflow = 'unset';
-        return () => clearTimeout(timer);
-    }
+    document.body.style.overflow = isOpen ? 'hidden' : 'unset';
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
   }, [isOpen]);
 
-  if (!show && !isOpen) return null;
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
 
   const config = {
     success: { icon: CheckCircle, color: 'text-green-500', bg: 'bg-green-50' },
@@ -46,7 +50,10 @@ export const Modal: React.FC<ModalProps> = ({
   const Icon = config.icon;
 
   return (
-    <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 transition-all duration-300 ${isOpen ? 'opacity-100' : 'opacity-0'}`}>
+    <div
+      className={`fixed inset-0 z-[100] flex items-center justify-center p-4 transition-all duration-300 ${isOpen ? 'opacity-100' : 'opacity-0'}`}
+      role="presentation"
+    >
       
       {/* Backdrop */}
       <div 
@@ -55,9 +62,18 @@ export const Modal: React.FC<ModalProps> = ({
       ></div>
 
       {/* Content */}
-      <div className={`relative bg-white w-full max-w-sm rounded-[32px] shadow-2xl p-6 transform transition-all duration-300 ${isOpen ? 'scale-100 translate-y-0' : 'scale-95 translate-y-4'}`}>
+      <div
+        className={`relative bg-white w-full max-w-sm rounded-[32px] shadow-2xl p-6 transform transition-all duration-300 ${isOpen ? 'scale-100 translate-y-0' : 'scale-95 translate-y-4'}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+      >
         
-        <button onClick={onClose} className="absolute top-4 left-4 p-2 bg-gray-50 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
+        <button
+          onClick={onClose}
+          aria-label="סגירת חלון"
+          className="absolute top-4 left-4 p-2 bg-gray-50 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+        >
             <X size={18} />
         </button>
 

@@ -41,7 +41,7 @@ export default function ManagerHomePage() {
                 supabase.from('users_management_view').select('raw_user_meta_data')
             ]);
 
-            const pendingUsersCount = usersRes.data?.filter((u: any) => {
+            const pendingUsersCount = usersRes.data?.filter((u: { raw_user_meta_data?: { status?: string } }) => {
                 const status = u.raw_user_meta_data?.status;
                 return !status || status === 'pending';
             }).length || 0;
@@ -109,7 +109,7 @@ export default function ManagerHomePage() {
                 <div className="group p-4 md:p-6 flex flex-col items-center justify-center hover:bg-gray-50 transition-colors text-center dir-rtl">
                     <div className="text-gray-400 bg-gray-50 p-2 rounded-xl mb-2"><FileText size={20}/></div>
                     <div className="text-2xl md:text-3xl font-black text-gray-800 leading-none mb-1">{stats.totalTrips}</div>
-                    <div className="text-xs font-bold text-gray-400">סה"כ פעילויות</div>
+                    <div className="text-xs font-bold text-gray-400">סה״כ פעילויות</div>
                 </div>
 
             </div>

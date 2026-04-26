@@ -7,19 +7,17 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
 import { Save, User, Mail, Lock, ShieldCheck, Camera, Loader2 } from 'lucide-react'
-
-// ייבוא Hook ו-Zod
 import { useUser } from '@/hooks/useUser'
 import { profileSchema } from '@/lib/schemas'
+import { saveUserProfile } from '@/lib/profile'
+import Image from 'next/image'
 
 export default function ManagerProfile() {
-  // 1. שימוש ב-Hook
   const { user, profile, loading: userLoading, refresh } = useUser('/');
 
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  // מודל גלובלי
   const [modal, setModal] = useState({
       isOpen: false,
       type: 'info' as 'success' | 'error' | 'info' | 'confirm',
@@ -43,7 +41,6 @@ export default function ManagerProfile() {
     profileImage: null as string | null
   });
 
-  // 2. טעינת נתונים
   useEffect(() => {
     if (user && !userLoading) {
         const meta = user.user_metadata || {};
@@ -71,27 +68,39 @@ export default function ManagerProfile() {
     }
   }, [user, profile, userLoading]);
 
+  // --- הפונקציה המתוקנת להעלאת תמונת פרופיל מנהל ---
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || !e.target.files[0]) return;
     const file = e.target.files[0];
+    
+    // ולידציה
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+        showModal('error', 'קובץ לא נתמך', 'ניתן להעלות תמונות בלבד (JPG, PNG).');
+        return;
+    }
+
     setUploading(true);
 
     try {
+      if (!user) throw new Error("User not found");
       const fileExt = file.name.split('.').pop();
-      const fileName = `avatars/${user.id}_${Date.now()}.${fileExt}`;
-      const { error } = await supabase.storage.from('trip-files').upload(fileName, file, { upsert: true });
+      // העלאה לדלי הציבורי 'avatars'
+      const fileName = `${user.id}_${Date.now()}.${fileExt}`;
+      const { error } = await supabase.storage.from('avatars').upload(fileName, file, { upsert: true });
       if (error) throw error;
-      const { data } = supabase.storage.from('trip-files').getPublicUrl(fileName);
+      
+      const { data } = supabase.storage.from('avatars').getPublicUrl(fileName);
       setFormData(prev => ({ ...prev, profileImage: data.publicUrl }));
-    } catch (error: any) {
-      showModal('error', 'שגיאה', error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'שגיאה לא ידועה';
+      showModal('error', 'שגיאה', message);
     } finally {
       setUploading(false);
     }
   };
 
   const handleSave = async () => {
-      // 3. ולידציה עם Zod
       const validation = profileSchema.safeParse({
           officialName: formData.officialName,
           lastName: formData.lastName,
@@ -109,45 +118,28 @@ export default function ManagerProfile() {
       }
 
       setSaving(true);
-      
-      const { error } = await supabase.auth.updateUser({
-          data: { 
-              official_name: formData.officialName,
-              first_name: formData.officialName, 
-              last_name: formData.lastName,
-              nickname: formData.nickname,
-              birth_date: formData.birthDate,
-              full_name_mother: formData.fullNameAndMother, 
-              phone: formData.phone,
-              contact_email: formData.email,
-              avatar_url: formData.profileImage,
-              full_name: `${formData.officialName} ${formData.lastName}`
-          }
-      });
+      try {
+        if (!user) throw new Error("User not found");
+        await saveUserProfile({
+          userId: user.id,
+          officialName: formData.officialName,
+          lastName: formData.lastName,
+          idNumber: formData.idNumber,
+          birthDate: formData.birthDate,
+          nickname: formData.nickname,
+          fullNameAndMother: formData.fullNameAndMother,
+          phone: formData.phone,
+          email: formData.email,
+          avatarUrl: formData.profileImage,
+        });
 
-      // עדכון גם בטבלת פרופילים אם צריך
-      if (!error && user) {
-          await supabase.from('profiles').upsert({
-              id: user.id,
-              official_name: formData.officialName,
-              last_name: formData.lastName,
-              identity_number: formData.idNumber,
-              birth_date: formData.birthDate,
-              phone: formData.phone,
-              email: formData.email,
-              full_name: `${formData.officialName} ${formData.lastName}`.trim(),
-              avatar_url: formData.profileImage,
-              updated_at: new Date()
-          });
-      }
-
-      setSaving(false);
-      
-      if (error) {
-          showModal('error', 'שגיאה', error.message);
-      } else {
-          refresh(); // רענון הנתונים הגלובליים
-          showModal('success', 'נשמר', 'הפרופיל עודכן בהצלחה');
+        refresh();
+        showModal('success', 'נשמר', 'הפרופיל עודכן בהצלחה');
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'שגיאה בשמירה';
+        showModal('error', 'שגיאה', message);
+      } finally {
+        setSaving(false);
       }
   };
 
@@ -164,7 +156,7 @@ export default function ManagerProfile() {
                <div className="relative group w-24 h-24">
                    <div className="w-full h-full bg-gray-800 rounded-3xl flex items-center justify-center text-white text-3xl font-bold overflow-hidden border-4 border-white shadow-lg">
                       {formData.profileImage ? (
-                          <img src={formData.profileImage} className="w-full h-full object-cover"/>
+                          <Image src={formData.profileImage} alt="Profile" fill className="object-cover" unoptimized/>
                       ) : (
                           formData.officialName?.[0] || <User/>
                       )}
@@ -213,18 +205,18 @@ export default function ManagerProfile() {
                   <div className="space-y-6">
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <Input label="שם פרטי (כפי שמופיע בתעודת זהות)" value={formData.officialName} onChange={(e: any) => setFormData({...formData, officialName: e.target.value})} />
-                          <Input label="כינוי / שם חיבה" value={formData.nickname} onChange={(e: any) => setFormData({...formData, nickname: e.target.value})} />
+                          <Input label="שם פרטי (כפי שמופיע בתעודת זהות)" value={formData.officialName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, officialName: e.target.value})} />
+                          <Input label="כינוי / שם חיבה" value={formData.nickname} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, nickname: e.target.value})} />
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <Input label="שם משפחה" value={formData.lastName} onChange={(e: any) => setFormData({...formData, lastName: e.target.value})} />
-                          <Input label="טלפון נייד" value={formData.phone} onChange={(e: any) => setFormData({...formData, phone: e.target.value})} />
+                          <Input label="שם משפחה" value={formData.lastName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, lastName: e.target.value})} />
+                          <Input label="טלפון נייד" value={formData.phone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, phone: e.target.value})} />
                       </div>
 
-                      <Input label="שם מלא + שם האם (לתפילה)" value={formData.fullNameAndMother} onChange={(e: any) => setFormData({...formData, fullNameAndMother: e.target.value})} placeholder="לדוגמה: יוסף בן שרה" />
+                      <Input label="שם מלא + שם האם (לתפילה)" value={formData.fullNameAndMother} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, fullNameAndMother: e.target.value})} placeholder="לדוגמה: יוסף בן שרה" />
 
-                      <Input label="אימייל ליצירת קשר" value={formData.email} onChange={(e: any) => setFormData({...formData, email: e.target.value})} icon={<Mail size={18}/>} />
+                      <Input label="אימייל ליצירת קשר" value={formData.email} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, email: e.target.value})} icon={<Mail size={18}/>} />
                       
                       <div className="pt-6 flex justify-end border-t border-gray-100 mt-6">
                           <Button onClick={handleSave} isLoading={saving} icon={<Save size={18}/>} className="bg-gray-800 hover:bg-gray-900 px-10 shadow-lg shadow-gray-200">

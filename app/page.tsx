@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { ArrowLeft, UserPlus, ShieldCheck, Users, Briefcase, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -12,6 +12,7 @@ import Image from 'next/image';
 // ייבוא הסכמות החדשות
 import { loginSchema, registerSchema } from '@/lib/schemas';
 import { DEPARTMENTS_CONFIG } from '@/lib/constants'; 
+import type { User } from '@supabase/supabase-js';
 
 const SUPER_ADMIN_EMAIL = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL;
 
@@ -55,25 +56,8 @@ export default function Home() {
     }
   };
 
-  useEffect(() => {
-    const autoLogin = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        setLoading(true);
-        try {
-          await checkRoleAndRedirect(session.user);
-        } catch (error) {
-          console.log("Auto-login failed:", error);
-          await supabase.auth.signOut();
-          setLoading(false);
-        }
-      }
-    };
-    autoLogin();
-  }, []);
-
-  const checkRoleAndRedirect = async (user: any) => {
-    const meta = user.user_metadata || {};
+  const checkRoleAndRedirect = useCallback(async (user: User) => {
+    const meta = (user.user_metadata || {}) as Record<string, string>;
     const status = meta.status || 'pending';
 
     if (user.email !== SUPER_ADMIN_EMAIL && status !== 'approved') {
@@ -89,13 +73,30 @@ export default function Home() {
     } else {
         router.push('/dashboard');
     }
-  };
+  }, [router]);
 
-  const handleInputChange = (e: any) => {
+  useEffect(() => {
+    const autoLogin = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setLoading(true);
+        try {
+          await checkRoleAndRedirect(session.user);
+        } catch (error) {
+          console.log("Auto-login failed:", error);
+          await supabase.auth.signOut();
+          setLoading(false);
+        }
+      }
+    };
+    autoLogin();
+  }, [checkRoleAndRedirect]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleLogin = async (e: any) => {
+  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
     // 1. ולידציה עם Zod
@@ -121,14 +122,15 @@ export default function Home() {
           return;
         }
         await checkRoleAndRedirect(data.user);
-    } catch (err: any) {
+    } catch (err: unknown) {
         console.error(err);
-        showModal('error', 'שגיאה', err.message || 'שגיאה כללית במערכת');
+        const message = err instanceof Error ? err.message : 'שגיאה כללית במערכת';
+        showModal('error', 'שגיאה', message);
         setLoading(false);
     }
   };
 
-  const handleRegister = async (e: any) => {
+  const handleRegister = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     // 1. ולידציה עם Zod
@@ -207,7 +209,7 @@ export default function Home() {
           <div className="space-y-3">
             <h1 className="text-4xl md:text-4xl font-black text-[#00BCD4] leading-tight drop-shadow-sm">
                 מערכת הטיולים והאירועים
-                <span className="block text-2xl md:text-3xl text-gray-800 mt-1">של ארגון נוער חב"ד</span>
+                <span className="block text-2xl md:text-3xl text-gray-800 mt-1">של ארגון נוער חב״ד</span>
             </h1>
             
             <p className="text-gray-500 font-medium text-lg px-4">
@@ -241,7 +243,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="mt-16 text-xs text-gray-300 font-medium">© ארגון נוער חב"ד</div>
+          <div className="mt-16 text-xs text-gray-300 font-medium">© ארגון נוער חב״ד</div>
         </main>
       </div>
     );

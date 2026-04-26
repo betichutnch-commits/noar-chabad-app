@@ -8,13 +8,14 @@ import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
 import { 
   User, Mail, Building2, Save, Loader2, Camera, 
-  ShieldCheck, Lock, Trash2, Calendar, ArrowRight, Info, MapPin, ExternalLink, Briefcase
+  ShieldCheck, Lock, Trash2, ArrowRight, Info, MapPin, ExternalLink
 } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
-
-// ייבוא Hook ו-Zod
 import { useUser } from '@/hooks/useUser'
 import { profileSchema } from '@/lib/schemas'
+import { saveUserProfile } from '@/lib/profile'
+import { sanitizeInternalReturnUrl } from '@/lib/auth'
+import Image from 'next/image'
 
 const formatDisplayDate = (dateStr: string) => {
     if (!dateStr) return '-';
@@ -24,9 +25,8 @@ const formatDisplayDate = (dateStr: string) => {
 function ProfileContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const returnUrl = searchParams.get('returnUrl');
+  const returnUrl = sanitizeInternalReturnUrl(searchParams.get('returnUrl'), '');
 
-  // 1. שימוש ב-Hook
   const { user, profile, loading: userLoading, refresh } = useUser('/');
 
   const [saving, setSaving] = useState(false);
@@ -61,22 +61,16 @@ function ProfileContent() {
     profileImage: null as string | null
   });
 
-  // הגדרות תפקיד ומחלקה
   const role = user?.user_metadata?.role;
   const isHQ = role === 'dept_staff' || role === 'safety_admin' || role === 'admin';
   const branchName = user?.user_metadata?.branch_name || user?.user_metadata?.branch || '';
   const department = user?.user_metadata?.department || '';
 
-  // פונקציה לקביעת תואר מגדרי לרכז - תוקנה לזיהוי מדויק יותר
   const getRoleTitle = () => {
-      let title = 'רכז/ת סניף'; // ברירת מחדל (מועדונים וכו')
+      let title = 'רכז/ת סניף';
       
       const deptName = department.trim();
-
-      // בדיקת מחלקות גבריות (הוספנו גם 'תמים' וגם 'התמים')
       const maleKeywords = ['הפנסאים', 'פנסאים', 'התמים', 'תמים', 'בני חב"ד', 'בני חב״ד'];
-      
-      // בדיקת מחלקות נשיות
       const femaleKeywords = ['בת מלך', 'בנות חב"ד', 'בנות חב״ד'];
 
       if (maleKeywords.some(d => deptName.includes(d))) {
@@ -89,12 +83,10 @@ function ProfileContent() {
       return title;
   };
 
-  // בניית הכותרת המלאה (למעלה)
   const fullRoleString = isHQ 
     ? `צוות מטה | ${department}` 
     : `${department} | ${getRoleTitle()} ${branchName}`;
 
-  // בניית תיאור התפקיד (עבור הנתונים המערכתיים)
   const systemRoleDescription = isHQ 
     ? (role === 'safety_admin' ? 'מנהל בטיחות ומפעלים' : `מטה ${department}`)
     : `${getRoleTitle()} ${branchName}`;
@@ -123,20 +115,39 @@ function ProfileContent() {
     }
   }, [user, profile, userLoading]);
 
+  // --- הפונקציה המתוקנת להעלאת תמונת פרופיל ---
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || !e.target.files[0]) return;
     const file = e.target.files[0];
+    
+    // ולידציה
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+        showModal('error', 'קובץ לא נתמך', 'ניתן להעלות תמונות בלבד (JPG, PNG).');
+        return;
+    }
+
     setUploading(true);
     try {
         if (!user) throw new Error("User not found");
         const fileExt = file.name.split('.').pop();
-        const fileName = `avatars/${user.id}_${Date.now()}.${fileExt}`;
-        const { error: uploadError } = await supabase.storage.from('trip-files').upload(fileName, file, { upsert: true });
+        // שינוי: העלאה לדלי הציבורי 'avatars'
+        const fileName = `${user.id}_${Date.now()}.${fileExt}`;
+        
+        const { error: uploadError } = await supabase.storage.from('avatars').upload(fileName, file, { upsert: true });
+        
         if (uploadError) throw uploadError;
-        const { data: { publicUrl } } = supabase.storage.from('trip-files').getPublicUrl(fileName);
-        setFormData(prev => ({ ...prev, profileImage: publicUrl }));
-    } catch (error: any) { showModal('error', 'שגיאה', 'שגיאה בהעלאת תמונה: ' + error.message); } 
-    finally { setUploading(false); }
+        
+        // כאן אנחנו משתמשים ב-getPublicUrl כי הדלי 'avatars' הוא ציבורי!
+        const { data } = supabase.storage.from('avatars').getPublicUrl(fileName);
+        
+        setFormData(prev => ({ ...prev, profileImage: data.publicUrl }));
+    } catch (error: unknown) { 
+        const message = error instanceof Error ? error.message : 'שגיאה לא ידועה';
+        showModal('error', 'שגיאה', 'שגיאה בהעלאת תמונה: ' + message); 
+    } finally { 
+        setUploading(false); 
+    }
   };
 
   const handleRemoveImageClick = (e: React.MouseEvent) => { 
@@ -171,43 +182,25 @@ function ProfileContent() {
 
     setSaving(true);
     try {
-      await supabase.auth.updateUser({
-        data: {
-          official_name: formData.officialName,
-          last_name: formData.lastName,
-          identity_number: formData.idNumber,
-          birth_date: formData.birthDate,
-          nickname: formData.nickname,
-          phone: formData.phone,
-          avatar_url: formData.profileImage, 
-          start_year: formData.startYear, 
-          full_name_mother: formData.fullNameAndMother,
-          contact_email: formData.contactEmail,
-          branch_address: formData.branchAddress,
-          zip_code: formData.zipCode,
-          student_count: formData.studentCount,
-          staff_count: formData.staffCount,
-          additional_staff: formData.additionalStaff,
-        }
+      if (!user) throw new Error("User not found");
+      await saveUserProfile({
+        userId: user.id,
+        officialName: formData.officialName,
+        lastName: formData.lastName,
+        idNumber: formData.idNumber,
+        birthDate: formData.birthDate,
+        nickname: formData.nickname,
+        fullNameAndMother: formData.fullNameAndMother,
+        phone: formData.phone,
+        email: formData.contactEmail,
+        avatarUrl: formData.profileImage,
+        startYear: formData.startYear,
+        zipCode: formData.zipCode,
+        branchAddress: formData.branchAddress,
+        studentCount: formData.studentCount,
+        staffCount: formData.staffCount,
+        additionalStaff: formData.additionalStaff,
       });
-      
-      if (user) {
-          const updates = {
-              id: user.id,
-              official_name: formData.officialName,
-              last_name: formData.lastName,
-              identity_number: formData.idNumber,
-              birth_date: formData.birthDate,
-              phone: formData.phone,
-              email: formData.contactEmail,
-              full_name: `${formData.officialName} ${formData.lastName}`.trim(),
-              avatar_url: formData.profileImage,
-              start_year: formData.startYear, 
-              zip_code: formData.zipCode,
-              updated_at: new Date()
-          };
-          await supabase.from('profiles').upsert(updates);
-      }
 
       refresh();
       showModal('success', 'הפרטים נשמרו', 'העדכון בוצע בהצלחה!');
@@ -216,7 +209,10 @@ function ProfileContent() {
           setTimeout(() => { router.push(returnUrl); }, 1500);
       }
 
-    } catch (e: any) { showModal('error', 'שגיאה', 'שגיאה בשמירה: ' + e.message); } 
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'שגיאה לא ידועה';
+      showModal('error', 'שגיאה', 'שגיאה בשמירה: ' + message);
+    } 
     finally { setSaving(false); }
   };
 
@@ -252,7 +248,7 @@ function ProfileContent() {
             
             <div className="relative group">
                 <div className="w-32 h-32 rounded-[30px] bg-gradient-to-tr from-[#00BCD4] to-cyan-100 flex items-center justify-center text-white font-bold text-5xl shadow-xl shadow-cyan-100 border-[5px] border-white ring-1 ring-gray-100 overflow-hidden cursor-pointer relative">
-                    {uploading ? <Loader2 className="animate-spin text-[#00BCD4]" size={32}/> : formData.profileImage ? <img src={formData.profileImage} alt="Profile" className="w-full h-full object-cover"/> : (formData.officialName?.[0] || <User size={48}/>)}
+                    {uploading ? <Loader2 className="animate-spin text-[#00BCD4]" size={32}/> : formData.profileImage ? <Image src={formData.profileImage} alt="Profile" fill className="object-cover" unoptimized/> : (formData.officialName?.[0] || <User size={48}/>)}
                     <label className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer z-10">
                         <Camera size={24}/>
                         <span className="text-xs font-bold mt-1">שנה תמונה</span>
@@ -282,7 +278,7 @@ function ProfileContent() {
                 <div className="flex items-center gap-2 mb-6 text-[#8BC34A] font-bold text-sm uppercase tracking-wider"><Lock size={14}/> נתונים מערכתיים (תצוגה)</div>
                 <div className="space-y-6">
                     <div><label className="text-xs font-bold text-gray-400 block mb-1">תפקיד</label><div className="font-bold text-gray-800 text-base border-b border-green-200/50 pb-2">{systemRoleDescription}</div></div>
-                    <div><label className="text-xs font-bold text-gray-400 block mb-1">שם (לפי ת"ז)</label><div className="font-bold text-gray-800 text-lg border-b border-green-200/50 pb-2">{formData.officialName || '-'}</div></div>
+                    <div><label className="text-xs font-bold text-gray-400 block mb-1">שם (לפי ת״ז)</label><div className="font-bold text-gray-800 text-lg border-b border-green-200/50 pb-2">{formData.officialName || '-'}</div></div>
                     <div><label className="text-xs font-bold text-gray-400 block mb-1">שם משפחה</label><div className="font-bold text-gray-800 text-lg border-b border-green-200/50 pb-2">{formData.lastName || '-'}</div></div>
                     <div><label className="text-xs font-bold text-gray-400 block mb-1">תעודת זהות</label><div className="font-bold text-gray-800 text-lg border-b border-green-200/50 pb-2 tracking-wider">{formData.idNumber || '-'}</div></div>
                     <div><label className="text-xs font-bold text-gray-400 block mb-1">תאריך לידה</label><div className="font-bold text-gray-800 text-lg border-b border-green-200/50 pb-2">{formatDisplayDate(formData.birthDate)}</div></div>
@@ -293,26 +289,26 @@ function ProfileContent() {
                 <div className="flex items-center gap-3 mb-8 border-b border-gray-100 pb-4"><ShieldCheck size={24} className="text-[#00BCD4]"/><h3 className="text-xl font-bold text-gray-800">עדכון פרטים אישיים</h3></div>
                 <div className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <Input label="שם פרטי (כפי שמופיע בתעודת הזהות)" value={formData.officialName} onChange={(e: any) => setFormData({...formData, officialName: e.target.value})} placeholder="לדוגמה: יוסף חיים"/>
-                        <Input label="כינוי / שם חיבה" value={formData.nickname} onChange={(e: any) => setFormData({...formData, nickname: e.target.value})} placeholder="לדוגמה: יוסי"/>
+                        <Input label="שם פרטי (כפי שמופיע בתעודת הזהות)" value={formData.officialName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, officialName: e.target.value})} placeholder="לדוגמה: יוסף חיים"/>
+                        <Input label="כינוי / שם חיבה" value={formData.nickname} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, nickname: e.target.value})} placeholder="לדוגמה: יוסי"/>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <Input label="שם משפחה" value={formData.lastName} onChange={(e: any) => setFormData({...formData, lastName: e.target.value})}/>
-                        <Input label="שם מלא + שם האם" value={formData.fullNameAndMother} onChange={(e: any) => setFormData({...formData, fullNameAndMother: e.target.value})}/>
+                        <Input label="שם משפחה" value={formData.lastName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, lastName: e.target.value})}/>
+                        <Input label="שם מלא + שם האם" value={formData.fullNameAndMother} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, fullNameAndMother: e.target.value})}/>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <Input label="תעודת זהות" value={formData.idNumber} onChange={(e: any) => setFormData({...formData, idNumber: e.target.value})}/>
-                        <Input label="תאריך לידה" type="date" value={formData.birthDate} onChange={(e: any) => setFormData({...formData, birthDate: e.target.value})}/>
+                        <Input label="תעודת זהות" value={formData.idNumber} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, idNumber: e.target.value})}/>
+                        <Input label="תאריך לידה" type="date" value={formData.birthDate} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, birthDate: e.target.value})}/>
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <Input label="טלפון נייד" value={formData.phone} onChange={(e: any) => setFormData({...formData, phone: e.target.value})}/>
-                        <Input label="אימייל ליצירת קשר" value={formData.contactEmail} onChange={(e: any) => setFormData({...formData, contactEmail: e.target.value})} icon={<Mail size={18}/>} placeholder="example@gmail.com"/>
+                        <Input label="טלפון נייד" value={formData.phone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, phone: e.target.value})}/>
+                        <Input label="אימייל ליצירת קשר" value={formData.contactEmail} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, contactEmail: e.target.value})} icon={<Mail size={18}/>} placeholder="example@gmail.com"/>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
                         <div className="md:col-span-2">
-                            <Input label={isHQ ? "כתובת מגורים" : "כתובת הסניף"} value={formData.branchAddress} onChange={(e: any) => setFormData({...formData, branchAddress: e.target.value})} placeholder="רחוב, מספר, עיר..."/>
+                            <Input label={isHQ ? "כתובת מגורים" : "כתובת הסניף"} value={formData.branchAddress} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, branchAddress: e.target.value})} placeholder="רחוב, מספר, עיר..."/>
                         </div>
                         <div>
                             <div className="flex justify-between items-end mb-1.5">
@@ -321,7 +317,7 @@ function ProfileContent() {
                                     <ExternalLink size={10} /> איתור מיקוד
                                 </a>
                             </div>
-                            <Input value={formData.zipCode} onChange={(e: any) => setFormData({...formData, zipCode: e.target.value})} placeholder="1234567" icon={<MapPin size={16}/>}/>
+                            <Input value={formData.zipCode} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, zipCode: e.target.value})} placeholder="1234567" icon={<MapPin size={16}/>}/>
                         </div>
                     </div>
 
@@ -329,14 +325,14 @@ function ProfileContent() {
                     
                     {!isHQ && (
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fadeIn">
-                            <Input label="שנת הצטרפות לארגון" type="number" value={formData.startYear} onChange={(e: any) => setFormData({...formData, startYear: e.target.value})} placeholder="2020"/>
-                            <Input label="כמות חניכים בסניף" type="number" value={formData.studentCount} onChange={(e: any) => setFormData({...formData, studentCount: e.target.value})}/>
-                            <Input label="כמות אנשי צוות בסניף" type="number" value={formData.staffCount} onChange={(e: any) => setFormData({...formData, staffCount: e.target.value})}/>
+                            <Input label="שנת הצטרפות לארגון" type="number" value={formData.startYear} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, startYear: e.target.value})} placeholder="2020"/>
+                            <Input label="כמות חניכים בסניף" type="number" value={formData.studentCount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, studentCount: e.target.value})}/>
+                            <Input label="כמות אנשי צוות בסניף" type="number" value={formData.staffCount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, staffCount: e.target.value})}/>
                         </div>
                     )}
                     
                     {isHQ && (
-                         <Input label="שנת הצטרפות לצוות" type="number" value={formData.startYear} onChange={(e: any) => setFormData({...formData, startYear: e.target.value})} placeholder="2020"/>
+                         <Input label="שנת הצטרפות לצוות" type="number" value={formData.startYear} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, startYear: e.target.value})} placeholder="2020"/>
                     )}
                     
                     <div className="bg-cyan-50/50 p-6 rounded-2xl border border-cyan-100">

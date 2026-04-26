@@ -6,11 +6,12 @@ import { supabase } from '@/lib/supabaseClient'
 import { TripDetailsView } from '@/components/TripDetailsView'
 import { Loader2, AlertCircle } from 'lucide-react'
 import Image from 'next/image'
+import type { AppProfile, TripRecord } from '@/lib/types'
 
 export default function SharedTripPage() {
   const params = useParams();
-  const [trip, setTrip] = useState<any>(null);
-  const [creatorProfile, setCreatorProfile] = useState<any>(null); // State לפרופיל היוצר
+  const [trip, setTrip] = useState<TripRecord | null>(null);
+  const [creatorProfile, setCreatorProfile] = useState<AppProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,8 +23,9 @@ export default function SharedTripPage() {
           // 1. שליפת הטיול
           const { data: tripData, error: tripError } = await supabase
             .from('trips')
-            .select('*') // שולף הכל כולל user_id
+            .select('id, user_id, name, branch, coordinator_name, start_date, status, details')
             .eq('id', params.id)
+            .eq('status', 'approved')
             .single();
 
           if (tripError || !tripData) {
@@ -38,7 +40,7 @@ export default function SharedTripPage() {
           if (tripData.user_id) {
               const { data: profileData } = await supabase
                   .from('profiles')
-                  .select('*')
+                  .select('id, full_name, email, phone, avatar_url, role, department')
                   .eq('id', tripData.user_id)
                   .single();
               
@@ -96,7 +98,7 @@ export default function SharedTripPage() {
         </div>
 
         <footer className="mt-12 text-center text-xs text-gray-400 font-medium pb-8">
-            © ארגון נוער חב"ד | מערכת הטיולים
+            © ארגון נוער חב״ד | מערכת הטיולים
         </footer>
     </div>
   );

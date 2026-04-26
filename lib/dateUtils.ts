@@ -47,7 +47,7 @@ export const formatHebrewDateRange = (startStr: string, endStr: string) => {
         // אחרת: "ח' שבט – ג' אדר תשפד" (פורמט מלא)
         return `${startFull} – ${endFull}`;
 
-    } catch (e) {
+    } catch {
         return '';
     }
 };
@@ -63,7 +63,7 @@ export const getMonthNameHebrew = (dateString: string) => {
             return parts[1]; // החלק השני הוא בדרך כלל החודש (למשל "ג' אדר תשפד")
         }
         return '';
-    } catch (e) {
+    } catch {
         return '';
     }
 };
@@ -121,7 +121,7 @@ export const formatHebrewYear = (dateString: string) => {
         const date = new Date(dateString);
         const hDate = new HDate(date);
         return gematriya(hDate.getFullYear());
-    } catch (e) {
+    } catch {
         return '';
     }
 };

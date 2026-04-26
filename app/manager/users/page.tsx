@@ -7,9 +7,16 @@ import { Loader2, Shield, User, MapPin, CheckCircle, XCircle, ChevronDown, Chevr
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { useRouter } from 'next/navigation'
+import { isManagerUser } from '@/lib/auth'
 
 // ייבוא Hook
 import { useUser } from '@/hooks/useUser'
+
+type ManagedUser = {
+  id: string;
+  email: string;
+  raw_user_meta_data: Record<string, string>;
+};
 
 export default function UsersManagement() {
   const router = useRouter();
@@ -18,7 +25,7 @@ export default function UsersManagement() {
   const { user, profile, loading: userLoading } = useUser('/');
 
   const [loadingUsers, setLoadingUsers] = useState(true);
-  const [users, setUsers] = useState<any[]>([]);
+  const [users, setUsers] = useState<ManagedUser[]>([]);
   const [filter, setFilter] = useState('pending');
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
 
@@ -41,15 +48,17 @@ export default function UsersManagement() {
 
         // בדיקת הרשאות (רק למנהלים מורשים)
         // אפשר להוסיף כאן לוגיקה יותר מחמירה אם צריך
-        const isManager = profile?.role === 'admin' || profile?.role === 'safety_admin' || user.user_metadata?.department === 'בטיחות ומפעלים';
+        const isManager = isManagerUser(user, profile);
         
         if (profile && !isManager) {
              router.push('/dashboard');
              return;
         }
 
-        const { data } = await supabase.from('users_management_view').select('*');
-        if (data) setUsers(data);
+        const { data } = await supabase
+          .from('users_management_view')
+          .select('id, email, raw_user_meta_data');
+        if (data) setUsers(data as ManagedUser[]);
         setLoadingUsers(false);
     };
 

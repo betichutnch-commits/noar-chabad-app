@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabaseClient';
 import Link from 'next/link';
 import { useUser } from '@/hooks/useUser';
 
-const DEPT_LOGOS: any = {
+const DEPT_LOGOS: Record<string, string> = {
     'בת מלך': '/logos/bat-melech.png',
     'בנות חב״ד': '/logos/bnos-chabad.png',
     'הפנסאים': '/logos/hapanasim.png',
@@ -21,7 +21,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { user } = useUser();
   
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [unreadNotifications, setUnreadNotifications] = useState<any[]>([]);
+  const [unreadNotifications, setUnreadNotifications] = useState<Array<{ id: string; title: string }>>([]);
   const [isBellOpen, setIsBellOpen] = useState(false);
 
   // נתונים נגזרים

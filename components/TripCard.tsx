@@ -8,15 +8,16 @@ import {
 } from 'lucide-react';
 import { CATEGORY_STYLES } from '@/lib/constants';
 import { formatHebrewDateRange } from '@/lib/dateUtils';
+import type { TripRecord } from '@/lib/types';
 
 interface TripCardProps {
-    trip: any;
+    trip: TripRecord & { details?: Record<string, unknown>; department?: string | null };
     onDeleteDraft?: (id: string) => void;
     onCancelTrip?: (id: string) => void;
 }
 
 const getStatusConfig = (status: string) => {
-    const config: any = {
+    const config: Record<string, { text: string; bg: string; textCol: string; icon: React.ElementType }> = {
         approved: { text: 'מאושר', bg: 'bg-green-100', textCol: 'text-green-700', icon: CheckCircle },
         pending: { text: 'ממתין', bg: 'bg-amber-100', textCol: 'text-amber-700', icon: Clock },
         rejected: { text: 'לא אושר', bg: 'bg-red-100', textCol: 'text-red-700', icon: AlertTriangle },
@@ -88,17 +89,18 @@ const getMobileDateString = (startStr: string, endStr: string) => {
 
 export const TripCard = ({ trip, onDeleteDraft, onCancelTrip }: TripCardProps) => {
     const router = useRouter();
-    const d = trip.details || {};
-    const timeline = d.timeline || [];
+    const d = (trip.details || {}) as Record<string, unknown>;
+    const timeline = (d.timeline as Array<Record<string, unknown>> | undefined) || [];
     const status = getStatusConfig(trip.status);
     const StatusIcon = status.icon;
     const isDraft = trip.status === 'draft';
     const isPast = new Date(trip.start_date) < new Date(new Date().setHours(0,0,0,0));
     const isCancelled = trip.status === 'cancelled';
     
-    const smartDate = getSmartDateDisplay(trip.start_date, d.endDate);
-    const mobileDateString = getMobileDateString(trip.start_date, d.endDate);
-    const dateRangeHeb = formatHebrewDateRange(trip.start_date, d.endDate);
+    const endDate = typeof d.endDate === 'string' ? d.endDate : trip.start_date || '';
+    const smartDate = getSmartDateDisplay(trip.start_date || '', endDate);
+    const mobileDateString = getMobileDateString(trip.start_date || '', endDate);
+    const dateRangeHeb = formatHebrewDateRange(trip.start_date || '', endDate);
 
     const deptName = trip.department || ''; 
     const isFemale = deptName.includes('בת מלך') || deptName.includes('בנות חב"ד') || deptName.includes('בנות חב״ד');
@@ -118,8 +120,8 @@ export const TripCard = ({ trip, onDeleteDraft, onCancelTrip }: TripCardProps) =
             
             {/* === MOBILE ONLY: Header === */}
             <div className="md:hidden flex flex-col w-full">
-                <div className={`w-full py-1.5 px-3 flex items-center justify-center text-white text-xs font-bold ${getRibbonColor(d.tripType)}`}>
-                    {d.tripType}
+                <div className={`w-full py-1.5 px-3 flex items-center justify-center text-white text-xs font-bold ${getRibbonColor(typeof d.tripType === 'string' ? d.tripType : '')}`}>
+                    {typeof d.tripType === 'string' ? d.tripType : ''}
                 </div>
                 <div className="flex justify-between items-center p-3 bg-slate-50 border-b border-gray-100">
                       {/* סטטוס מימין */}
@@ -145,8 +147,8 @@ export const TripCard = ({ trip, onDeleteDraft, onCancelTrip }: TripCardProps) =
                 {status.text}
             </div>
 
-            <div className={`hidden md:flex w-9 shrink-0 items-center justify-center text-white text-[11px] font-bold z-10 ${getRibbonColor(d.tripType)}`}>
-                <span className="rotate-90 whitespace-nowrap tracking-wider drop-shadow-sm">{d.tripType}</span>
+            <div className={`hidden md:flex w-9 shrink-0 items-center justify-center text-white text-[11px] font-bold z-10 ${getRibbonColor(typeof d.tripType === 'string' ? d.tripType : '')}`}>
+                <span className="rotate-90 whitespace-nowrap tracking-wider drop-shadow-sm">{typeof d.tripType === 'string' ? d.tripType : ''}</span>
             </div>
 
             <div className="hidden md:flex w-32 shrink-0 flex-col justify-center items-center text-center p-2 border-l border-dashed border-gray-200 bg-gradient-to-b from-white to-gray-50/50">
@@ -174,11 +176,11 @@ export const TripCard = ({ trip, onDeleteDraft, onCancelTrip }: TripCardProps) =
                     
                     <div className="flex flex-wrap items-center gap-2">
                         <span className="bg-gray-50 text-gray-600 px-2 py-0.5 rounded text-[10px] font-bold border border-gray-200 whitespace-nowrap">
-                            {d.totalTravelers || 0} {participantsLabel}
+                            {(typeof d.totalTravelers === 'string' || typeof d.totalTravelers === 'number') ? d.totalTravelers : 0} {participantsLabel}
                         </span>
-                        {(d.gradeFrom || d.gradeTo) && (
+                        {(typeof d.gradeFrom === 'string' || typeof d.gradeTo === 'string') && (
                             <span className="bg-gray-50 text-gray-600 px-2 py-0.5 rounded text-[10px] font-bold border border-gray-200 whitespace-nowrap">
-                                כיתות {d.gradeFrom}-{d.gradeTo}
+                                כיתות {String(d.gradeFrom || '')}-{String(d.gradeTo || '')}
                             </span>
                         )}
                     </div>
@@ -190,25 +192,26 @@ export const TripCard = ({ trip, onDeleteDraft, onCancelTrip }: TripCardProps) =
 
                     <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-hide px-1 md:px-0 w-full items-stretch">
                         {timeline.length === 0 ? (
-                            <div className="text-xs text-gray-400 italic p-2 w-full">טרם הוזן לו"ז</div>
+                            <div className="text-xs text-gray-400 italic p-2 w-full">טרם הוזן לו״ז</div>
                         ) : (
-                            timeline.map((item: any, i: number) => {
-                                const catStyle = CATEGORY_STYLES[item.category] || CATEGORY_STYLES.other;
+                            timeline.map((item, i: number) => {
+                                const category = typeof item.category === 'string' ? item.category : 'other';
+                                const catStyle = CATEGORY_STYLES[category] || CATEGORY_STYLES.other;
                                 const Icon = catStyle.icon;
                                 
-                                let titleText = item.finalSubCategory || catStyle.label;
-                                let subText = item.finalLocation;
+                                let titleText = typeof item.finalSubCategory === 'string' ? item.finalSubCategory : catStyle.label;
+                                let subText = typeof item.finalLocation === 'string' ? item.finalLocation : '';
 
-                                if (item.category === 'sleeping') {
+                                if (category === 'sleeping') {
                                     if (item.subCategory === 'לינת מבנה' || titleText === 'לינת מבנה') {
                                         titleText = 'לינת מבנה';
-                                        const placeName = item.otherDetail || '';
-                                        const placeCity = item.finalLocation || '';
+                                        const placeName = typeof item.otherDetail === 'string' ? item.otherDetail : '';
+                                        const placeCity = typeof item.finalLocation === 'string' ? item.finalLocation : '';
                                         if (placeName && placeCity) subText = `${placeName} - ${placeCity}`;
                                         else subText = placeName || placeCity;
                                     } else {
-                                         titleText = item.subCategory || 'לינה';
-                                         subText = item.finalLocation;
+                                         titleText = typeof item.subCategory === 'string' ? item.subCategory : 'לינה';
+                                         subText = typeof item.finalLocation === 'string' ? item.finalLocation : '';
                                     }
                                 }
                                 

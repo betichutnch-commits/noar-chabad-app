@@ -41,8 +41,16 @@ export const DEPARTMENTS_CONFIG: Record<string, { color: string; gender: 'male' 
   }
 };
 
+type TripLogicEntry = {
+  nameLabel: string;
+  namePlaceholder: string;
+  timelineTitle: string;
+  staffLabel: string;
+  minRows: number;
+};
+
 // --- לוגיקה והגדרות סוגי טיולים ---
-export const TRIP_LOGIC: any = {
+export const TRIP_LOGIC: Record<string, TripLogicEntry> = {
     "טיול מחוץ לסניף": { nameLabel: "שם הטיול", namePlaceholder: "לדוגמה: טיול לצפון", timelineTitle: "פירוט הטיול", staffLabel: "צוות משתתף בטיול", minRows: 2 },
     "כנס/אירוע מחוץ לסניף": { nameLabel: "שם הפעילות", namePlaceholder: "לדוגמה: כנס סיום שנה", timelineTitle: "פירוט האירוע", staffLabel: "צוות משתתף בפעילות", minRows: 2 },
     "פעילות לא שגרתית בסניף": { nameLabel: "שם הפעילות", namePlaceholder: 'לדוגמה: התוועדות יו"ד שבט', timelineTitle: "פירוט הפעילות", staffLabel: "צוות משתתף בפעילות", minRows: 1 },
@@ -59,7 +67,7 @@ export const TRIP_TYPES_CONFIG = [
 ];
 
 // --- קטגוריות לפעילויות ---
-export const CATEGORIES: any = { 
+export const CATEGORIES: Record<string, { label: string; icon: typeof Bus; color?: string; options: Array<{ label: string; license: boolean }> }> = { 
   transport: { label: 'התניידות', icon: Bus, options: [{ label: 'הליכה ביום', license: false }, { label: 'הליכה בלילה', license: false }, { label: 'נסיעה מאורגנת', license: false }, { label: 'תחבורה ציבורית', license: false }, { label: 'רכבת', license: false }, { label: 'רכבים פרטיים', license: false }, { label: 'אופניים', license: true }, { label: 'ג׳יפים', license: true }, { label: 'אחר', license: false }] }, 
   hiking: { label: 'מסלול בטבע', icon: Navigation, options: [{ label: 'מסלול יום', license: false }, { label: 'מסלול לילה', license: false }, { label: 'טיול ג׳יפים', license: true }, { label: 'אחר', license: false }] }, 
   attraction: { label: 'אטרקציה', icon: Ticket, options: [{ label: 'פארק מים', license: true }, { label: 'קיאקים/רפטינג', license: true }, { label: 'שייט', license: true }, { label: 'בריכה', license: true }, { label: 'גלישה/סאפ', license: true }, { label: 'פארק חבלים', license: true }, { label: 'קיר טיפוס', license: true }, { label: 'טרקטורונים', license: true }, { label: 'פיינטבול', license: true }, { label: 'לונה פארק', license: true }, { label: 'קארטינג', license: true }, { label: 'מתקנים מתנפחים', license: true }, { label: 'איי ג\'אמפ', license: true }, { label: 'לייזר טאג', license: true }, { label: 'שייט טורנדו', license: true }, { label: 'מוזיאון', license: false }, { label: 'מרכז מבקרים', license: false }, { label: 'אתר מורשת', license: false }, { label: 'קבר צדיק', license: false }, { label: 'אחר', license: false }] }, 
@@ -71,7 +79,7 @@ export const CATEGORIES: any = {
 
 export const DEFAULT_STYLE = { icon: HelpCircle, label: 'כללי', pastelBg: 'bg-gray-100', darkText: 'text-gray-600', border: 'border-gray-200' };
 
-export const CATEGORY_STYLES: any = { 
+export const CATEGORY_STYLES: Record<string, { icon: typeof Bus; label: string; pastelBg: string; darkText: string; border: string }> = { 
     transport: { icon: Bus, label: 'התניידות', pastelBg: 'bg-[#E3F2FD]', darkText: 'text-[#1565C0]', border: 'border-[#BBDEFB]' }, 
     hiking: { icon: Navigation, label: 'מסלול בטבע', pastelBg: 'bg-[#E8F5E9]', darkText: 'text-[#2E7D32]', border: 'border-[#C8E6C9]' }, 
     attraction: { icon: Ticket, label: 'אטרקציה', pastelBg: 'bg-[#FCE4EC]', darkText: 'text-[#C2185B]', border: 'border-[#F8BBD0]' }, 
@@ -88,7 +96,7 @@ export const getColorHex = (colorName: string) => {
     // אם כבר קיבלנו קוד צבע
     if (colorName.startsWith('#')) return colorName;
 
-    const map: any = { 
+    const map: Record<string, string> = { 
         blue: '#00BCD4', 
         emerald: '#8BC34A', 
         pink: '#E91E63', 

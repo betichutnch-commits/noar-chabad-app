@@ -4,6 +4,10 @@ import { z } from 'zod';
 const idValidator = z.string().regex(/^\d{9}$/, "תעודת זהות חייבת להכיל 9 ספרות בדיוק");
 const phoneValidator = z.string().min(9, "מספר טלפון לא תקין (מינימום 9 ספרות)");
 const requiredString = (msg: string) => z.string().min(1, msg);
+const optionalNumberish = z
+  .union([z.string(), z.number()])
+  .optional()
+  .transform((value) => (value === undefined || value === null ? undefined : String(value)));
 
 // ---------------------------------------------------------
 // 1. חוקים לדף כניסה והרשמה (Login / Register)
@@ -45,9 +49,9 @@ export const profileSchema = z.object({
     nickname: z.string().optional(),
     fullNameAndMother: z.string().optional(),
     branchAddress: z.string().optional(),
-    startYear: z.any().optional(), // מקבל מספר או מחרוזת
-    studentCount: z.any().optional(),
-    staffCount: z.any().optional(),
+    startYear: optionalNumberish,
+    studentCount: optionalNumberish,
+    staffCount: optionalNumberish,
     additionalStaff: z.string().optional(),
 });
 

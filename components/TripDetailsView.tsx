@@ -6,13 +6,61 @@ import {
   Printer, Share2, Users, MapPin, Tent, Info, 
   User, CreditCard, Hash, Phone, Mail, 
   Briefcase, Edit2, Trash2, Plus, X, Paperclip, ShieldCheck,
-  ArrowRight
+  ArrowRight, Loader2 // <--- הוספנו את זה כאן
 } from 'lucide-react'
 import { TRIP_TYPES_CONFIG, CATEGORY_STYLES } from '@/lib/constants'
 import { formatHebrewDateRange, formatHebrewDate } from '@/lib/dateUtils'
-import { Button } from '@/components/ui/Button' 
+import { useSignedUrl } from '@/hooks/useSignedUrl'; // <--- זה חייב להיות למעלה
+import type { AppProfile, TripRecord } from '@/lib/types';
 
-// ... פונקציות עזר (ללא שינוי) ...
+// --- רכיב עזר פנימי להצגת קובץ מאובטח (מוגדר מחוץ לקומפוננטה הראשית) ---
+type FileRef = { path?: string; url?: string };
+type TimelineItem = {
+    category?: string;
+    date?: string;
+    finalSubCategory?: string;
+    finalLocation?: string;
+    otherDetail?: string;
+    details?: string;
+    requiresLicense?: boolean;
+    licenseFile?: FileRef | null;
+    insuranceFile?: FileRef | null;
+};
+type SecondaryStaff = { name?: string; role?: string; idNumber?: string; phone?: string; email?: string };
+type TripDetails = {
+    tripType?: string;
+    timeline?: TimelineItem[];
+    endDate?: string;
+    startTime?: string;
+    endTime?: string;
+    gradeFrom?: string;
+    gradeTo?: string;
+    chanichimCount?: string;
+    staffAges?: string[];
+    staffOther?: string;
+    totalTravelers?: string;
+    coordPhone?: string;
+    phone?: string;
+    secondaryStaffObj?: SecondaryStaff | null;
+    generalComments?: string;
+};
+type NewStaffData = { name: string; role: string; idNumber: string; phone: string; email: string };
+
+const SecureFileLink = ({ file, label, icon: Icon }: { file: FileRef; label: string; icon: React.ElementType }) => {
+    // תמיכה לאחור: אם נשמר url נשתמש בו, אחרת נשתמש ב-path
+    const path = file.path || (file.url?.startsWith('http') ? file.url : null);
+    const signedUrl = useSignedUrl(path);
+
+    if (!signedUrl) return <span className="text-gray-400 text-[10px] flex items-center gap-1"><Loader2 size={10} className="animate-spin"/> טוען...</span>;
+
+    return (
+        <a href={signedUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[10px] font-bold text-green-700 bg-green-50 px-2 py-1 rounded border border-green-200 hover:bg-green-100">
+            <Icon size={12}/> {label}
+        </a>
+    );
+};
+
+// ... פונקציות עזר ...
 const formatDateShortYear = (dateStr: string) => {
     if (!dateStr) return '';
     const date = new Date(dateStr);
@@ -59,8 +107,8 @@ const DateBox = ({ dateStr }: { dateStr: string }) => {
 };
 
 interface TripDetailsViewProps {
-    trip: any;
-    profile?: any;
+    trip: TripRecord & { details?: Record<string, unknown> | null; department?: string | null };
+    profile?: (AppProfile & { branch?: string | null; branch_name?: string | null }) | null;
     isEditable: boolean;
     isPublic: boolean;
     onBack?: () => void;
@@ -71,8 +119,8 @@ interface TripDetailsViewProps {
     onSaveStaff?: () => void;
     isAddingStaff?: boolean;
     setIsAddingStaff?: (val: boolean) => void;
-    newStaffData?: any;
-    setNewStaffData?: (data: any) => void;
+    newStaffData?: NewStaffData;
+    setNewStaffData?: (data: NewStaffData) => void;
     isVerifying?: boolean;
 }
 
@@ -82,7 +130,7 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
     isAddingStaff, setIsAddingStaff, newStaffData, setNewStaffData, isVerifying
 }) => {
     
-    const d = trip.details || {};
+    const d = (trip.details ?? {}) as TripDetails;
     const timeline = d.timeline || [];
     const typeConfig = TRIP_TYPES_CONFIG.find(t => t.id === d.tripType) || TRIP_TYPES_CONFIG[4];
     const isPast = new Date(trip.start_date) < new Date(new Date().setHours(0,0,0,0));
@@ -99,44 +147,40 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
     const secondStaffTitle = isFemale ? 'אחראית נוספת' : 'אחראי נוסף';
     const namePlaceholder = "שם מלא כפי שמופיע בתעודת זהות";
 
-    // --- לוגיקה חכמה לתצוגת תפקיד (עם Fallback לפרופיל) ---
     // --- לוגיקה משופרת לתצוגת תפקיד (Role Display) ---
-  const getCoordinatorRoleDisplay = () => {
-      const branch = trip.branch || profile?.branch || profile?.branch_name || '';
-      const department = trip.department || profile?.department || '';
-      
-      // בדיקה אם זה מטה - לפי שם הסניף או תפקיד בפרופיל
-      const isBranchHQ = branch === 'מטה' || branch === 'הנהלה';
-      // בדיקה אם הפרופיל (של היוצר) הוא מטה - רלוונטי בדפי שיתוף או בצפייה עצמית
-      const isProfileHQ = profile?.role === 'dept_staff' || profile?.role === 'safety_admin' || profile?.role === 'admin';
+    const getCoordinatorRoleDisplay = () => {
+        const branch = trip.branch || profile?.branch || profile?.branch_name || '';
+        const department = trip.department || profile?.department || '';
+        
+        // בדיקה אם זה מטה
+        const isBranchHQ = branch === 'מטה' || branch === 'הנהלה';
+        const isProfileHQ = profile?.role === 'dept_staff' || profile?.role === 'safety_admin' || profile?.role === 'admin';
 
-      // אם זה מוגדר כמטה, או שזה איש מטה שלא הגדיר סניף ספציפי
-      if (isBranchHQ || (isProfileHQ && (!branch || branch === 'מטה'))) {
-          return `צוות מטה | ${department}`;
-      }
+        if (isBranchHQ || (isProfileHQ && (!branch || branch === 'מטה'))) {
+            return `צוות מטה | ${department}`;
+        }
 
-      // חישוב תואר מגדרי לרכזים
-      let roleTitle = 'רכז/ת סניף';
-      const deptCheck = department.trim();
-      const maleDepts = ['הפנסאים', 'פנסאים', 'התמים', 'תמים', 'בני חב"ד', 'בני חב״ד'];
-      const femaleDepts = ['בת מלך', 'בנות חב"ד', 'בנות חב״ד'];
+        let roleTitle = 'רכז/ת סניף';
+        const deptCheck = department.trim();
+        const maleDepts = ['הפנסאים', 'פנסאים', 'התמים', 'תמים', 'בני חב"ד', 'בני חב״ד'];
+        const femaleDepts = ['בת מלך', 'בנות חב"ד', 'בנות חב״ד'];
 
-      if (maleDepts.some(d => deptCheck.includes(d))) roleTitle = 'רכז סניף';
-      else if (femaleDepts.some(d => deptCheck.includes(d))) roleTitle = 'רכזת סניף';
+        if (maleDepts.some(d => deptCheck.includes(d))) roleTitle = 'רכז סניף';
+        else if (femaleDepts.some(d => deptCheck.includes(d))) roleTitle = 'רכזת סניף';
 
-      if (!branch && !department) return '';
+        if (!branch && !department) return '';
 
-      return `${roleTitle} ${branch} | ${department}`;
-  };
+        return `${roleTitle} ${branch} | ${department}`;
+    };
 
     const isTripType = d.tripType === 'טיול מחוץ לסניף';
     const editButtonText = isTripType ? 'עריכת פרטי הטיול' : 'עריכת פרטי הפעילות';
     const cancelButtonText = isTripType ? 'ביטול הטיול' : 'ביטול הפעילות';
-    const missingDocsCount = timeline.filter((t: any) => t.requiresLicense && (!t.licenseFile || !t.insuranceFile)).length;
-    const durationDays = calculateDuration(trip.start_date, d.endDate);
+    const missingDocsCount = timeline.filter((t) => t.requiresLicense && (!t.licenseFile || !t.insuranceFile)).length;
+    const durationDays = calculateDuration(trip.start_date || '', d.endDate || '');
 
     const getStatusBadge = (status: string) => {
-        const styles: any = {
+        const styles: Record<string, { text: string; bg: string; textCol: string; icon: React.ElementType }> = {
             approved: { text: 'מאושר', bg: 'bg-green-100', textCol: 'text-green-700', icon: CheckCircle },
             pending: { text: 'ממתין לאישור', bg: 'bg-orange-100', textCol: 'text-orange-700', icon: Clock },
             rejected: { text: 'לא אושר', bg: 'bg-red-100', textCol: 'text-red-700', icon: AlertTriangle },
@@ -157,7 +201,7 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
         const origin = typeof window !== 'undefined' && window.location.origin ? window.location.origin : '';
         const publicUrl = `${origin}/share/trip/${trip.id}`;
         if (navigator.share) {
-            try { await navigator.share({ title: trip.name, text: trip.name, url: publicUrl }); } catch (err) {}
+            try { await navigator.share({ title: trip.name, text: trip.name, url: publicUrl }); } catch {}
         } else {
             navigator.clipboard.writeText(publicUrl);
             alert('הקישור הציבורי הועתק ללוח!');
@@ -165,7 +209,8 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
     };
 
     const showSecondaryStaffCard = d.secondaryStaffObj && !isAddingStaff;
-    const showAddStaffForm = isEditable && !isPublic && isAddingStaff && setNewStaffData && setIsAddingStaff;
+    const secondaryStaff = d.secondaryStaffObj;
+    const showAddStaffForm = isEditable && !isPublic && isAddingStaff && newStaffData && setNewStaffData && setIsAddingStaff;
     const showAddButton = isEditable && !isPublic && !isAddingStaff && !d.secondaryStaffObj && setIsAddingStaff;
 
     return (
@@ -207,33 +252,31 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                                 <div className="w-px h-10 bg-gray-300 mx-1 md:mx-2"></div>
                                 <div className="flex flex-col items-center flex-1">
                                     <span className="text-[10px] text-gray-400 font-bold mb-1 uppercase tracking-wide">סיום</span>
-                                    <span className="text-base md:text-lg font-black text-gray-800 leading-none mb-1">{formatDateShortYear(d.endDate)}</span>
+                                    <span className="text-base md:text-lg font-black text-gray-800 leading-none mb-1">{formatDateShortYear(d.endDate || '')}</span>
                                     <span className="text-[10px] md:text-[11px] font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-full">{d.endTime || '--:--'}</span>
                                 </div>
                             </div>
                             <div className="border-t border-gray-200 pt-2 flex items-center justify-center gap-2">
-                                <span className="text-[10px] md:text-[11px] text-gray-500 font-bold">{formatHebrewDateRange(trip.start_date, d.endDate)}</span>
-                                <span className="text-[10px] md:text-[11px] font-black text-gray-800 border-r border-gray-300 pr-2">סה"כ {durationDays} ימים</span>
+                                <span className="text-[10px] md:text-[11px] text-gray-500 font-bold">{formatHebrewDateRange(trip.start_date || '', d.endDate || '')}</span>
+                                <span className="text-[10px] md:text-[11px] font-black text-gray-800 border-r border-gray-300 pr-2">סה״כ {durationDays} ימים</span>
                             </div>
                         </div>
                     </div>
                     <div className="text-center md:text-right px-2 flex flex-col justify-center pt-2 md:pt-0"><span className="text-xs font-bold text-gray-400 block mb-1">שכבות</span><div className="font-black text-gray-800 text-lg md:text-xl">כיתות {d.gradeFrom}-{d.gradeTo}</div></div>
-                    <div className="text-center md:text-right px-2 flex flex-col justify-center pt-2 md:pt-0"><span className="text-xs font-bold text-gray-400 block mb-1">סה"כ {traineesLabel}</span><div className="font-black text-gray-800 text-lg md:text-xl flex items-center gap-2 justify-center md:justify-start"><Users size={18} className="text-[#00BCD4] shrink-0"/>{d.chanichimCount || '0'}</div></div>
+                    <div className="text-center md:text-right px-2 flex flex-col justify-center pt-2 md:pt-0"><span className="text-xs font-bold text-gray-400 block mb-1">סה״כ {traineesLabel}</span><div className="font-black text-gray-800 text-lg md:text-xl flex items-center gap-2 justify-center md:justify-start"><Users size={18} className="text-[#00BCD4] shrink-0"/>{d.chanichimCount || '0'}</div></div>
                     <div className="text-center md:text-right px-2 md:col-span-1 flex flex-col justify-center pt-2 md:pt-0">
-    <span className="text-xs font-bold text-gray-400 block mb-1">הרכב צוות</span>
-    <div className="flex flex-wrap gap-1 justify-center md:justify-start">
-        {d.staffAges?.map((s: string, i: number) => {
-            // תיקון: אם הערך הוא 'אחר' ויש פירוט ב-staffOther, מציגים את הפירוט
-            const displayText = (s === 'אחר' || s === 'אחר...') && d.staffOther ? d.staffOther : s;
-            
-            return (
-                <span key={i} className="text-[10px] font-bold bg-gray-50 text-gray-500 px-1.5 py-0.5 rounded border border-gray-100 truncate max-w-full">
-                    {displayText}
-                </span>
-            );
-        })}
-    </div>
-</div>
+                        <span className="text-xs font-bold text-gray-400 block mb-1">הרכב צוות</span>
+                        <div className="flex flex-wrap gap-1 justify-center md:justify-start">
+                            {d.staffAges?.map((s: string, i: number) => {
+                                const displayText = (s === 'אחר' || s === 'אחר...') && d.staffOther ? d.staffOther : s;
+                                return (
+                                    <span key={i} className="text-[10px] font-bold bg-gray-50 text-gray-500 px-1.5 py-0.5 rounded border border-gray-100 truncate max-w-full">
+                                        {displayText}
+                                    </span>
+                                );
+                            })}
+                        </div>
+                    </div>
                     <div className="text-center md:text-right px-2 flex flex-col justify-center pt-2 md:pt-0"><span className="text-xs font-bold text-gray-400 block mb-1">{participantsTitle}</span><div className="font-black text-gray-800 text-lg md:text-xl flex items-center gap-2 justify-center md:justify-start"><Users size={18} className="text-[#00BCD4] shrink-0"/>{d.totalTravelers}</div><div className="text-[10px] text-gray-400 mt-0.5">כולל צוות</div></div>
                     
                     <div className="col-span-2 md:col-span-1 text-center md:text-right pr-0 md:pr-4 flex flex-row md:flex-col justify-center gap-2 print:hidden pt-2 md:pt-0">
@@ -246,14 +289,14 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* --- Timeline --- */}
                 <div className="lg:col-span-2 space-y-6">
-                    <div className="flex items-center gap-2 mb-2"><Clock className="text-gray-400" size={20}/><h2 className="text-xl font-bold text-gray-800">לו"ז הפעילות</h2></div>
+                    <div className="flex items-center gap-2 mb-2"><Clock className="text-gray-400" size={20}/><h2 className="text-xl font-bold text-gray-800">לו״ז הפעילות</h2></div>
                     <div className="relative">
                         <div className="absolute top-4 bottom-4 right-[27px] w-[2px] bg-gray-200 z-0"></div>
                         <div className="space-y-4 relative z-10">
-                            {timeline.map((item: any, i: number) => {
-                                const catStyle = CATEGORY_STYLES[item.category] || CATEGORY_STYLES.other;
+                            {timeline.map((item, i: number) => {
+                                const catStyle = CATEGORY_STYLES[item.category || 'other'] || CATEGORY_STYLES.other;
                                 const Icon = catStyle.icon;
-                                const borderClass = getCategoryBorder(item.category);
+                                const borderClass = getCategoryBorder(item.category || '');
                                 return (
                                     <div key={i} className="flex gap-3 md:gap-4 items-stretch">
                                         <div className="shrink-0 flex flex-col items-center w-14 pt-1 gap-1">
@@ -274,12 +317,21 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                                                     )}
                                                     {item.details && <div className="text-xs text-gray-500 leading-relaxed pl-2 border-r-2 border-gray-100 pr-2">{item.details}</div>}
                                                 </div>
+                                                
+                                                {/* --- תיקון: שימוש ב-SecureFileLink לקבצים --- */}
                                                 {item.requiresLicense && (
                                                     <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t border-gray-100">
-                                                        {item.licenseFile ? <a href={item.licenseFile.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[10px] font-bold text-green-700 bg-green-50 px-2 py-1 rounded border border-green-200 hover:bg-green-100"><ShieldCheck size={12}/> רישוי עסק</a> : <span className="flex items-center gap-1 text-[10px] font-bold text-red-600 bg-red-50 px-2 py-1 rounded border border-red-200"><AlertTriangle size={12}/> חסר רישוי</span>}
-                                                        {item.insuranceFile ? <a href={item.insuranceFile.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[10px] font-bold text-green-700 bg-green-50 px-2 py-1 rounded border border-green-200 hover:bg-green-100"><ShieldCheck size={12}/> ביטוח</a> : <span className="flex items-center gap-1 text-[10px] font-bold text-red-600 bg-red-50 px-2 py-1 rounded border border-red-200"><AlertTriangle size={12}/> חסר ביטוח</span>}
+                                                        {item.licenseFile ? 
+                                                            <SecureFileLink file={item.licenseFile} label="רישוי עסק" icon={ShieldCheck} /> 
+                                                            : <span className="flex items-center gap-1 text-[10px] font-bold text-red-600 bg-red-50 px-2 py-1 rounded border border-red-200"><AlertTriangle size={12}/> חסר רישוי</span>
+                                                        }
+                                                        {item.insuranceFile ? 
+                                                            <SecureFileLink file={item.insuranceFile} label="ביטוח" icon={ShieldCheck} /> 
+                                                            : <span className="flex items-center gap-1 text-[10px] font-bold text-red-600 bg-red-50 px-2 py-1 rounded border border-red-200"><AlertTriangle size={12}/> חסר ביטוח</span>
+                                                        }
                                                     </div>
                                                 )}
+
                                             </div>
                                         </div>
                                     </div>
@@ -298,7 +350,6 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                                 <User size={16} className="text-gray-400"/>
                                 <div>
                                     <span className="block font-black text-[#00BCD4] text-lg">{trip.coordinator_name}</span>
-                                    {/* התיקון: שימוש בפונקציה החדשה */}
                                     <span className="text-xs font-bold text-gray-500">{getCoordinatorRoleDisplay()}</span>
                                 </div>
                             </div>
@@ -306,7 +357,6 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                             {(!isPublic && profile?.official_name) && (<div className="flex items-center gap-3 p-3 bg-gray-50 border-b border-white"><CreditCard size={16} className="text-gray-400"/><div><span className="text-[10px] text-gray-400 block font-bold">שם מלא (ת.ז)</span><span className="block font-bold text-gray-700">{profile.official_name} {profile.last_name}</span></div></div>)}
                             {(!isPublic && profile?.identity_number) && (<div className="flex items-center gap-3 p-3 bg-gray-50 border-b border-white"><Hash size={16} className="text-gray-400"/><div><span className="text-[10px] text-gray-400 block font-bold">תעודת זהות</span><span className="block font-bold text-gray-800">{profile.identity_number}</span></div></div>)}
                             
-                            {/* תיקון: שימוש ב-d.coordPhone ו fallback לפרופיל */}
                             <div className="flex items-center gap-3 p-3 bg-gray-50 border-b border-white"><Phone size={16} className="text-gray-400"/><div><span className="text-[10px] text-gray-400 block font-bold">טלפון</span><span className="block font-bold text-gray-800">{d.coordPhone || d.phone || profile?.phone || '-'}</span></div></div>
                             
                             {!isPublic && (
@@ -314,7 +364,7 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                             )}
                         </div>
 
-                        {showSecondaryStaffCard && (
+                        {showSecondaryStaffCard && secondaryStaff && (
                             <div className="mt-4 pt-4 border-t border-gray-100 group">
                                 <div className="flex justify-between items-center mb-2">
                                     <div className="text-[10px] font-bold text-purple-600 uppercase">{secondStaffTitle}</div>
@@ -326,11 +376,11 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                                     )}
                                 </div>
                                 <div className="bg-purple-50 p-3 rounded-xl border border-purple-100 text-sm">
-                                    <div className="font-bold text-purple-900 mb-1 flex justify-between">{d.secondaryStaffObj.name}<span className="text-[10px] bg-white/50 px-2 py-0.5 rounded text-purple-500">{d.secondaryStaffObj.role}</span></div>
+                                    <div className="font-bold text-purple-900 mb-1 flex justify-between">{secondaryStaff.name}<span className="text-[10px] bg-white/50 px-2 py-0.5 rounded text-purple-500">{secondaryStaff.role}</span></div>
                                     <div className="mt-2 text-xs text-purple-600 flex flex-col gap-1">
-                                        {!isPublic && <div className="flex items-center gap-1"><Hash size={10}/> {d.secondaryStaffObj.idNumber}</div>}
-                                        <div className="flex items-center gap-1"><Phone size={10}/> {d.secondaryStaffObj.phone}</div>
-                                        {!isPublic && <div className="flex items-center gap-1"><Mail size={10}/> {d.secondaryStaffObj.email}</div>}
+                                        {!isPublic && <div className="flex items-center gap-1"><Hash size={10}/> {secondaryStaff.idNumber}</div>}
+                                        <div className="flex items-center gap-1"><Phone size={10}/> {secondaryStaff.phone}</div>
+                                        {!isPublic && <div className="flex items-center gap-1"><Mail size={10}/> {secondaryStaff.email}</div>}
                                     </div>
                                 </div>
                             </div>
