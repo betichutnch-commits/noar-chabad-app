@@ -34,3 +34,37 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Environment Variables
+
+Create `.env.local` with the required keys:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+```
+
+Notes:
+- Do not commit `.env*` files.
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` is expected to be public client-side, but still manage it through environment variables only.
+
+## Security Baseline
+
+The project includes:
+- Server-side mutation routes under `app/api` for critical write paths.
+- Route protection via `proxy.ts` (Next 16).
+- Supabase security migrations under `supabase/migrations`.
+
+Run the verification script after security migrations:
+- `supabase/migrations/20260426_verify_security_state.sql`
+
+## Quality Gate (Required Before Merge)
+
+```bash
+npm run lint
+npx tsc --noEmit
+npm run build
+npm test
+```
+
+Manual checks are listed in `docs/pre-merge-checklist.md`.
