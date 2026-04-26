@@ -1,0 +1,27 @@
+---
+description: Keep every new feature fast, consistent, and production-ready
+alwaysApply: true
+---
+
+# Feature Delivery Guardrails
+
+For every new task, follow this sequence:
+
+1. Define the smallest shippable scope before coding (avoid broad rewrites).
+2. Reuse existing patterns first:
+   - design tokens from `app/globals.css` and `tailwind.config.ts`
+   - shared UI primitives from `components/ui/*`
+   - existing page/layout patterns before inventing new ones
+3. Keep changes local and incremental to preserve delivery speed.
+4. Avoid hardcoded style values when a token or existing utility exists.
+5. Run validation proportional to impact:
+   - required for substantive UI/logic changes: `lint`, `tsc --noEmit`, `build`, `test`
+6. If a tradeoff is needed, prefer:
+   - consistency over one-off styling
+   - maintainability over short-term hacks
+7. Before final handoff, provide:
+   - what changed
+   - why this approach preserves speed + consistency
+   - verification results
+
+Do not mark work complete if validation fails or if the new UI bypasses the design system without explicit justification.
