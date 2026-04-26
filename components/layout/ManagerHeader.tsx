@@ -151,15 +151,15 @@ export const ManagerHeader = ({ title }: { title: string }) => {
   }, []);
 
   return (
-    <header className="hidden md:flex h-24 sticky top-0 z-50 px-8 items-center justify-between transition-all bg-[#F8F9FA]/90 backdrop-blur-md border-b border-gray-200">
+    <header className="hidden md:flex h-24 sticky top-0 z-50 px-8 items-center justify-between transition-all bg-surface-base/90 backdrop-blur-md border-b border-border-subtle">
       
-      <div><h1 className="text-3xl font-bold text-gray-800 tracking-tight leading-none">{title}</h1></div>
+      <div><h1 className="text-3xl font-bold text-text-primary tracking-tight leading-none">{title}</h1></div>
       
       <div className="flex items-center gap-6 relative">
             
             {/* כפתור משתמשים */}
             <div className="relative">
-                <button aria-label="פתיחת משתמשים ממתינים" onClick={() => { setIsUsersOpen(!isUsersOpen); setIsBellOpen(false); }} className="text-gray-400 hover:text-purple-600 transition-colors relative p-3 bg-white rounded-2xl shadow-sm border border-gray-100 hover:border-purple-200 group">
+                <button aria-label="פתיחת משתמשים ממתינים" onClick={() => { setIsUsersOpen(!isUsersOpen); setIsBellOpen(false); }} className="text-text-muted hover:text-purple-600 transition-colors relative p-3 bg-surface-card rounded-2xl shadow-sm border border-border-subtle hover:border-purple-200 group">
                     <UserPlus size={22} className="group-hover:scale-110 transition-transform"/>
                     {counts.newUsers > 0 && <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-purple-500 rounded-full border-2 border-white animate-pulse"></span>}
                 </button>
@@ -188,13 +188,13 @@ export const ManagerHeader = ({ title }: { title: string }) => {
 
             {/* כפתור הודעות (פעמון) */}
             <div className="relative">
-                <button aria-label="פתיחת הודעות חדשות" onClick={() => { setIsBellOpen(!isBellOpen); setIsUsersOpen(false); }} className="text-gray-400 hover:text-[#00BCD4] transition-colors relative p-3 bg-white rounded-2xl shadow-sm border border-gray-100 hover:border-[#00BCD4] group">
+                <button aria-label="פתיחת הודעות חדשות" onClick={() => { setIsBellOpen(!isBellOpen); setIsUsersOpen(false); }} className="text-text-muted hover:text-brand-cyan transition-colors relative p-3 bg-surface-card rounded-2xl shadow-sm border border-border-subtle hover:border-brand-cyan group">
                     <Bell size={22} className="group-hover:rotate-12 transition-transform" />
-                    {counts.newMessages > 0 && <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-[#E91E63] rounded-full border-2 border-white animate-pulse"></span>}
+                    {counts.newMessages > 0 && <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-brand-pink rounded-full border-2 border-white animate-pulse"></span>}
                 </button>
                 {isBellOpen && (
                     <div className="absolute top-full left-0 mt-4 bg-white rounded-2xl shadow-2xl border border-gray-100 w-[450px] overflow-hidden animate-fadeIn z-[100]">
-                        <div className="bg-[#00BCD4] p-3 flex justify-between items-center text-white"><span className="text-sm font-bold">הודעות חדשות</span><button aria-label="סגירת חלון הודעות" onClick={() => setIsBellOpen(false)}><X size={16}/></button></div>
+                        <div className="bg-brand-cyan p-3 flex justify-between items-center text-white"><span className="text-sm font-bold">הודעות חדשות</span><button aria-label="סגירת חלון הודעות" onClick={() => setIsBellOpen(false)}><X size={16}/></button></div>
                         <div className="max-h-60 overflow-y-auto">
                             {unreadMessagesList.length === 0 ? (
                                 <div className="p-4 text-center text-gray-400 text-xs">אין הודעות חדשות</div>
@@ -221,14 +221,14 @@ export const ManagerHeader = ({ title }: { title: string }) => {
                                                 {secondaryInfo && (
                                                     <>
                                                         <span className="text-gray-300">|</span>
-                                                        <span className="text-[#00BCD4] font-bold">{secondaryInfo}</span>
+                                                        <span className="text-brand-cyan font-bold">{secondaryInfo}</span>
                                                     </>
                                                 )}
                                                 
                                                 {m.category === 'bug' && <span className="mr-auto text-[9px] bg-red-100 text-red-600 px-1.5 rounded-full font-bold">תקלה</span>}
                                             </div>
                                             <div className="flex gap-2 text-xs text-gray-500">
-                                                <Mail size={12} className="text-[#00BCD4] mt-0.5 shrink-0"/>
+                                                <Mail size={12} className="text-brand-cyan mt-0.5 shrink-0"/>
                                                 <span className="line-clamp-1">{m.subject}</span>
                                             </div>
                                         </Link>
@@ -236,7 +236,7 @@ export const ManagerHeader = ({ title }: { title: string }) => {
                                 })
                             )}
                         </div>
-                        <Link href="/manager/inbox" className="block p-2 text-center text-xs font-bold text-[#00BCD4] bg-gray-50 hover:underline">לכל ההודעות</Link>
+                        <Link href="/manager/inbox" className="block p-2 text-center text-xs font-bold text-brand-cyan bg-gray-50 hover:underline">לכל ההודעות</Link>
                     </div>
                 )}
             </div>
@@ -246,10 +246,10 @@ export const ManagerHeader = ({ title }: { title: string }) => {
             {/* פרטי מנהל */}
             <div className="flex items-center gap-4">
                 <div className="text-left hidden lg:block">
-                    <div className="text-lg font-bold text-gray-800 leading-none mb-1">
+                    <div className="text-lg font-bold text-text-primary leading-none mb-1">
                         {managerProfile.full_name}
                     </div>
-                    <div className="text-sm text-[#8BC34A] font-medium text-left">
+                    <div className="text-sm text-brand-green font-medium text-left">
                         מחלקת בטיחות ומפעלים
                     </div>
                 </div>

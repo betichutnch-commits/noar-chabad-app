@@ -483,7 +483,7 @@ function NewTripContent() {
       return '';
   };
 
-  if (userLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
+  if (userLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-brand-cyan" size={40}/></div>;
 
   return (
     <>
@@ -503,8 +503,8 @@ function NewTripContent() {
         {step === 0 && (
             <div className="max-w-md mx-auto">
                 <div className="text-center mb-8">
-                    <h2 className="text-2xl font-black text-gray-800 mb-2">איזו פעילות מתכננים?</h2>
-                    <p className="text-gray-500">בחרו את סוג הפעילות להתחלת התהליך</p>
+                    <h2 className="text-2xl font-black text-text-primary mb-2">איזו פעילות מתכננים?</h2>
+                    <p className="text-text-secondary">בחרו את סוג הפעילות להתחלת התהליך</p>
                 </div>
                 <div className="flex flex-col gap-3">
                     {TRIP_TYPES_CONFIG.map(type => {
@@ -520,7 +520,7 @@ function NewTripContent() {
                                             autoFocus
                                             className="focus:!border-[#E91E63] focus:!ring-0"
                                         />
-                                        <button onClick={submitOtherType} className="bg-[#E91E63] text-white px-4 rounded-xl font-bold text-sm shadow-sm hover:bg-pink-600 transition-colors">המשך</button>
+                                        <button onClick={submitOtherType} className="bg-brand-pink text-white px-4 rounded-xl font-bold text-sm shadow-sm hover:bg-pink-600 transition-colors">המשך</button>
                                     </div>
                                     <button onClick={() => setIsOtherSelected(false)} className="text-xs text-gray-400 mt-2 hover:text-gray-600 underline">ביטול וחזרה</button>
                                 </div>
@@ -539,26 +539,26 @@ function NewTripContent() {
 
         {step === 1 && (
             <>
-                <button onClick={() => setStep(0)} className="flex items-center gap-1 text-gray-400 hover:text-[#00BCD4] mb-4 text-xs font-bold transition-colors">
+                <button onClick={() => setStep(0)} className="flex items-center gap-1 text-text-muted hover:text-brand-cyan mb-4 text-xs font-bold transition-colors">
                     <ArrowRight size={16} /> חזרה לבחירת סוג
                 </button>
 
-                <div className="mb-6 bg-white p-4 rounded-2xl border border-gray-100 flex items-center justify-between shadow-sm">
+                <div className="mb-6 bg-surface-card p-4 rounded-2xl border border-border-subtle flex items-center justify-between shadow-sm">
                     <div className="flex items-center gap-3">
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm ${TRIP_TYPES_CONFIG.find(t => t.id === generalInfo.tripType)?.bg || 'bg-gray-50'}`}>
                             {React.createElement(TRIP_TYPES_CONFIG.find(t => t.id === generalInfo.tripType)?.icon || Flag, { size: 20, className: TRIP_TYPES_CONFIG.find(t => t.id === generalInfo.tripType)?.text })}
                         </div>
                         <div>
-                            <div className="text-xs text-gray-400 font-bold">סוג פעילות נבחר</div>
-                            <div className="font-black text-gray-800 text-lg leading-tight">{generalInfo.tripType === 'אחר' ? generalInfo.tripTypeOther : generalInfo.tripType}</div>
+                            <div className="text-xs text-text-muted font-bold">סוג פעילות נבחר</div>
+                            <div className="font-black text-text-primary text-lg leading-tight">{generalInfo.tripType === 'אחר' ? generalInfo.tripTypeOther : generalInfo.tripType}</div>
                         </div>
                     </div>
-                    <button onClick={() => setStep(0)} className="text-xs font-bold text-[#00BCD4] bg-cyan-50 px-3 py-1.5 rounded-lg hover:bg-cyan-100 transition-colors">שנה</button>
+                    <button onClick={() => setStep(0)} className="text-xs font-bold text-brand-cyan bg-cyan-50 px-3 py-1.5 rounded-lg hover:bg-cyan-100 transition-colors">שנה</button>
                 </div>
 
                 {/* --- פרטים כלליים --- */}
-                <section className="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-visible relative z-20 mb-8 animate-fadeIn">
-                  <div className="bg-[#00BCD4] text-white h-12 flex items-center px-6 font-bold text-lg shadow-sm gap-2 rounded-t-3xl">
+                <section className="bg-surface-card rounded-[32px] shadow-sm border border-border-subtle overflow-visible relative z-20 mb-8 animate-fadeIn">
+                  <div className="bg-brand-cyan text-white h-12 flex items-center px-6 font-bold text-lg shadow-sm gap-2 rounded-t-3xl">
                         <Flag size={20} />
                         <span>פרטים כלליים</span>
                   </div>
@@ -704,13 +704,13 @@ function NewTripContent() {
                   </div>
                 </section>
 
-                <section className="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-visible relative z-30 mb-8 animate-fadeIn">
-                   <div className="bg-[#00BCD4] text-white h-12 flex items-center px-6 font-bold text-lg shadow-sm justify-between rounded-t-3xl">
+                <section className="bg-surface-card rounded-[32px] shadow-sm border border-border-subtle overflow-visible relative z-30 mb-8 animate-fadeIn">
+                   <div className="bg-brand-cyan text-white h-12 flex items-center px-6 font-bold text-lg shadow-sm justify-between rounded-t-3xl">
                        <div className="flex items-center gap-2"><MapPin size={20}/> <span>{currentLogic.timelineTitle}</span></div>
                        <span className="text-xs bg-white/20 px-3 py-1 rounded-full">{timeline.length} שורות</span>
                    </div>
                    
-                   <div className="p-6 space-y-4 bg-gray-50 rounded-b-3xl">
+                   <div className="p-6 space-y-4 bg-surface-muted rounded-b-3xl">
                       {timeline.map((item) => {
                           const catConfig = CATEGORIES[item.category];
                           const CatIcon = catConfig?.icon || Flag;
@@ -794,8 +794,8 @@ function NewTripContent() {
                       })}
 
                       {!isRowsLocked && (
-                        <div className="bg-white p-5 rounded-2xl border-2 !border-[#E91E63] border-dashed shadow-sm animate-fadeIn mt-4 relative z-20">
-                            <div className="absolute -top-3 right-4 bg-white px-2 text-xs font-bold !text-[#E91E63]">הוספת שורה חדשה</div>
+                        <div className="bg-surface-card p-5 rounded-2xl border-2 !border-brand-pink border-dashed shadow-sm animate-fadeIn mt-4 relative z-20">
+                            <div className="absolute -top-3 right-4 bg-surface-card px-2 text-xs font-bold !text-brand-pink">הוספת שורה חדשה</div>
                             <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
                                 <div className="md:col-span-1 w-full">
                                     <label className="text-xs font-bold text-gray-400 mb-1 block">תאריך</label>
@@ -819,7 +819,7 @@ function NewTripContent() {
                                     )}
                                     {showLocationSuggestions && currentLine.locationType !== 'branch' && (
                                         <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto">
-                                            <div className="p-2 text-xs font-bold text-[#E91E63] hover:bg-pink-50 cursor-pointer border-b border-gray-100 flex items-center gap-2" onClick={() => setCurrentLine({...currentLine, locationValue: 'בסניף הקבוע', locationType: 'branch'})}><Home size={14} />הסניף הקבוע</div>
+                                            <div className="p-2 text-xs font-bold text-brand-pink hover:bg-pink-50 cursor-pointer border-b border-gray-100 flex items-center gap-2" onClick={() => setCurrentLine({...currentLine, locationValue: 'בסניף הקבוע', locationType: 'branch'})}><Home size={14} />הסניף הקבוע</div>
                                             {currentLine.locationValue.length >= 1 && ISRAEL_CITIES.filter(city => city.includes(currentLine.locationValue) && city !== currentLine.locationValue).map(city => (<div key={city} className="p-2 text-xs text-gray-700 hover:bg-gray-50 cursor-pointer border-b border-gray-50" onClick={() => setCurrentLine({...currentLine, locationValue: city, locationType: 'city'})}>{city}</div>))}
                                         </div>
                                     )}
@@ -866,7 +866,7 @@ function NewTripContent() {
                                         </div>
                                     )}
                                     <div className="w-full md:w-auto mt-2 md:mt-0">
-                                        <button onClick={handleAddLine} className="bg-[#8BC34A] hover:bg-[#7CB342] text-white h-[52px] w-full md:w-[60px] rounded-lg flex items-center justify-center shadow-lg transition-all active:scale-95 flex-shrink-0 mb-[1px]" title="לאישור השורה ופתיחת שורה חדשה">
+                                        <button onClick={handleAddLine} className="bg-brand-green hover:bg-[#7CB342] text-white h-[52px] w-full md:w-[60px] rounded-lg flex items-center justify-center shadow-lg transition-all active:scale-95 flex-shrink-0 mb-[1px]" title="לאישור השורה ופתיחת שורה חדשה">
                                             <Check size={28} strokeWidth={3} />
                                             <span className="md:hidden mr-2 font-bold">הוסף שורה ללו״ז</span>
                                         </button>
@@ -897,15 +897,15 @@ function NewTripContent() {
                       )}
                       
                       <div className="flex justify-center pt-4 pb-6">
-                          <button onClick={handleLockToggle} className={`text-xs flex items-center gap-2 px-6 py-2 rounded-full border transition-all font-bold ${isRowsLocked ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-[#E91E63] border-[#E91E63] hover:bg-[#E91E63] hover:text-white'}`}>
+                          <button onClick={handleLockToggle} className={`text-xs flex items-center gap-2 px-6 py-2 rounded-full border transition-all font-bold ${isRowsLocked ? 'bg-gray-800 text-white border-gray-800' : 'bg-surface-card text-brand-pink border-brand-pink hover:bg-brand-pink hover:text-white'}`}>
                               {isRowsLocked ? <><Lock size={14}/> מצב צפייה (לחץ לעריכה)</> : <><Unlock size={14}/> סיום הוספת שורות</>}
                           </button>
                       </div>
                    </div>
                 </section>
 
-                <section className="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-visible relative z-10 mb-8 animate-fadeIn">
-                    <div className="bg-[#00BCD4] text-white h-12 flex items-center px-6 font-bold text-lg shadow-sm gap-2 rounded-t-3xl">
+                <section className="bg-surface-card rounded-[32px] shadow-sm border border-border-subtle overflow-visible relative z-10 mb-8 animate-fadeIn">
+                    <div className="bg-brand-cyan text-white h-12 flex items-center px-6 font-bold text-lg shadow-sm gap-2 rounded-t-3xl">
                        <UserPlus size={20} />
                        <span>{getStaffTitle('title')}</span>
                     </div>
@@ -916,7 +916,7 @@ function NewTripContent() {
                                 <div className="text-xs text-gray-400 font-bold">הפרטים נשאבים מהפרופיל האישי</div>
                                 <button 
                                     onClick={handleGoToProfile} 
-                                    className="text-[10px] font-bold text-[#E91E63] hover:underline flex items-center gap-1"
+                                    className="text-[10px] font-bold text-brand-pink hover:underline flex items-center gap-1"
                                 >
                                     <Edit2 size={12}/> לעדכון פרטים בפרופיל
                                 </button>
@@ -953,7 +953,7 @@ function NewTripContent() {
                         ) : (
                             !showAddStaffForm ? (
                                 <div className="flex justify-center">
-                                    <button onClick={() => setShowAddStaffForm(true)} className="text-xs flex items-center gap-2 px-6 py-2 rounded-full border transition-all font-bold bg-white text-[#E91E63] border-[#E91E63] hover:bg-[#E91E63] hover:text-white">
+                                    <button onClick={() => setShowAddStaffForm(true)} className="text-xs flex items-center gap-2 px-6 py-2 rounded-full border transition-all font-bold bg-surface-card text-brand-pink border-brand-pink hover:bg-brand-pink hover:text-white">
                                         <Plus size={14}/> {getStaffTitle('additional')} (אופציונלי)
                                     </button>
                                 </div>
@@ -973,7 +973,7 @@ function NewTripContent() {
                                         <Input label="אימייל" icon={<Mail size={14}/>} type="email" value={newStaffData.email} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewStaffData({...newStaffData, email: e.target.value})} className="text-left focus:!border-[#E91E63] focus:!ring-0" dir="ltr"/>
                                     </div>
                                     <div className="flex justify-end">
-                                        <button onClick={handleSaveStaff} disabled={isVerifyingStaff} className="bg-[#E91E63] text-white px-6 py-3 rounded-lg font-bold hover:bg-pink-600 transition-colors shadow-md text-xs flex items-center gap-2 h-[52px]">
+                                        <button onClick={handleSaveStaff} disabled={isVerifyingStaff} className="bg-brand-pink text-white px-6 py-3 rounded-lg font-bold hover:bg-pink-600 transition-colors shadow-md text-xs flex items-center gap-2 h-[52px]">
                                             {isVerifyingStaff ? <Loader2 size={16} className="animate-spin"/> : <CheckCircle size={16}/>}
                                             {isVerifyingStaff ? 'בודק...' : 'שמור אחראי'}
                                         </button>
@@ -984,8 +984,8 @@ function NewTripContent() {
                     </div>
                 </section>
 
-                <section className="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-hidden mb-24 animate-fadeIn relative z-10">
-                    <div className="bg-[#00BCD4] text-white h-12 flex items-center px-6 font-bold text-lg shadow-sm gap-2">
+                <section className="bg-surface-card rounded-[32px] shadow-sm border border-border-subtle overflow-hidden mb-24 animate-fadeIn relative z-10">
+                    <div className="bg-brand-cyan text-white h-12 flex items-center px-6 font-bold text-lg shadow-sm gap-2">
                        <MessageSquare size={20} />
                        <span>הערות</span>
                     </div>
@@ -995,14 +995,14 @@ function NewTripContent() {
                     </div>
                 </section>
                 
-                <div className="fixed bottom-0 left-0 right-0 md:right-56 bg-white/90 backdrop-blur-md border-t border-gray-100 p-4 z-40 transition-all">
+                <div className="fixed bottom-0 left-0 right-0 md:right-56 bg-surface-card/90 backdrop-blur-md border-t border-border-subtle p-4 z-40 transition-all">
                     <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-end gap-3">
                         {isUrgentError && <div className="bg-red-50 text-red-600 px-4 py-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-2"><AlertTriangle size={16}/> תאריך היציאה קרוב מדי!</div>}
                         <button onClick={handleSaveDraft} disabled={loading} className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-6 py-3.5 rounded-2xl font-bold text-base shadow-sm transition-all flex items-center justify-center gap-2 transform hover:-translate-y-1">
                             {loading ? <Loader2 size={20} className="animate-spin" /> : <FileEdit size={20} />}
                             <span>{t('save_draft')}</span>
                         </button>
-                        <button onClick={handleSubmit} disabled={loading || isUrgentError} className={`bg-[#8BC34A] hover:bg-[#7CB342] text-white px-8 py-3.5 rounded-2xl font-bold text-lg shadow-lg hover:shadow-green-200 transition-all flex items-center justify-center gap-3 transform hover:-translate-y-1 ${loading || isUrgentError ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}>
+                        <button onClick={handleSubmit} disabled={loading || isUrgentError} className={`bg-brand-green hover:bg-[#7CB342] text-white px-8 py-3.5 rounded-2xl font-bold text-lg shadow-lg hover:shadow-green-200 transition-all flex items-center justify-center gap-3 transform hover:-translate-y-1 ${loading || isUrgentError ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}>
                             {loading ? 'שולח...' : (<><span>{t('submit')}</span><Save size={20} /></>)}
                         </button>
                     </div>
@@ -1018,7 +1018,7 @@ function NewTripContent() {
 // 2. Export the wrapper
 export default function NewTripPage() {
   return (
-    <Suspense fallback={<div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>}>
+    <Suspense fallback={<div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-brand-cyan" size={40}/></div>}>
        <NewTripContent />
     </Suspense>
   )

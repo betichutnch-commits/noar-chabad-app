@@ -158,7 +158,7 @@ export default function InboxPage() {
           case 'success': return <CheckCircle size={20} className="text-green-500" />;
           case 'warning': return <AlertTriangle size={20} className="text-orange-500" />;
           case 'error': return <X size={20} className="text-red-500" />;
-          default: return <Info size={20} className="text-[#00BCD4]" />;
+          default: return <Info size={20} className="text-brand-cyan" />;
       }
   };
 
@@ -178,7 +178,7 @@ export default function InboxPage() {
       );
   };
 
-  if (userLoading || dataLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
+  if (userLoading || dataLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-brand-cyan" size={40}/></div>;
 
   return (
     <>
@@ -194,16 +194,16 @@ export default function InboxPage() {
 
       <div className="max-w-5xl mx-auto p-4 md:p-8 animate-fadeIn pb-32">
         
-        <div className="flex bg-gray-100 p-1.5 rounded-2xl w-full md:w-fit mb-6 mx-auto md:mx-0">
+        <div className="flex bg-surface-muted p-1.5 rounded-2xl w-full md:w-fit mb-6 mx-auto md:mx-0">
             <button 
                 onClick={() => { setActiveTab('incoming'); setExpandedId(null); }}
                 className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2
-                ${activeTab === 'incoming' ? 'bg-white text-[#00BCD4] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                ${activeTab === 'incoming' ? 'bg-surface-card text-brand-cyan shadow-sm' : 'text-text-secondary hover:text-text-primary'}`}
             >
                 <Bell size={16}/>
                 דואר נכנס
                 {notifications.filter(n => !n.is_read).length > 0 && (
-                    <span className="bg-[#E91E63] text-white text-[10px] px-1.5 rounded-full min-w-[18px] h-[18px] flex items-center justify-center">
+                    <span className="bg-brand-pink text-white text-[10px] px-1.5 rounded-full min-w-[18px] h-[18px] flex items-center justify-center">
                         {notifications.filter(n => !n.is_read).length}
                     </span>
                 )}
@@ -211,14 +211,14 @@ export default function InboxPage() {
             <button 
                 onClick={() => { setActiveTab('outgoing'); setExpandedId(null); }}
                 className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2
-                ${activeTab === 'outgoing' ? 'bg-white text-[#00BCD4] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                ${activeTab === 'outgoing' ? 'bg-surface-card text-brand-cyan shadow-sm' : 'text-text-secondary hover:text-text-primary'}`}
             >
                 <Send size={16}/>
                 פניות ששלחתי
             </button>
         </div>
 
-        <div className="bg-white rounded-[24px] shadow-sm border border-gray-200 overflow-hidden min-h-[400px]">
+        <div className="bg-surface-card rounded-[24px] shadow-sm border border-border-subtle overflow-hidden min-h-[400px]">
             
             {activeTab === 'incoming' && (
                 notifications.length === 0 ? (
@@ -249,10 +249,10 @@ export default function InboxPage() {
                                     </div>
                                     {isExpanded && (
                                         <div className="px-4 pb-6 pt-2 pl-12 border-t border-gray-100 animate-fadeIn">
-                                            <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{note.message}</p>
+                                                <p className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap">{note.message}</p>
                                             <div className="mt-4 flex items-center gap-3">
                                                 {note.link && (
-                                                    <a href={note.link} className="text-xs font-bold text-white bg-[#00BCD4] px-4 py-2 rounded-lg hover:bg-cyan-600 transition-colors">לפרטים נוספים</a>
+                                                    <a href={note.link} className="text-xs font-bold text-white bg-brand-cyan px-4 py-2 rounded-lg hover:bg-cyan-600 transition-colors">לפרטים נוספים</a>
                                                 )}
                                                 <button onClick={(e) => deleteNotification(note.id, e)} className="text-xs font-bold text-red-500 hover:bg-red-50 px-3 py-2 rounded-lg transition-colors flex items-center gap-1">
                                                     <Trash2 size={14}/> מחק הודעה
@@ -285,7 +285,7 @@ export default function InboxPage() {
                                 <div key={msg.id} className={`transition-all hover:bg-gray-50 relative overflow-hidden ${isExpanded ? 'bg-gray-50' : 'bg-white'}`}>
                                     
                                     <div className={`absolute top-0 right-0 px-3 py-1 rounded-bl-xl text-[10px] font-bold text-white flex items-center gap-1.5 shadow-sm z-10
-                                        ${isBug ? 'bg-[#E91E63]' : 'bg-[#00BCD4]'}`}
+                                        ${isBug ? 'bg-brand-pink' : 'bg-brand-cyan'}`}
                                     >
                                         {isBug ? <Wrench size={12}/> : <HelpCircle size={12}/>}
                                         {isBug ? 'דיווח תקלה' : 'פנייה כללית'}

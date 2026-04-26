@@ -73,7 +73,7 @@ export default function ApprovalsPage() {
   };
 
   // בדיקת טעינה משולבת
-  if (userLoading || loadingTrips) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
+  if (userLoading || loadingTrips) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-brand-cyan" size={40}/></div>;
 
   return (
     <>
@@ -85,7 +85,7 @@ export default function ApprovalsPage() {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                 
                 {/* פילטרים */}
-                <div className="flex bg-white p-1 rounded-xl border border-gray-200 shadow-sm w-full md:w-auto overflow-x-auto">
+                <div className="flex bg-surface-card p-1 rounded-xl border border-border-subtle shadow-sm w-full md:w-auto overflow-x-auto">
                     {['pending', 'approved', 'rejected', 'all'].map((f) => (
                         <button
                             key={f}
@@ -109,7 +109,7 @@ export default function ApprovalsPage() {
             </div>
 
             {/* --- תצוגה 1: טבלה (רק למחשב) --- */}
-            <div className="hidden md:block bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+            <div className="hidden md:block bg-surface-card rounded-2xl border border-border-subtle overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
                     <table className="w-full text-right">
                         <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 text-xs font-bold uppercase">
@@ -149,7 +149,7 @@ export default function ApprovalsPage() {
                                     </td>
                                     <td className="p-5 text-left">
                                         <Link href={`/manager/approvals/${trip.id}`}>
-                                            <button className="bg-[#00BCD4] hover:bg-cyan-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md shadow-cyan-100 transition-all flex items-center gap-2 ml-auto">
+                                            <button className="bg-brand-cyan hover:bg-cyan-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md shadow-cyan-100 transition-all flex items-center gap-2 ml-auto">
                                                 <Eye size={16}/> צפה וטפל
                                             </button>
                                         </Link>
@@ -164,7 +164,7 @@ export default function ApprovalsPage() {
             {/* --- תצוגה 2: כרטיסים (רק לטלפון) --- */}
             <div className="md:hidden space-y-4">
                 {filteredTrips.map((trip) => (
-                    <div key={trip.id} className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm">
+                    <div key={trip.id} className="bg-surface-card p-5 rounded-2xl border border-border-subtle shadow-sm">
                         
                         {/* כותרת וסטטוס */}
                         <div className="flex justify-between items-start mb-3">
@@ -193,7 +193,7 @@ export default function ApprovalsPage() {
 
                         {/* כפתור פעולה */}
                         <Link href={`/manager/approvals/${trip.id}`} className="block">
-                            <button className="w-full bg-[#00BCD4] text-white py-3 rounded-xl font-bold shadow-md shadow-cyan-100 flex items-center justify-center gap-2 active:scale-95 transition-all">
+                            <button className="w-full bg-brand-cyan text-white py-3 rounded-xl font-bold shadow-md shadow-cyan-100 flex items-center justify-center gap-2 active:scale-95 transition-all">
                                 <Eye size={18}/> כנס לטיפול בבקשה
                             </button>
                         </Link>

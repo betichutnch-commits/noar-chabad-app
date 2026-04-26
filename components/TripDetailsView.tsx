@@ -223,7 +223,7 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
             )}
 
             {/* --- Hero --- */}
-            <div className="bg-white rounded-[32px] border border-gray-200 shadow-sm overflow-hidden mb-8 print:shadow-none print:border-none">
+            <div className="bg-surface-card rounded-[32px] border border-border-subtle shadow-sm overflow-hidden mb-8 print:shadow-none print:border-none">
                 <div className={`h-auto py-6 md:h-32 ${typeConfig.bg} relative overflow-hidden flex items-center px-4 md:px-8`}>
                     <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
                     <div className="relative z-10 w-full flex flex-row justify-between items-start md:items-center gap-4">
@@ -240,7 +240,7 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                     </div>
                 </div>
 
-                <div className="p-4 md:p-6 grid grid-cols-2 md:grid-cols-7 gap-4 md:gap-6 divide-y md:divide-y-0 md:divide-x divide-x-reverse divide-gray-100">
+                    <div className="p-4 md:p-6 grid grid-cols-2 md:grid-cols-7 gap-4 md:gap-6 divide-y md:divide-y-0 md:divide-x divide-x-reverse divide-border-subtle">
                     <div className="col-span-2 md:col-span-2 text-center md:text-right pl-0 md:pl-2 flex flex-col justify-center">
                         <div className="bg-gray-50 border border-gray-200 rounded-2xl p-3 flex flex-col gap-3">
                             <div className="flex justify-between items-center w-full gap-1">
@@ -263,7 +263,7 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                         </div>
                     </div>
                     <div className="text-center md:text-right px-2 flex flex-col justify-center pt-2 md:pt-0"><span className="text-xs font-bold text-gray-400 block mb-1">שכבות</span><div className="font-black text-gray-800 text-lg md:text-xl">כיתות {d.gradeFrom}-{d.gradeTo}</div></div>
-                    <div className="text-center md:text-right px-2 flex flex-col justify-center pt-2 md:pt-0"><span className="text-xs font-bold text-gray-400 block mb-1">סה״כ {traineesLabel}</span><div className="font-black text-gray-800 text-lg md:text-xl flex items-center gap-2 justify-center md:justify-start"><Users size={18} className="text-[#00BCD4] shrink-0"/>{d.chanichimCount || '0'}</div></div>
+                    <div className="text-center md:text-right px-2 flex flex-col justify-center pt-2 md:pt-0"><span className="text-xs font-bold text-gray-400 block mb-1">סה״כ {traineesLabel}</span><div className="font-black text-gray-800 text-lg md:text-xl flex items-center gap-2 justify-center md:justify-start"><Users size={18} className="text-brand-cyan shrink-0"/>{d.chanichimCount || '0'}</div></div>
                     <div className="text-center md:text-right px-2 md:col-span-1 flex flex-col justify-center pt-2 md:pt-0">
                         <span className="text-xs font-bold text-gray-400 block mb-1">הרכב צוות</span>
                         <div className="flex flex-wrap gap-1 justify-center md:justify-start">
@@ -277,7 +277,7 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                             })}
                         </div>
                     </div>
-                    <div className="text-center md:text-right px-2 flex flex-col justify-center pt-2 md:pt-0"><span className="text-xs font-bold text-gray-400 block mb-1">{participantsTitle}</span><div className="font-black text-gray-800 text-lg md:text-xl flex items-center gap-2 justify-center md:justify-start"><Users size={18} className="text-[#00BCD4] shrink-0"/>{d.totalTravelers}</div><div className="text-[10px] text-gray-400 mt-0.5">כולל צוות</div></div>
+                    <div className="text-center md:text-right px-2 flex flex-col justify-center pt-2 md:pt-0"><span className="text-xs font-bold text-gray-400 block mb-1">{participantsTitle}</span><div className="font-black text-gray-800 text-lg md:text-xl flex items-center gap-2 justify-center md:justify-start"><Users size={18} className="text-brand-cyan shrink-0"/>{d.totalTravelers}</div><div className="text-[10px] text-gray-400 mt-0.5">כולל צוות</div></div>
                     
                     <div className="col-span-2 md:col-span-1 text-center md:text-right pr-0 md:pr-4 flex flex-row md:flex-col justify-center gap-2 print:hidden pt-2 md:pt-0">
                          <button onClick={handlePrint} className="flex-1 md:w-full bg-gray-50 hover:bg-gray-100 text-gray-600 py-2 md:py-1.5 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-2"><Printer size={14}/> הדפסה</button>
@@ -308,7 +308,7 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                                             <div className="flex-1 flex flex-col justify-center">
                                                 <h3 className="text-sm md:text-base font-black text-gray-800 leading-tight mb-2">{item.finalSubCategory}</h3>
                                                 <div className="space-y-2">
-                                                    <div className="flex items-start gap-2 text-xs text-gray-700 font-medium"><MapPin size={14} className="text-[#E91E63] shrink-0 mt-0.5"/><span>{item.finalLocation}</span></div>
+                                            <div className="flex items-start gap-2 text-xs text-gray-700 font-medium"><MapPin size={14} className="text-brand-pink shrink-0 mt-0.5"/><span>{item.finalLocation}</span></div>
                                                     {item.otherDetail && item.finalSubCategory !== item.otherDetail && (
                                                         <div className="flex items-start gap-2 text-xs text-gray-800 bg-slate-50 p-2 rounded border border-gray-100">
                                                             <div className="shrink-0 mt-0.5">{item.category === 'sleeping' ? <Tent size={14} className="text-purple-500"/> : <Info size={14} className="text-gray-400"/>}</div>
@@ -343,13 +343,13 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
 
                 {/* --- Sidebar --- */}
                 <div className="space-y-6">
-                    <div className="bg-white rounded-3xl border border-gray-200 p-6 shadow-sm">
-                        <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2 border-b border-gray-100 pb-2"><Briefcase size={18} className="text-[#00BCD4] shrink-0"/>{boxTitle}</h3>
+                    <div className="bg-surface-card rounded-3xl border border-border-subtle p-6 shadow-sm">
+                        <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2 border-b border-gray-100 pb-2"><Briefcase size={18} className="text-brand-cyan shrink-0"/>{boxTitle}</h3>
                         <div className="flex flex-col gap-0 text-sm">
                             <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-t-xl border-b border-white">
                                 <User size={16} className="text-gray-400"/>
                                 <div>
-                                    <span className="block font-black text-[#00BCD4] text-lg">{trip.coordinator_name}</span>
+                                    <span className="block font-black text-brand-cyan text-lg">{trip.coordinator_name}</span>
                                     <span className="text-xs font-bold text-gray-500">{getCoordinatorRoleDisplay()}</span>
                                 </div>
                             </div>
@@ -396,7 +396,7 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                                         <input type="text" className="w-full p-2 text-xs border rounded-lg bg-white" placeholder="תעודת זהות" value={newStaffData.idNumber} onChange={e => setNewStaffData && setNewStaffData({...newStaffData, idNumber: e.target.value})}/>
                                         <input type="tel" dir="rtl" className="w-full p-2 text-xs border rounded-lg bg-white text-right" placeholder="טלפון" value={newStaffData.phone} onChange={e => setNewStaffData && setNewStaffData({...newStaffData, phone: e.target.value})}/>
                                         <input type="email" className="w-full p-2 text-xs border rounded-lg bg-white text-right" placeholder="אימייל" value={newStaffData.email} onChange={e => setNewStaffData && setNewStaffData({...newStaffData, email: e.target.value})}/>
-                                        <button onClick={onSaveStaff} disabled={isVerifying} className="w-full bg-[#00BCD4] text-white text-xs font-bold py-2 rounded-lg hover:bg-cyan-600 transition-colors mt-1 disabled:opacity-50">{isVerifying ? 'בודק במערכת...' : 'אימות ושמירה'}</button>
+                                        <button onClick={onSaveStaff} disabled={isVerifying} className="w-full bg-brand-cyan text-white text-xs font-bold py-2 rounded-lg hover:bg-cyan-600 transition-colors mt-1 disabled:opacity-50">{isVerifying ? 'בודק במערכת...' : 'אימות ושמירה'}</button>
                                     </div>
                                 </div>
                             </div>
@@ -404,13 +404,13 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                         
                         {showAddButton && (
                              <div className="mt-4 pt-4 border-t border-gray-100">
-                                <button onClick={() => setIsAddingStaff && setIsAddingStaff(true)} className="w-full py-2 border border-dashed border-gray-300 rounded-xl text-xs font-bold text-gray-500 hover:text-[#00BCD4] flex items-center justify-center gap-1"><Plus size={14}/> {addStaffBtnLabel}</button>
+                                <button onClick={() => setIsAddingStaff && setIsAddingStaff(true)} className="w-full py-2 border border-dashed border-gray-300 rounded-xl text-xs font-bold text-gray-500 hover:text-brand-cyan flex items-center justify-center gap-1"><Plus size={14}/> {addStaffBtnLabel}</button>
                              </div>
                         )}
                     </div>
 
-                    <div className="bg-white rounded-3xl border border-gray-200 p-6 shadow-sm">
-                        <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2 border-b border-gray-100 pb-2"><Paperclip size={18} className="text-[#E91E63]"/>קבצים ומסמכים</h3>
+                    <div className="bg-surface-card rounded-3xl border border-border-subtle p-6 shadow-sm">
+                        <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2 border-b border-gray-100 pb-2"><Paperclip size={18} className="text-brand-pink"/>קבצים ומסמכים</h3>
                         {missingDocsCount > 0 ? (
                             <div className="bg-red-50 border border-red-100 rounded-xl p-4 flex gap-3 items-start"><AlertTriangle size={20} className="text-red-500 mt-0.5 shrink-0"/><div><span className="block text-sm font-bold text-red-700">חסר רישוי עסק וביטוח</span><span className="text-xs text-red-600 block mt-1">יש להשלים {missingDocsCount} אישורים.</span></div></div>
                         ) : (
@@ -429,7 +429,7 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                         {isEditable && onEditTrip && (
                             <button 
                                 onClick={onEditTrip}
-                                className="flex-1 h-10 bg-[#00BCD4] hover:bg-cyan-600 text-white rounded-xl font-bold shadow-lg shadow-cyan-100 transition-all active:scale-95 flex items-center justify-center gap-2 text-xs"
+                                className="flex-1 h-10 bg-brand-cyan hover:bg-cyan-600 text-white rounded-xl font-bold shadow-lg shadow-cyan-100 transition-all active:scale-95 flex items-center justify-center gap-2 text-xs"
                             >
                                 <Edit2 size={14} />
                                 {editButtonText}

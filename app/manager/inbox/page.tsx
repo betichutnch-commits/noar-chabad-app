@@ -196,7 +196,7 @@ export default function InboxPage() {
   const content = selectedMsg ? parseMessageContent(selectedMsg.message) : null;
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] pb-12">
+    <div className="min-h-screen bg-surface-base pb-12">
       <ManagerHeader title="דואר נכנס ופניות" />
 
       <main className="max-w-6xl mx-auto p-4 md:p-8 animate-fadeIn">
@@ -206,13 +206,13 @@ export default function InboxPage() {
             <div className="bg-white p-1 rounded-2xl border border-gray-200 shadow-sm flex items-center w-full md:w-auto">
                 <button 
                   onClick={() => { setFilter('new'); setSelectedMsg(null); }}
-                  className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${filter === 'new' ? 'bg-[#E91E63] text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
+                  className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${filter === 'new' ? 'bg-brand-pink text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
                 >
                     <Mail size={16}/> ממתינים לטיפול
                 </button>
                 <button 
                   onClick={() => { setFilter('treated'); setSelectedMsg(null); }}
-                  className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${filter === 'treated' ? 'bg-[#00BCD4] text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
+                  className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${filter === 'treated' ? 'bg-brand-cyan text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
                 >
                     <CheckCircle size={16}/> ארכיון וטופלו
                 </button>
@@ -232,7 +232,7 @@ export default function InboxPage() {
                 
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2">
                     {loading ? (
-                        <div className="p-8 text-center"><Loader2 className="animate-spin text-[#00BCD4] mx-auto"/></div>
+                        <div className="p-8 text-center"><Loader2 className="animate-spin text-brand-cyan mx-auto"/></div>
                     ) : messages.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-64 text-gray-400 text-center p-6">
                             <CheckCircle size={32} className="text-gray-200 mb-2"/>
@@ -248,7 +248,7 @@ export default function InboxPage() {
                                     key={msg.id}
                                     onClick={() => setSelectedMsg(msg)}
                                     className={`p-4 rounded-2xl cursor-pointer border transition-all hover:shadow-md group relative flex flex-col gap-2
-                                    ${isSelected ? 'bg-cyan-50 border-[#00BCD4] ring-1 ring-[#00BCD4]/30' : 'bg-white border-gray-100 hover:border-gray-200'}`}
+                                    ${isSelected ? 'bg-cyan-50 border-brand-cyan ring-1 ring-cyan-300/40' : 'bg-white border-gray-100 hover:border-gray-200'}`}
                                 >
                                     <div className="flex justify-between items-start">
                                         <div className="flex items-center gap-2">
@@ -279,7 +279,7 @@ export default function InboxPage() {
                                         )}
                                     </div>
 
-                                    <h4 className={`text-xs font-bold line-clamp-1 mr-9 ${isSelected ? 'text-[#00BCD4]' : 'text-gray-600'}`}>
+                                    <h4 className={`text-xs font-bold line-clamp-1 mr-9 ${isSelected ? 'text-brand-cyan' : 'text-gray-600'}`}>
                                         {msg.subject}
                                     </h4>
                                 </div>
@@ -370,13 +370,13 @@ export default function InboxPage() {
                                             value={responseText}
                                             onChange={(e) => setResponseText(e.target.value)}
                                             placeholder="כתוב כאן את התשובה... (לחיצה על שלח תעביר את ההודעה לארכיון)"
-                                            className="flex-1 bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#00BCD4]/20 resize-none h-20"
+                                            className="flex-1 bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-200 resize-none h-20"
                                         />
                                         <div className="flex flex-col gap-2">
                                             <button 
                                                 onClick={handleSendReply}
                                                 disabled={sendingReply || !responseText.trim()}
-                                                className="h-full px-6 bg-[#00BCD4] text-white rounded-xl font-bold text-sm hover:bg-cyan-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1"
+                                                className="h-full px-6 bg-brand-cyan text-white rounded-xl font-bold text-sm hover:bg-cyan-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1"
                                             >
                                                 {sendingReply ? <Loader2 size={18} className="animate-spin"/> : <Send size={18}/>}
                                                 <span>שלח</span>

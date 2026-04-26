@@ -124,7 +124,7 @@ export default function ContactPage() {
     }
   };
 
-  if (userLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
+  if (userLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-brand-cyan" size={40}/></div>;
 
   return (
     <>
@@ -139,13 +139,13 @@ export default function ContactPage() {
       />
 
       <div className="max-w-3xl mx-auto p-4 md:p-8 animate-fadeIn pb-32">
-         <div className="bg-white rounded-[32px] border border-gray-200 p-6 md:p-8 shadow-sm text-center md:text-right">
+         <div className="bg-surface-card rounded-[32px] border border-border-subtle p-6 md:p-8 shadow-sm text-center md:text-right">
              
              <div className="flex flex-col sm:flex-row gap-4 mb-6">
                  <button 
                     onClick={() => setType('general')}
                     className={`flex-1 py-4 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all font-bold
-                    ${type === 'general' ? 'border-[#00BCD4] bg-cyan-50 text-[#00BCD4]' : 'border-gray-100 text-gray-400 hover:bg-gray-50'}`}
+                    ${type === 'general' ? 'border-brand-cyan bg-cyan-50 text-brand-cyan' : 'border-gray-100 text-gray-400 hover:bg-gray-50'}`}
                  >
                      <HelpCircle size={28}/>
                      שאלה כללית
@@ -153,7 +153,7 @@ export default function ContactPage() {
                  <button 
                     onClick={() => setType('bug')}
                     className={`flex-1 py-4 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all font-bold
-                    ${type === 'bug' ? 'border-[#E91E63] bg-pink-50 text-[#E91E63]' : 'border-gray-100 text-gray-400 hover:bg-gray-50'}`}
+                    ${type === 'bug' ? 'border-brand-pink bg-pink-50 text-brand-pink' : 'border-gray-100 text-gray-400 hover:bg-gray-50'}`}
                  >
                      <AlertTriangle size={28}/>
                      דיווח על תקלה
@@ -187,14 +187,14 @@ export default function ContactPage() {
                      </label>
                      <div className="relative">
                         <textarea 
-                            className="w-full p-4 rounded-xl border border-gray-200 outline-none focus:border-[#E91E63] focus:ring-1 focus:ring-[#E91E63] min-h-[150px] resize-none text-base md:text-sm font-medium bg-white transition-all text-right"
+                            className="w-full p-4 rounded-xl border border-border-subtle outline-none focus:border-brand-pink focus:ring-1 focus:ring-brand-pink min-h-[150px] resize-none text-base md:text-sm font-medium bg-white transition-all text-right"
                             placeholder={type === 'bug' ? "אנא פרטו כאן את השלבים שגרמו לתקלה...\n\n(ניתן להדביק כאן צילום מסך או לבחור קובץ)" : "תוכן הפנייה..."}
                             value={formData.message}
                             onChange={e => setFormData({...formData, message: e.target.value})}
                             onPaste={handlePaste}
                         ></textarea>
                         
-                        <label className="absolute bottom-3 left-3 text-gray-400 hover:text-[#E91E63] cursor-pointer p-3 bg-gray-50 rounded-lg shadow-sm border border-gray-200 transition-all active:scale-95" title="צרף קובץ תמונה">
+                        <label className="absolute bottom-3 left-3 text-gray-400 hover:text-brand-pink cursor-pointer p-3 bg-gray-50 rounded-lg shadow-sm border border-gray-200 transition-all active:scale-95" title="צרף קובץ תמונה">
                             <ImageIcon size={22}/>
                             <input type="file" accept="image/*" className="hidden" onChange={handleFileChange}/>
                         </label>

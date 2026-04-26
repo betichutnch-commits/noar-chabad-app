@@ -60,7 +60,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [user]);
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] dir-rtl text-right font-sans">
+    <div className="min-h-screen bg-surface-base dir-rtl text-right font-sans">
       
       {/* Mobile Header */}
       <div className="md:hidden flex items-center justify-between p-3 bg-white/95 backdrop-blur-md border-b border-gray-200 sticky top-0 z-40 shadow-sm h-16">
@@ -117,7 +117,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="fixed bottom-6 left-6 z-50 flex flex-col items-end gap-2 md:hidden">
           {isBellOpen && (
               <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 w-72 mb-2 overflow-hidden animate-fadeIn">
-                  <div className="bg-[#00BCD4] p-3 flex justify-between items-center text-white">
+                  <div className="bg-brand-cyan p-3 flex justify-between items-center text-white">
                       <span className="text-sm font-bold">הודעות חדשות</span>
                       <button onClick={() => setIsBellOpen(false)}><X size={16}/></button>
                   </div>
@@ -128,14 +128,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                           unreadNotifications.map(n => (
                               <Link key={n.id} href="/dashboard/inbox" onClick={() => setIsBellOpen(false)} className="block p-3 border-b border-gray-50 hover:bg-gray-50 transition-colors">
                                   <div className="flex gap-2">
-                                      <Mail size={14} className="text-[#00BCD4] mt-0.5 shrink-0"/>
+                                      <Mail size={14} className="text-brand-cyan mt-0.5 shrink-0"/>
                                       <span className="text-xs font-bold text-gray-700 line-clamp-2">{n.title}</span>
                                   </div>
                               </Link>
                           ))
                       )}
                   </div>
-                  <Link href="/dashboard/inbox" onClick={() => setIsBellOpen(false)} className="block p-2 text-center text-xs font-bold text-[#00BCD4] bg-gray-50 hover:underline">
+                  <Link href="/dashboard/inbox" onClick={() => setIsBellOpen(false)} className="block p-2 text-center text-xs font-bold text-brand-cyan bg-gray-50 hover:underline">
                       לכל ההודעות
                   </Link>
               </div>
@@ -143,11 +143,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           <button 
             onClick={() => setIsBellOpen(!isBellOpen)}
-            className="w-12 h-12 bg-white rounded-full shadow-lg shadow-gray-300 border border-gray-100 flex items-center justify-center text-gray-600 hover:text-[#00BCD4] transition-all hover:scale-110 active:scale-95 relative"
+            className="w-12 h-12 bg-white rounded-full shadow-lg shadow-gray-300 border border-gray-100 flex items-center justify-center text-gray-600 hover:text-brand-cyan transition-all hover:scale-110 active:scale-95 relative"
           >
               <Bell size={22} />
               {unreadNotifications.length > 0 && (
-                  <span className="absolute top-0 right-0 w-4 h-4 bg-[#E91E63] text-white text-[10px] font-bold rounded-full flex items-center justify-center border border-white animate-pulse">
+                  <span className="absolute top-0 right-0 w-4 h-4 bg-brand-pink text-white text-[10px] font-bold rounded-full flex items-center justify-center border border-white animate-pulse">
                       {unreadNotifications.length}
                   </span>
               )}

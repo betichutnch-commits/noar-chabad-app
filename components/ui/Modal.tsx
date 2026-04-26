@@ -41,10 +41,10 @@ export const Modal: React.FC<ModalProps> = ({
   if (!isOpen) return null;
 
   const config = {
-    success: { icon: CheckCircle, color: 'text-green-500', bg: 'bg-green-50' },
-    error:   { icon: AlertCircle, color: 'text-red-500',   bg: 'bg-red-50' },
-    confirm: { icon: AlertTriangle, color: 'text-orange-500', bg: 'bg-orange-50' },
-    info:    { icon: Info,        color: 'text-[#00BCD4]', bg: 'bg-cyan-50' },
+    success: { icon: CheckCircle, color: 'text-state-success', bg: 'bg-state-success-bg' },
+    error:   { icon: AlertCircle, color: 'text-state-danger',   bg: 'bg-state-danger-bg' },
+    confirm: { icon: AlertTriangle, color: 'text-state-warning', bg: 'bg-state-warning-bg' },
+    info:    { icon: Info,        color: 'text-brand-cyan', bg: 'bg-state-info-bg' },
   }[type];
 
   const Icon = config.icon;
@@ -63,7 +63,7 @@ export const Modal: React.FC<ModalProps> = ({
 
       {/* Content */}
       <div
-        className={`relative bg-white w-full max-w-sm rounded-[32px] shadow-2xl p-6 transform transition-all duration-300 ${isOpen ? 'scale-100 translate-y-0' : 'scale-95 translate-y-4'}`}
+        className={`relative bg-surface-card w-full max-w-sm rounded-3xl shadow-2xl p-6 transform transition-all duration-300 ${isOpen ? 'scale-100 translate-y-0' : 'scale-95 translate-y-4'}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}
@@ -72,7 +72,7 @@ export const Modal: React.FC<ModalProps> = ({
         <button
           onClick={onClose}
           aria-label="סגירת חלון"
-          className="absolute top-4 left-4 p-2 bg-gray-50 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+          className="absolute top-4 left-4 p-2 bg-surface-muted rounded-full text-text-muted hover:bg-gray-100 hover:text-text-secondary transition-colors"
         >
             <X size={18} />
         </button>
@@ -82,11 +82,11 @@ export const Modal: React.FC<ModalProps> = ({
                 <Icon size={32} strokeWidth={2.5} />
             </div>
 
-            <h3 className="text-xl font-black text-gray-800 mb-2">
+            <h3 className="text-xl font-black text-text-primary mb-2">
                 {title}
             </h3>
             
-            <p className="text-gray-500 text-sm font-medium leading-relaxed mb-6 whitespace-pre-line">
+            <p className="text-text-secondary text-sm font-medium leading-relaxed mb-6 whitespace-pre-line">
                 {message}
             </p>
 

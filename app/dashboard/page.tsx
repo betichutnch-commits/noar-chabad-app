@@ -40,10 +40,10 @@ export default function DashboardPage() {
   const [cancelReason, setCancelReason] = useState('');
 
   const filterOptions = [
-      { id: "טיול מחוץ לסניף", label: "טיול מחוץ לסניף", color: "bg-[#4DD0E1]" },
-      { id: "כנס/אירוע מחוץ לסניף", label: "כנס/אירוע חוץ", color: "bg-[#BA68C8]" },
-      { id: "פעילות לא שגרתית בסניף", label: "פעילות בסניף", color: "bg-[#81C784]" },
-      { id: "יציאה רגלית באזור הסניף", label: "יציאה רגלית", color: "bg-[#FFB74D]" },
+      { id: "טיול מחוץ לסניף", label: "טיול מחוץ לסניף", color: "bg-brand-cyan" },
+      { id: "כנס/אירוע מחוץ לסניף", label: "כנס/אירוע חוץ", color: "bg-purple-400" },
+      { id: "פעילות לא שגרתית בסניף", label: "פעילות בסניף", color: "bg-brand-green" },
+      { id: "יציאה רגלית באזור הסניף", label: "יציאה רגלית", color: "bg-amber-400" },
       { id: "אחר", label: "אחר", color: "bg-slate-400" }
   ];
 
@@ -164,7 +164,7 @@ export default function DashboardPage() {
       }
   };
 
-  if (userLoading || tripsLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
+  if (userLoading || tripsLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-brand-cyan" size={40}/></div>;
 
   const today = new Date().toISOString().split('T')[0];
   const upcomingTrip = trips
@@ -183,19 +183,19 @@ export default function DashboardPage() {
   });
 
   const SafetyCard = () => (
-      <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-center relative overflow-hidden h-full">
+      <div className="bg-surface-card p-6 rounded-3xl border border-border-subtle shadow-sm flex flex-col justify-center relative overflow-hidden h-full">
           <div className="absolute top-0 left-0 bg-red-500 text-white text-[9px] px-2 py-1 rounded-br-lg z-20 font-bold shadow-sm">אופציונלי - דורש תכנות</div>
           <div className="flex items-center gap-3 mb-3 relative z-10 pt-2">
               <div className="w-10 h-10 bg-green-50 rounded-2xl flex items-center justify-center text-green-600 shrink-0 shadow-sm"><ShieldAlert size={20}/></div>
-              <h3 className="text-base font-bold text-gray-800">חדר מצב</h3>
+              <h3 className="text-base font-bold text-text-primary">חדר מצב</h3>
           </div>
-          <p className="text-sm text-gray-500 leading-relaxed relative z-10">אין התראות חריגות להיום.<br/><span className="text-green-600 font-bold">ניתן לקיים פעילות כסדרה.</span></p>
+          <p className="text-sm text-text-secondary leading-relaxed relative z-10">אין התראות חריגות להיום.<br/><span className="text-green-600 font-bold">ניתן לקיים פעילות כסדרה.</span></p>
           <div className="absolute top-0 right-0 w-1 h-full bg-green-500"></div>
       </div>
   );
 
   const WeatherCard = () => (
-      <div className="bg-gradient-to-br from-[#00BCD4] to-cyan-600 p-6 rounded-3xl text-white shadow-lg shadow-cyan-100/50 flex flex-col justify-between relative overflow-hidden h-full min-h-[140px]">
+      <div className="bg-gradient-to-br from-brand-cyan to-cyan-600 p-6 rounded-3xl text-white shadow-lg shadow-cyan-100/50 flex flex-col justify-between relative overflow-hidden h-full min-h-[140px]">
           <div className="absolute top-0 left-0 bg-red-500 text-white text-[9px] px-2 py-1 rounded-br-lg z-20 font-bold shadow-sm">אופציונלי - דורש תכנות</div>
           <div className="relative z-10 pt-2">
               <div className="flex justify-between items-start"><div className="text-xs font-bold opacity-80 mb-1">תחזית להיום</div><MapPin size={16} className="opacity-60"/></div>
@@ -235,10 +235,10 @@ export default function DashboardPage() {
       {/* תיקון: min-h-screen מבטיח גובה מלא כדי שיהיה מקום לפופאפ */}
       <div className="p-4 md:p-8 space-y-6 animate-fadeIn pb-32 max-w-[100vw] overflow-x-hidden md:max-w-7xl md:mx-auto min-h-screen">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm relative overflow-hidden group hover:shadow-md transition-all h-full md:col-span-1">
+              <div className="bg-surface-card p-6 rounded-3xl border border-border-subtle shadow-sm relative overflow-hidden group hover:shadow-md transition-all h-full md:col-span-1">
                   <div className="relative z-10">
-                      <div className="flex justify-between items-start mb-2"><div className="text-xs font-bold text-gray-400 uppercase tracking-widest">הפעילות הבאה</div>{upcomingTrip && <div className="bg-cyan-50 text-[#00BCD4] px-2 py-1 rounded-lg text-[10px] font-bold">בקרוב</div>}</div>
-                      {upcomingTrip ? (<><h3 className="text-xl font-black text-gray-800 truncate mb-1 leading-tight">{upcomingTrip.name}</h3><div className="flex items-center gap-2 text-sm text-gray-500 font-bold mt-2"><Calendar size={16} className="text-[#E91E63]"/><span>{formatHebrewDate(upcomingTrip.start_date)}</span></div></>) : (<div className="flex flex-col items-center justify-center py-4 text-center"><span className="text-gray-300 mb-2">--</span><div className="text-gray-400 font-medium text-sm">אין פעילויות מתוכננות בקרוב</div></div>)}
+                      <div className="flex justify-between items-start mb-2"><div className="text-xs font-bold text-text-muted uppercase tracking-widest">הפעילות הבאה</div>{upcomingTrip && <div className="bg-cyan-50 text-brand-cyan px-2 py-1 rounded-lg text-[10px] font-bold">בקרוב</div>}</div>
+                      {upcomingTrip ? (<><h3 className="text-xl font-black text-text-primary truncate mb-1 leading-tight">{upcomingTrip.name}</h3><div className="flex items-center gap-2 text-sm text-text-secondary font-bold mt-2"><Calendar size={16} className="text-brand-pink"/><span>{formatHebrewDate(upcomingTrip.start_date)}</span></div></>) : (<div className="flex flex-col items-center justify-center py-4 text-center"><span className="text-gray-300 mb-2">--</span><div className="text-text-muted font-medium text-sm">אין פעילויות מתוכננות בקרוב</div></div>)}
                   </div>
                   <div className="w-32 h-32 bg-gradient-to-tr from-[#E91E63]/10 to-transparent rounded-full absolute -bottom-10 -left-10 transition-transform group-hover:scale-110"></div>
               </div>
@@ -248,11 +248,11 @@ export default function DashboardPage() {
 
           <div className="space-y-4 pt-2">
               <div className="flex flex-col md:flex-row justify-between items-end gap-4">
-                  <div className="flex gap-2 bg-white p-1.5 rounded-2xl border border-gray-100 w-full md:w-auto overflow-x-auto no-scrollbar shadow-sm">
+                  <div className="flex gap-2 bg-surface-card p-1.5 rounded-2xl border border-border-subtle w-full md:w-auto overflow-x-auto no-scrollbar shadow-sm">
                       {['all', 'approved', 'pending', 'rejected', 'draft'].map(f => {
                           const labels: Record<string, string> = { all: 'הכל', approved: 'אושר', pending: 'בבדיקה', rejected: 'נדחה', draft: 'טיוטות' };
                           const isActive = activeFilter === f;
-                          return (<button key={f} onClick={() => setActiveFilter(f)} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex-1 md:flex-none ${isActive ? 'bg-[#00BCD4] text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>{labels[f]}</button>)
+                          return (<button key={f} onClick={() => setActiveFilter(f)} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex-1 md:flex-none ${isActive ? 'bg-brand-cyan text-white shadow-md' : 'text-text-secondary hover:bg-surface-muted'}`}>{labels[f]}</button>)
                       })}
                   </div>
 
@@ -264,15 +264,15 @@ export default function DashboardPage() {
                         onChange={setSelectedTypes}
                       />
                       <div className="relative flex-1 md:w-64">
-                          <input type="text" placeholder="חיפוש לפי שם..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-4 pr-10 py-3 bg-white border border-gray-200 rounded-2xl text-sm font-bold focus:border-[#00BCD4] outline-none transition-all shadow-sm focus:ring-4 focus:ring-cyan-50"/>
-                          <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={18}/>
+                          <input type="text" placeholder="חיפוש לפי שם..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-4 pr-10 py-3 bg-surface-card border border-border-subtle rounded-2xl text-sm font-bold focus:border-brand-cyan outline-none transition-all shadow-sm focus:ring-4 focus:ring-cyan-50"/>
+                          <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted" size={18}/>
                       </div>
                   </div>
               </div>
 
               <div className="grid grid-cols-1 gap-4">
                   {displayTrips.length === 0 ? (
-                      <div className="py-20 text-center bg-white rounded-3xl border border-dashed border-gray-200 flex flex-col items-center"><div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-3"><Search size={24} className="text-gray-300"/></div><span className="text-gray-400 font-bold">לא נמצאו פעילויות תואמות</span></div>
+                      <div className="py-20 text-center bg-surface-card rounded-3xl border border-dashed border-border-subtle flex flex-col items-center"><div className="w-16 h-16 bg-surface-muted rounded-full flex items-center justify-center mb-3"><Search size={24} className="text-gray-300"/></div><span className="text-text-muted font-bold">לא נמצאו פעילויות תואמות</span></div>
                   ) : displayTrips.map(trip => (
                       <TripCard 
                           key={trip.id} 

@@ -104,11 +104,11 @@ export default function ManagerTripView({ params }: { params: Promise<{ id: stri
   };
 
   // בדיקת טעינה משולבת
-  if (userLoading || dataLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
+  if (userLoading || dataLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-brand-cyan" size={40}/></div>;
   if (!trip) return null;
 
   return (
-    <div className="min-h-screen bg-[#F5F5F5] font-sans text-gray-800 pb-32" dir="rtl">
+    <div className="min-h-screen bg-surface-base font-sans text-text-primary pb-32" dir="rtl">
       
       <Modal 
         isOpen={modal.isOpen} 
@@ -119,7 +119,7 @@ export default function ManagerTripView({ params }: { params: Promise<{ id: stri
         onConfirm={modal.onConfirm} 
       />
 
-      <header className="bg-[#263238] text-white shadow-md sticky top-0 z-30 border-b-4 border-[#00BCD4]">
+      <header className="bg-brand-dark text-white shadow-md sticky top-0 z-30 border-b-4 border-brand-cyan">
         <div className="max-w-[1600px] mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button onClick={() => router.back()} className="hover:bg-white/10 p-2 rounded-full transition-colors"><ArrowRight size={20} /></button>

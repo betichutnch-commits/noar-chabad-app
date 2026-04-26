@@ -212,7 +212,7 @@ export default function TripDetailsPage() {
   };
 
   // בדיקת טעינה משולבת
-  if (userLoading || tripLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
+  if (userLoading || tripLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-brand-cyan" size={40}/></div>;
   if (!trip) return null;
 
   return (

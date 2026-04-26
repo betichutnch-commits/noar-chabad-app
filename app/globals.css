@@ -8,13 +8,35 @@
   --brand-pink: #E91E63;
   --brand-yellow: #FFC107;
   --brand-dark: #263238;
-  --bg-light: #F8F9FA;
+  --surface-base: #F4F6F8;
+  --surface-card: #ffffff;
+  --surface-muted: #f9fafb;
+  --border-subtle: #e5e7eb;
+  --border-strong: #d1d5db;
+  --text-primary: #1f2937;
+  --text-secondary: #4b5563;
+  --text-muted: #9ca3af;
+  --state-success: #15803d;
+  --state-success-bg: #dcfce7;
+  --state-danger: #dc2626;
+  --state-danger-bg: #fee2e2;
+  --state-warning: #b45309;
+  --state-warning-bg: #ffedd5;
+  --state-info: #0e7490;
+  --state-info-bg: #cffafe;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --radius-3xl: 1.5rem;
+  --shadow-soft: 0 8px 30px rgba(0, 0, 0, 0.04);
+  --focus-ring: rgba(233, 30, 99, 0.2);
+  --space-section: 2rem;
+  --space-block: 1.5rem;
   
   /* משתני הפונט מוגדרים ב-Layout */
 }
 
 body {
-  @apply bg-[#F4F6F8] text-brand-dark font-sans; /* רקע טיפה יותר אפרפר-כחלחל מודרני */
+  @apply bg-surface-base text-text-primary font-sans;
   direction: rtl;
 }
 
@@ -25,5 +47,13 @@ body {
 
 /* כרטיס יוקרתי - רך, עגול, עם צל עדין */
 .card-premium {
-  @apply bg-white rounded-[32px] shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-gray-100/50 hover:shadow-[0_8px_30px_rgba(0,188,212,0.1)] transition-all duration-300;
+  @apply bg-surface-card rounded-3xl shadow-soft border border-border-subtle hover:shadow-[0_8px_30px_rgba(0,188,212,0.1)] transition-all duration-300;
+}
+
+.surface-card {
+  @apply bg-surface-card border border-border-subtle rounded-3xl shadow-soft;
+}
+
+.focus-ring {
+  @apply focus:outline-none focus:ring-4 focus:ring-pink-100;
 }

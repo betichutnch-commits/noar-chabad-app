@@ -152,7 +152,7 @@ export default function ManagerProfile() {
       
       <div className="p-8 max-w-5xl mx-auto pb-32 animate-fadeIn">
           
-          <div className="bg-white rounded-[32px] p-8 border border-gray-200 shadow-sm flex items-center gap-8 mb-8">
+          <div className="bg-surface-card rounded-[32px] p-8 border border-border-subtle shadow-sm flex items-center gap-8 mb-8">
                <div className="relative group w-24 h-24">
                    <div className="w-full h-full bg-gray-800 rounded-3xl flex items-center justify-center text-white text-3xl font-bold overflow-hidden border-4 border-white shadow-lg">
                       {formData.profileImage ? (
@@ -167,17 +167,17 @@ export default function ManagerProfile() {
                    </label>
                </div>
                <div>
-                   <h2 className="text-3xl font-black text-gray-800">{formData.officialName} {formData.lastName}</h2>
+                   <h2 className="text-3xl font-black text-text-primary">{formData.officialName} {formData.lastName}</h2>
                    <div className="flex items-center gap-2 text-gray-500 font-bold mt-1">
-                       <ShieldCheck size={18} className="text-[#00BCD4]"/> מנהל מערכת ראשי
+                       <ShieldCheck size={18} className="text-brand-cyan"/> מנהל מערכת ראשי
                    </div>
                </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               
-              <div className="bg-[#F1F8E9] p-6 rounded-3xl border border-green-100 h-fit">
-                  <div className="flex items-center gap-2 mb-6 text-[#8BC34A] font-bold text-sm uppercase tracking-wider">
+              <div className="bg-green-50 p-6 rounded-3xl border border-green-100 h-fit">
+                  <div className="flex items-center gap-2 mb-6 text-brand-green font-bold text-sm uppercase tracking-wider">
                       <Lock size={14}/> פרטי מערכת
                   </div>
                   <div className="space-y-4">
@@ -200,7 +200,7 @@ export default function ManagerProfile() {
                   </div>
               </div>
 
-              <div className="md:col-span-2 bg-white p-8 rounded-3xl border border-gray-200 shadow-sm">
+              <div className="md:col-span-2 bg-surface-card p-8 rounded-3xl border border-border-subtle shadow-sm">
                   <h3 className="text-xl font-bold text-gray-800 mb-6">עדכון פרטים</h3>
                   <div className="space-y-6">
                       

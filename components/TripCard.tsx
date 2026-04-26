@@ -29,10 +29,10 @@ const getStatusConfig = (status: string) => {
 
 const getRibbonColor = (type: string) => {
     if (!type) return 'bg-slate-400'; 
-    if (type === "טיול מחוץ לסניף") return 'bg-[#4DD0E1]'; 
-    if (type === "כנס/אירוע מחוץ לסניף") return 'bg-[#BA68C8]';
-    if (type === "פעילות לא שגרתית בסניף") return 'bg-[#81C784]';
-    if (type === "יציאה רגלית באזור הסניף") return 'bg-[#FFB74D]';
+    if (type === "טיול מחוץ לסניף") return 'bg-brand-cyan'; 
+    if (type === "כנס/אירוע מחוץ לסניף") return 'bg-purple-400';
+    if (type === "פעילות לא שגרתית בסניף") return 'bg-brand-green';
+    if (type === "יציאה רגלית באזור הסניף") return 'bg-amber-400';
     return 'bg-slate-400';
 };
 
@@ -113,7 +113,7 @@ export const TripCard = ({ trip, onDeleteDraft, onCancelTrip }: TripCardProps) =
     return (
         <div 
             onClick={handleCardClick}
-            className={`bg-white border border-gray-200 rounded-2xl md:rounded-l-2xl md:rounded-r-none shadow-sm hover:shadow-md transition-all relative overflow-hidden flex flex-col md:flex-row min-h-[140px] cursor-pointer
+            className={`bg-surface-card border border-border-subtle rounded-2xl md:rounded-l-2xl md:rounded-r-none shadow-sm hover:shadow-md transition-all relative overflow-hidden flex flex-col md:flex-row min-h-[140px] cursor-pointer
             ${isDraft ? 'border-dashed bg-gray-50/50' : ''}
             ${isPast || isCancelled ? 'opacity-75 grayscale-[0.1]' : ''}
         `}>
@@ -237,7 +237,7 @@ export const TripCard = ({ trip, onDeleteDraft, onCancelTrip }: TripCardProps) =
                                             </div>
                                         </div>
                                         {i < timeline.length - 1 && (
-                                            <div className="shrink-0 px-0.5 text-gray-300 group-hover:text-[#00BCD4] transition-colors -ml-0.5 z-10 relative">
+                                            <div className="shrink-0 px-0.5 text-gray-300 group-hover:text-brand-cyan transition-colors -ml-0.5 z-10 relative">
                                                 <ChevronLeft size={16} strokeWidth={2} />
                                             </div>
                                         )}
@@ -250,12 +250,12 @@ export const TripCard = ({ trip, onDeleteDraft, onCancelTrip }: TripCardProps) =
             </div>
 
             {/* === כפתורים === */}
-            <div className="flex flex-row md:flex-col justify-end p-3 gap-2 w-full md:w-32 shrink-0 bg-white border-t md:border-t-0 border-gray-100">
+            <div className="flex flex-row md:flex-col justify-end p-3 gap-2 w-full md:w-32 shrink-0 bg-surface-card border-t md:border-t-0 border-gray-100">
                 {isDraft ? (
                     <>
                         <button 
                             onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/new-trip?id=${trip.id}`); }} 
-                            className="w-full py-2 bg-[#00BCD4] text-white rounded-lg text-xs font-bold hover:bg-cyan-600 transition-colors flex items-center justify-center gap-1 shadow-sm"
+                            className="w-full py-2 bg-brand-cyan text-white rounded-lg text-xs font-bold hover:bg-cyan-600 transition-colors flex items-center justify-center gap-1 shadow-sm"
                         >
                             <FileEdit size={14}/> עריכה
                         </button>

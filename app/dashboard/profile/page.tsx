@@ -216,7 +216,7 @@ function ProfileContent() {
     finally { setSaving(false); }
   };
 
-  if (userLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
+  if (userLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-brand-cyan" size={40}/></div>;
 
   return (
     <>
@@ -243,12 +243,12 @@ function ProfileContent() {
             </div>
         )}
 
-        <section className="bg-white rounded-[32px] border border-gray-200 p-8 shadow-sm flex flex-col md:flex-row items-center gap-10 relative overflow-hidden">
-            <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-[#00BCD4] to-[#8BC34A]"></div>
+        <section className="bg-surface-card rounded-[32px] border border-border-subtle p-8 shadow-sm flex flex-col md:flex-row items-center gap-10 relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-brand-cyan to-brand-green"></div>
             
             <div className="relative group">
-                <div className="w-32 h-32 rounded-[30px] bg-gradient-to-tr from-[#00BCD4] to-cyan-100 flex items-center justify-center text-white font-bold text-5xl shadow-xl shadow-cyan-100 border-[5px] border-white ring-1 ring-gray-100 overflow-hidden cursor-pointer relative">
-                    {uploading ? <Loader2 className="animate-spin text-[#00BCD4]" size={32}/> : formData.profileImage ? <Image src={formData.profileImage} alt="Profile" fill className="object-cover" unoptimized/> : (formData.officialName?.[0] || <User size={48}/>)}
+                <div className="w-32 h-32 rounded-[30px] bg-gradient-to-tr from-brand-cyan to-cyan-100 flex items-center justify-center text-white font-bold text-5xl shadow-xl shadow-cyan-100 border-[5px] border-white ring-1 ring-gray-100 overflow-hidden cursor-pointer relative">
+                    {uploading ? <Loader2 className="animate-spin text-brand-cyan" size={32}/> : formData.profileImage ? <Image src={formData.profileImage} alt="Profile" fill className="object-cover" unoptimized/> : (formData.officialName?.[0] || <User size={48}/>)}
                     <label className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer z-10">
                         <Camera size={24}/>
                         <span className="text-xs font-bold mt-1">שנה תמונה</span>
@@ -262,11 +262,11 @@ function ProfileContent() {
 
             <div className="text-center md:text-right flex-1 space-y-3">
                 <div className="flex flex-col md:items-start items-center">
-                    <h2 className="text-3xl font-black text-gray-800">{formData.officialName} {formData.lastName}</h2>
-                    {formData.nickname && <span className="text-lg text-gray-400 font-bold">({formData.nickname})</span>}
+                    <h2 className="text-3xl font-black text-text-primary">{formData.officialName} {formData.lastName}</h2>
+                    {formData.nickname && <span className="text-lg text-text-muted font-bold">({formData.nickname})</span>}
                 </div>
                 <div className="flex flex-wrap justify-center md:justify-start gap-3 mt-2">
-                    <span className="bg-cyan-50 text-[#00BCD4] border border-cyan-100 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2">
+                    <span className="bg-cyan-50 text-brand-cyan border border-cyan-100 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2">
                         <Building2 size={16}/> {fullRoleString}
                     </span>
                 </div>
@@ -274,8 +274,8 @@ function ProfileContent() {
         </section>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <section className="bg-[#F1F8E9] rounded-[32px] border border-green-100 p-8 shadow-inner lg:col-span-1 h-fit">
-                <div className="flex items-center gap-2 mb-6 text-[#8BC34A] font-bold text-sm uppercase tracking-wider"><Lock size={14}/> נתונים מערכתיים (תצוגה)</div>
+            <section className="bg-green-50 rounded-[32px] border border-green-100 p-8 shadow-inner lg:col-span-1 h-fit">
+                <div className="flex items-center gap-2 mb-6 text-brand-green font-bold text-sm uppercase tracking-wider"><Lock size={14}/> נתונים מערכתיים (תצוגה)</div>
                 <div className="space-y-6">
                     <div><label className="text-xs font-bold text-gray-400 block mb-1">תפקיד</label><div className="font-bold text-gray-800 text-base border-b border-green-200/50 pb-2">{systemRoleDescription}</div></div>
                     <div><label className="text-xs font-bold text-gray-400 block mb-1">שם (לפי ת״ז)</label><div className="font-bold text-gray-800 text-lg border-b border-green-200/50 pb-2">{formData.officialName || '-'}</div></div>
@@ -285,8 +285,8 @@ function ProfileContent() {
                 </div>
             </section>
 
-            <section className="bg-white rounded-[32px] border border-gray-200 p-8 shadow-sm lg:col-span-2">
-                <div className="flex items-center gap-3 mb-8 border-b border-gray-100 pb-4"><ShieldCheck size={24} className="text-[#00BCD4]"/><h3 className="text-xl font-bold text-gray-800">עדכון פרטים אישיים</h3></div>
+            <section className="bg-surface-card rounded-[32px] border border-border-subtle p-8 shadow-sm lg:col-span-2">
+                <div className="flex items-center gap-3 mb-8 border-b border-border-subtle pb-4"><ShieldCheck size={24} className="text-brand-cyan"/><h3 className="text-xl font-bold text-text-primary">עדכון פרטים אישיים</h3></div>
                 <div className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <Input label="שם פרטי (כפי שמופיע בתעודת הזהות)" value={formData.officialName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, officialName: e.target.value})} placeholder="לדוגמה: יוסף חיים"/>
@@ -313,7 +313,7 @@ function ProfileContent() {
                         <div>
                             <div className="flex justify-between items-end mb-1.5">
                                 <label className="text-xs font-bold text-gray-500">מיקוד</label>
-                                <a href="https://doar.israelpost.co.il/locatezip" target="_blank" rel="noreferrer" className="text-[10px] font-bold text-[#E91E63] flex items-center gap-1 hover:underline">
+                                <a href="https://doar.israelpost.co.il/locatezip" target="_blank" rel="noreferrer" className="text-[10px] font-bold text-brand-pink flex items-center gap-1 hover:underline">
                                     <ExternalLink size={10} /> איתור מיקוד
                                 </a>
                             </div>
@@ -337,7 +337,7 @@ function ProfileContent() {
                     
                     <div className="bg-cyan-50/50 p-6 rounded-2xl border border-cyan-100">
                         <label className="text-sm font-bold text-gray-600 block mb-2">{isHQ ? 'שמות חברי מטה נוספים' : 'שמות רכזים נוספים בסניף'}</label>
-                        <textarea className="w-full p-4 rounded-xl bg-white border border-gray-200 outline-none focus:border-[#00BCD4] min-h-[80px] resize-none text-sm font-medium" placeholder="הזן שמות מופרדים בפסיקים..." value={formData.additionalStaff} onChange={e => setFormData({...formData, additionalStaff: e.target.value})}></textarea>
+                        <textarea className="w-full p-4 rounded-xl bg-white border border-border-subtle outline-none focus:border-brand-cyan min-h-[80px] resize-none text-sm font-medium" placeholder="הזן שמות מופרדים בפסיקים..." value={formData.additionalStaff} onChange={e => setFormData({...formData, additionalStaff: e.target.value})}></textarea>
                     </div>
                 </div>
                 <div className="mt-10 flex items-center justify-end gap-4">
@@ -354,7 +354,7 @@ function ProfileContent() {
 
 export default function ProfilePage() {
   return (
-    <Suspense fallback={<div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>}>
+    <Suspense fallback={<div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-brand-cyan" size={40}/></div>}>
        <ProfileContent />
     </Suspense>
   )

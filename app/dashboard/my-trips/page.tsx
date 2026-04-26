@@ -37,10 +37,10 @@ export default function MyTripsPage() {
   const [pendingTripId, setPendingTripId] = useState<string | null>(null);
 
   const filterOptions = [
-      { id: "טיול מחוץ לסניף", label: "טיול מחוץ לסניף", color: "bg-[#4DD0E1]" },
-      { id: "כנס/אירוע מחוץ לסניף", label: "כנס/אירוע חוץ", color: "bg-[#BA68C8]" },
-      { id: "פעילות לא שגרתית בסניף", label: "פעילות בסניף", color: "bg-[#81C784]" },
-      { id: "יציאה רגלית באזור הסניף", label: "יציאה רגלית", color: "bg-[#FFB74D]" },
+      { id: "טיול מחוץ לסניף", label: "טיול מחוץ לסניף", color: "bg-brand-cyan" },
+      { id: "כנס/אירוע מחוץ לסניף", label: "כנס/אירוע חוץ", color: "bg-purple-400" },
+      { id: "פעילות לא שגרתית בסניף", label: "פעילות בסניף", color: "bg-brand-green" },
+      { id: "יציאה רגלית באזור הסניף", label: "יציאה רגלית", color: "bg-amber-400" },
       { id: "אחר", label: "אחר", color: "bg-slate-400" }
   ];
 
@@ -162,7 +162,7 @@ export default function MyTripsPage() {
       }
   };
 
-  if (userLoading || tripsLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
+  if (userLoading || tripsLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-brand-cyan" size={40}/></div>;
 
   const displayTrips = trips.filter(t => {
       const today = new Date();
@@ -223,14 +223,14 @@ export default function MyTripsPage() {
       <div className="p-4 md:p-8 space-y-6 animate-fadeIn pb-32 max-w-[100vw] overflow-x-hidden md:max-w-7xl md:mx-auto min-h-screen">
           <div className="space-y-4 pt-2">
               <div className="flex flex-col md:flex-row justify-between items-end gap-4">
-                  <div className="flex gap-2 bg-white p-1.5 rounded-2xl border border-gray-100 w-full md:w-auto overflow-x-auto no-scrollbar shadow-sm">
+                  <div className="flex gap-2 bg-surface-card p-1.5 rounded-2xl border border-border-subtle w-full md:w-auto overflow-x-auto no-scrollbar shadow-sm">
                       {[
                           { id: 'all', label: 'כל הטיולים' }, { id: 'future', label: 'עתידיים' }, { id: 'past', label: 'היסטוריה' },
                           { id: 'draft', label: 'טיוטות' }, { id: 'approved', label: 'אושר' }, { id: 'pending', label: 'בבדיקה' },
                           { id: 'rejected', label: 'נדחה' }, { id: 'cancelled', label: 'בוטל' },
                       ].map(f => {
                           const isActive = activeFilter === f.id;
-                          return (<button key={f.id} onClick={() => setActiveFilter(f.id)} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex-1 md:flex-none ${isActive ? 'bg-[#00BCD4] text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>{f.label}</button>)
+                          return (<button key={f.id} onClick={() => setActiveFilter(f.id)} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex-1 md:flex-none ${isActive ? 'bg-brand-cyan text-white shadow-md' : 'text-text-secondary hover:bg-surface-muted'}`}>{f.label}</button>)
                       })}
                   </div>
 
@@ -242,15 +242,15 @@ export default function MyTripsPage() {
                         onChange={setSelectedTypes}
                       />
                       <div className="relative flex-1 md:w-64">
-                          <input type="text" placeholder="חיפוש לפי שם..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-4 pr-10 py-3 bg-white border border-gray-200 rounded-2xl text-sm font-bold focus:border-[#00BCD4] outline-none transition-all shadow-sm focus:ring-4 focus:ring-cyan-50"/>
-                          <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={18}/>
+                          <input type="text" placeholder="חיפוש לפי שם..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-4 pr-10 py-3 bg-surface-card border border-border-subtle rounded-2xl text-sm font-bold focus:border-brand-cyan outline-none transition-all shadow-sm focus:ring-4 focus:ring-cyan-50"/>
+                          <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted" size={18}/>
                       </div>
                   </div>
               </div>
 
               <div className="grid grid-cols-1 gap-4">
                   {displayTrips.length === 0 ? (
-                      <div className="py-20 text-center bg-white rounded-3xl border border-dashed border-gray-200 flex flex-col items-center"><div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-3"><History size={24} className="text-gray-300"/></div><span className="text-gray-400 font-bold">לא נמצאו פעילויות</span></div>
+                      <div className="py-20 text-center bg-surface-card rounded-3xl border border-dashed border-border-subtle flex flex-col items-center"><div className="w-16 h-16 bg-surface-muted rounded-full flex items-center justify-center mb-3"><History size={24} className="text-gray-300"/></div><span className="text-text-muted font-bold">לא נמצאו פעילויות</span></div>
                   ) : displayTrips.map(trip => (
                       <TripCard 
                           key={trip.id} 

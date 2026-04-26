@@ -65,7 +65,7 @@ export default function ManagerHomePage() {
     }
   }, [user, userLoading, profile, router]);
 
-  if (userLoading || statsLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
+  if (userLoading || statsLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-brand-cyan" size={40}/></div>;
 
   return (
     <>
@@ -79,7 +79,7 @@ export default function ManagerHomePage() {
         </div>
 
         {/* --- גריד סטטיסטיקה --- */}
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden mb-8">
+        <div className="bg-surface-card rounded-3xl border border-border-subtle shadow-sm overflow-hidden mb-8">
             <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-y md:divide-y-0 divide-gray-100 dir-ltr">
                 
                 {/* 1. ממתינים לאישור */}
@@ -119,9 +119,9 @@ export default function ManagerHomePage() {
         <h3 className="text-lg font-bold text-gray-800 mb-4">גישה מהירה</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             
-            <Link href="/manager/inbox" className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between hover:border-[#00BCD4] hover:shadow-md transition-all group">
+            <Link href="/manager/inbox" className="bg-surface-card p-4 rounded-2xl border border-border-subtle shadow-sm flex items-center justify-between hover:border-brand-cyan hover:shadow-md transition-all group">
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-cyan-50 flex items-center justify-center text-[#00BCD4]">
+                    <div className="w-10 h-10 rounded-full bg-cyan-50 flex items-center justify-center text-brand-cyan">
                         <Clock size={20} />
                     </div>
                     <div>
@@ -129,7 +129,7 @@ export default function ManagerHomePage() {
                         <div className="text-[10px] text-gray-400">צפייה בדיווחים וטיפול בפניות</div>
                     </div>
                 </div>
-                <div className="bg-gray-50 p-2 rounded-full text-gray-400 group-hover:bg-[#00BCD4] group-hover:text-white transition-colors">
+                <div className="bg-gray-50 p-2 rounded-full text-gray-400 group-hover:bg-brand-cyan group-hover:text-white transition-colors">
                     <ArrowLeft size={16} />
                 </div>
             </Link>

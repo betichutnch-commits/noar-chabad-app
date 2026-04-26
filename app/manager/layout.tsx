@@ -206,7 +206,7 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
   const hasAnyAlerts = counts.newMessages > 0 || counts.newUsers > 0;
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] dir-rtl font-sans text-right relative">
+    <div className="min-h-screen bg-surface-base dir-rtl font-sans text-right relative">
       
       {/* Mobile Header */}
       <div className="md:hidden flex items-center justify-between px-4 py-3 bg-white/95 backdrop-blur-md border-b border-gray-200 sticky top-0 z-40 shadow-sm h-16">
@@ -228,7 +228,7 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
                  <span className="text-[11px] font-black text-gray-800">
                      {user?.user_metadata?.full_name || 'מנהל'}
                  </span>
-                 <span className="text-[9px] font-light text-[#8BC34A] mt-0.5">
+                 <span className="text-[9px] font-light text-brand-green mt-0.5">
                      מחלקת בטיחות ומפעלים
                  </span>
              </div>
@@ -260,7 +260,7 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
                 <div className="relative">
                     {activeBubble === 'messages' && (
                         <div className="absolute bottom-16 left-0 w-72 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden animate-fadeIn origin-bottom-left z-20">
-                            <div className="bg-[#00BCD4] p-3 flex justify-between items-center text-white">
+                            <div className="bg-brand-cyan p-3 flex justify-between items-center text-white">
                                 <span className="text-sm font-bold flex items-center gap-2"><Mail size={16}/> הודעות חדשות</span>
                                 <button onClick={() => setActiveBubble(null)}><X size={16}/></button>
                             </div>
@@ -283,7 +283,7 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
                                                 {details.secondaryInfo && (
                                                     <>
                                                         <span className="text-gray-300">|</span>
-                                                        <span className="text-[#00BCD4] font-bold">{details.secondaryInfo}</span>
+                                                        <span className="text-brand-cyan font-bold">{details.secondaryInfo}</span>
                                                     </>
                                                 )}
                                                 
@@ -295,15 +295,15 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
                                     );
                                 })}
                             </div>
-                            <Link href="/manager/inbox" className="block p-2 text-center text-xs font-bold text-[#00BCD4] bg-white border-t hover:bg-gray-50">לכל ההודעות</Link>
+                            <Link href="/manager/inbox" className="block p-2 text-center text-xs font-bold text-brand-cyan bg-white border-t hover:bg-gray-50">לכל ההודעות</Link>
                         </div>
                     )}
                     <button 
                         onClick={() => setActiveBubble(activeBubble === 'messages' ? null : 'messages')}
-                        className={`w-12 h-12 rounded-2xl shadow-lg border flex items-center justify-center transition-all relative ${activeBubble === 'messages' ? 'bg-[#00BCD4] text-white border-[#00BCD4]' : 'bg-white text-gray-600 border-gray-200'}`}
+                        className={`w-12 h-12 rounded-2xl shadow-lg border flex items-center justify-center transition-all relative ${activeBubble === 'messages' ? 'bg-brand-cyan text-white border-brand-cyan' : 'bg-white text-gray-600 border-gray-200'}`}
                     >
                         {activeBubble === 'messages' ? <X size={20}/> : <Bell size={20} />}
-                        {counts.newMessages > 0 && !activeBubble && <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#E91E63] text-white text-[9px] font-bold rounded-full flex items-center justify-center border border-white animate-pulse">{counts.newMessages}</span>}
+                        {counts.newMessages > 0 && !activeBubble && <span className="absolute -top-1 -right-1 w-4 h-4 bg-brand-pink text-white text-[9px] font-bold rounded-full flex items-center justify-center border border-white animate-pulse">{counts.newMessages}</span>}
                     </button>
                 </div>
             )}
