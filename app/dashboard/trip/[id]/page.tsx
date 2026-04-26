@@ -11,6 +11,9 @@ import { Modal } from '@/components/ui/Modal'
 // ייבוא Hook ו-Zod
 import { useUser } from '@/hooks/useUser'
 import { cancellationSchema, staffSchema } from '@/lib/schemas'
+import type { TripRecord } from '@/lib/types'
+
+type TripState = TripRecord & { details: Record<string, unknown>; cancellation_reason?: string };
 
 export default function TripDetailsPage() {
   const params = useParams();
@@ -19,7 +22,7 @@ export default function TripDetailsPage() {
   // 1. שימוש ב-Hook
   const { user, profile, loading: userLoading } = useUser('/');
 
-  const [trip, setTrip] = useState<any>(null);
+  const [trip, setTrip] = useState<TripState | null>(null);
   const [tripLoading, setTripLoading] = useState(true);
   
   const [isAddingStaff, setIsAddingStaff] = useState(false);
@@ -69,7 +72,7 @@ export default function TripDetailsPage() {
           return; 
       }
       
-      setTrip(tripData);
+      setTrip({ ...tripData, details: (tripData.details as Record<string, unknown>) || {} } as TripState);
       setTripLoading(false);
     };
 
@@ -91,7 +94,7 @@ export default function TripDetailsPage() {
   };
 
   const executeCancelTrip = async () => {
-      if (!cancelReason) return;
+      if (!cancelReason || !trip) return;
 
       // 3. ולידציה עם Zod (ביטול)
       const validation = cancellationSchema.safeParse({ reason: cancelReason });
@@ -103,52 +106,52 @@ export default function TripDetailsPage() {
       try {
           const updatedDetails = { ...trip.details, cancellationReason: cancelReason };
           
-          const { error } = await supabase.from('trips').update({
-              status: 'cancelled',
-              cancellation_reason: cancelReason, 
-              details: updatedDetails
-          }).eq('id', trip.id);
-          
-          if (error) throw error;
+          const res = await fetch(`/api/trips/${trip.id}/cancel`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason: cancelReason }),
+          });
+          const payload = await res.json();
+          if (!res.ok) throw new Error(payload.error || 'שגיאה בביטול');
           
           setTrip({ ...trip, status: 'cancelled', cancellation_reason: cancelReason, details: updatedDetails });
           setShowCancelModal(false);
           
           showAlert('success', 'הפעילות בוטלה', 'הסטטוס עודכן והודעה נשלחה לגורמים הרלוונטיים.');
 
-      } catch (e: any) { 
-          showAlert('error', 'שגיאה', 'שגיאה בביטול: ' + e.message);
+      } catch (e: unknown) { 
+          const message = e instanceof Error ? e.message : 'שגיאה לא ידועה';
+          showAlert('error', 'שגיאה', 'שגיאה בביטול: ' + message);
       }
   };
 
   // --- פונקציות ניהול צוות וטיול ---
   const handleDeleteSecondaryStaff = async () => {
-      if (!canManageStaff) return;
+      if (!canManageStaff || !trip) return;
       
       showAlert('confirm', 'מחיקת איש צוות', 'האם את/ה בטוח/ה שברצונך להסיר את איש הצוות?', async () => {
           const updatedDetails = { ...trip.details };
           delete updatedDetails.secondaryStaffObj;
-          
-          const { error } = await supabase.from('trips').update({ details: updatedDetails }).eq('id', trip.id);
-          
-          if (!error) { 
+          const res = await fetch(`/api/trips/${trip.id}/secondary-staff`, { method: 'DELETE' });
+          const payload = await res.json();
+          if (res.ok) { 
               setTrip({ ...trip, details: updatedDetails }); 
               setIsAddingStaff(false); 
           } else {
-              showAlert('error', 'שגיאה', 'לא ניתן היה למחוק את איש הצוות');
+              showAlert('error', 'שגיאה', payload.error || 'לא ניתן היה למחוק את איש הצוות');
           }
       });
   };
 
   const handleEditSecondaryStaff = () => { 
-      if (canManageStaff && trip.details?.secondaryStaffObj) { 
-          setNewStaffData(trip.details.secondaryStaffObj); 
+      if (canManageStaff && trip && trip.details?.secondaryStaffObj) { 
+          setNewStaffData(trip.details.secondaryStaffObj as { name: string; idNumber: string; phone: string; email: string; role: string }); 
           setIsAddingStaff(true); 
       } 
   };
 
   const handleSaveSecondaryStaff = async () => {
-      if (!canManageStaff) return;
+      if (!canManageStaff || !trip) return;
 
       // 4. ולידציה עם Zod (איש צוות)
       const validation = staffSchema.safeParse(newStaffData);
@@ -179,30 +182,25 @@ export default function TripDetailsPage() {
           } 
       };
       
-      const { error } = await supabase.from('trips').update({ details: updatedDetails }).eq('id', trip.id);
-      
-      if (!error) {
-          // שליחת התראה
-          await supabase.from('notifications').insert({ 
-              user_id: existingUser.id, 
-              title: 'שיבוץ לטיול', 
-              message: `שובצת לטיול: ${trip.name}`, 
-              link: `/dashboard/trip/${trip.id}`, 
-              type: 'assignment' 
-          });
-          
+      const res = await fetch(`/api/trips/${trip.id}/secondary-staff`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newStaffData),
+      });
+      const payload = await res.json();
+      if (res.ok) {
           setTrip({ ...trip, details: updatedDetails }); 
           setIsAddingStaff(false); 
           setNewStaffData({ name: '', idNumber: '', phone: '', email: '', role: '' }); 
           showAlert('success', 'הוספה בוצעה', 'איש הצוות נוסף בהצלחה!');
       } else {
-          showAlert('error', 'שגיאה', 'אירעה שגיאה בשמירה');
+          showAlert('error', 'שגיאה', payload.error || 'אירעה שגיאה בשמירה');
       }
       setIsVerifying(false);
   };
 
   const handleEditTrip = () => {
-      if (!canManage) return;
+      if (!canManage || !trip) return;
       if (trip.status === 'draft') { 
           router.push(`/dashboard/new-trip?id=${trip.id}`); 
           return; 

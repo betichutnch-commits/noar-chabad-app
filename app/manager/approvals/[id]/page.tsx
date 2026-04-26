@@ -7,6 +7,8 @@ import { useRouter } from 'next/navigation'
 import { TripDetailsView } from '@/components/TripDetailsView'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
+import { isManagerUser } from '@/lib/auth'
+import type { AppProfile, TripRecord } from '@/lib/types'
 
 // ייבוא Hook
 import { useUser } from '@/hooks/useUser'
@@ -18,8 +20,8 @@ export default function ManagerTripView({ params }: { params: Promise<{ id: stri
   // 1. שימוש ב-Hook
   const { user, profile, loading: userLoading } = useUser('/');
 
-  const [trip, setTrip] = useState<any>(null);
-  const [ownerProfile, setOwnerProfile] = useState<any>(null); // פרופיל של מי שיצר את הטיול
+  const [trip, setTrip] = useState<TripRecord | null>(null);
+  const [ownerProfile, setOwnerProfile] = useState<AppProfile | null>(null);
   const [dataLoading, setDataLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
 
@@ -41,14 +43,18 @@ export default function ManagerTripView({ params }: { params: Promise<{ id: stri
         if (!user) return;
 
         // בדיקת הרשאות (רק למנהלים)
-        const isManager = profile?.role === 'admin' || profile?.role === 'safety_admin' || user.user_metadata?.department === 'בטיחות ומפעלים';
+        const isManager = isManagerUser(user, profile);
         
         if (profile && !isManager) {
              router.push('/dashboard');
              return;
         }
 
-        const { data: tripData, error } = await supabase.from('trips').select('*').eq('id', id).single();
+        const { data: tripData, error } = await supabase
+          .from('trips')
+          .select('id, user_id, name, branch, coordinator_name, start_date, status, details')
+          .eq('id', id)
+          .single();
         if (error || !tripData) { 
             router.push('/manager/approvals'); 
             return; 
@@ -56,7 +62,11 @@ export default function ManagerTripView({ params }: { params: Promise<{ id: stri
         setTrip(tripData);
 
         if (tripData?.user_id) {
-            const { data: profileData } = await supabase.from('profiles').select('*').eq('id', tripData.user_id).single();
+            const { data: profileData } = await supabase
+              .from('profiles')
+              .select('id, full_name, email, phone, avatar_url, role, department')
+              .eq('id', tripData.user_id)
+              .single();
             setOwnerProfile(profileData);
         }
         setDataLoading(false);
@@ -74,20 +84,17 @@ export default function ManagerTripView({ params }: { params: Promise<{ id: stri
           `האם אתה בטוח שברצונך ${newStatus === 'approved' ? 'לאשר' : 'לדחות'} את הטיול?\nפעולה זו תשלח עדכון לרכז.`,
           async () => {
               setProcessing(true);
-              const { error } = await supabase.from('trips').update({ status: newStatus }).eq('id', trip.id);
+              if (!trip) return;
+              const res = await fetch(`/api/trips/${trip.id}/status`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus }),
+              });
+              await res.json();
 
-              if (error) {
+              if (!res.ok) {
                   showModal('error', 'שגיאה', 'שגיאה בעדכון הסטטוס');
               } else {
-                  // שליחת התראה
-                  await supabase.from('notifications').insert({
-                      user_id: trip.user_id,
-                      title: newStatus === 'approved' ? 'הטיול אושר!' : 'הטיול נדחה',
-                      message: newStatus === 'approved' ? `הטיול "${trip.name}" אושר בהצלחה.` : `הטיול "${trip.name}" נדחה. היכנס לפרטים לבירור.`,
-                      link: `/dashboard/trip/${trip.id}`,
-                      type: newStatus === 'approved' ? 'success' : 'error'
-                  });
-
                   setTrip({ ...trip, status: newStatus });
                   showModal('success', 'בוצע', newStatus === 'approved' ? 'הטיול אושר בהצלחה!' : 'הטיול נדחה.');
               }
@@ -98,6 +105,7 @@ export default function ManagerTripView({ params }: { params: Promise<{ id: stri
 
   // בדיקת טעינה משולבת
   if (userLoading || dataLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-[#00BCD4]" size={40}/></div>;
+  if (!trip) return null;
 
   return (
     <div className="min-h-screen bg-[#F5F5F5] font-sans text-gray-800 pb-32" dir="rtl">

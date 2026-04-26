@@ -9,6 +9,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Send, HelpCircle, Image as ImageIcon, X, AlertTriangle, Info, Loader2 } from 'lucide-react'
 import { useUser } from '@/hooks/useUser'
 import { contactSchema } from '@/lib/schemas'
+import Image from 'next/image'
 
 export default function ContactPage() {
   const { user, loading: userLoading } = useUser('/');
@@ -30,12 +31,22 @@ export default function ContactPage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [formData, setFormData] = useState({ subject: '', message: '' });
 
+  // ולידציה בסיסית לקובץ
+  const isValidFile = (file: File) => {
+      const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+      return allowed.includes(file.type);
+  };
+
   const handlePaste = (e: React.ClipboardEvent) => {
     const items = e.clipboardData.items;
     for (let i = 0; i < items.length; i++) {
       if (items[i].type.indexOf('image') !== -1) {
         const blob = items[i].getAsFile();
         if (blob) {
+            if (!isValidFile(blob)) {
+                showModal('error', 'קובץ לא נתמך', 'ניתן להעלות תמונות בלבד (JPG, PNG).');
+                return;
+            }
             setScreenshot(blob);
             setPreviewUrl(URL.createObjectURL(blob));
         }
@@ -46,6 +57,10 @@ export default function ContactPage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       if (e.target.files && e.target.files[0]) {
           const file = e.target.files[0];
+          if (!isValidFile(file)) {
+              showModal('error', 'קובץ לא נתמך', 'ניתן להעלות תמונות בלבד (JPG, PNG).');
+              return;
+          }
           setScreenshot(file);
           setPreviewUrl(URL.createObjectURL(file));
       }
@@ -66,34 +81,42 @@ export default function ContactPage() {
 
     setSubmitting(true);
 
-    let imageUrl = null;
+    let imagePath = null; // שינוי: שומרים Path ולא URL
 
     if (screenshot && user) {
-        const fileName = `bugs/${user.id}_${Date.now()}.png`;
-        const { error: uploadError } = await supabase.storage.from('trip-files').upload(fileName, screenshot);
-        if (!uploadError) {
-            const { data } = supabase.storage.from('trip-files').getPublicUrl(fileName);
-            imageUrl = data.publicUrl;
+        // שינוי: מעלים לתיקיית bugs תחת תיקייה פרטית של המשתמש
+        const fileName = `${user.id}/bugs/${Date.now()}.png`;
+        const { data, error: uploadError } = await supabase.storage.from('trip-files').upload(fileName, screenshot);
+        
+        if (uploadError) {
+             setSubmitting(false);
+             showModal('error', 'שגיאה', 'שגיאה בהעלאת התמונה: ' + uploadError.message);
+             return;
         }
+        
+        // שינוי קריטי: שומרים את ה-path
+        imagePath = data.path;
     }
     
-    const finalMessage = imageUrl 
-        ? `${formData.message}\n\n[צורף צילום מסך]: ${imageUrl}`
+    // בונים את ההודעה עם ה-Path
+    const finalMessage = imagePath 
+        ? `${formData.message}\n\n[צורף צילום מסך]: ${imagePath}`
         : formData.message;
 
-    // השינוי החשוב: שליחת הקטגוריה לעמודה הייעודית
-    const { error } = await supabase.from('contact_messages').insert([{
-        user_id: user?.id,
-        subject: formData.subject, // שולחים את הנושא נקי
-        message: finalMessage,
-        category: type, // שומרים 'bug' או 'general' בעמודה החדשה
-        status: 'new'
-    }]);
-
+    const res = await fetch('/api/contact-messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject: formData.subject,
+          message: finalMessage,
+          category: type,
+        }),
+    });
+    const payload = await res.json();
     setSubmitting(false);
 
-    if (error) {
-        showModal('error', 'שגיאה', 'אירעה שגיאה בשליחה: ' + error.message);
+    if (!res.ok) {
+        showModal('error', 'שגיאה', 'אירעה שגיאה בשליחה: ' + (payload.error || 'שגיאה לא ידועה'));
     } else {
         showModal('success', 'נשלח בהצלחה', 'הפנייה התקבלה ומספרה נרשם במערכת.\nאנו נטפל בה בהקדם.');
         setFormData({ subject: '', message: '' });
@@ -155,7 +178,7 @@ export default function ContactPage() {
                     label="נושא" 
                     placeholder={type === 'bug' ? "בקצרה: מה הבעיה?" : "בנושא..."}
                     value={formData.subject}
-                    onChange={(e: any) => setFormData({...formData, subject: e.target.value})}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, subject: e.target.value})}
                  />
 
                  <div>
@@ -181,7 +204,7 @@ export default function ContactPage() {
                  {previewUrl && (
                      <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 relative w-fit animate-fadeIn mx-auto md:mx-0">
                          <p className="text-xs font-bold text-gray-500 mb-2 flex items-center gap-1 justify-center md:justify-start"><ImageIcon size={12}/> צילום מסך מצורף:</p>
-                         <img src={previewUrl} alt="Screenshot" className="max-h-48 rounded-lg border border-gray-200 shadow-sm"/>
+                        <Image src={previewUrl} alt="Screenshot" width={960} height={640} className="max-h-48 w-auto rounded-lg border border-gray-200 shadow-sm" unoptimized/>
                          <button onClick={removeImage} className="absolute -top-2 -left-2 bg-white text-red-500 rounded-full p-2 shadow-md hover:bg-red-50 border border-gray-200 transition-all active:scale-95">
                              <X size={16}/>
                          </button>

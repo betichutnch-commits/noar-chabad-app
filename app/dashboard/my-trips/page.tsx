@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { Header } from '@/components/layout/Header'
 import { Loader2, Search, History, Trash2 } from 'lucide-react'
-import { useRouter } from 'next/navigation'
 import { TripCard } from '@/components/TripCard' 
 import { MultiSelectFilter } from '@/components/ui/MultiSelectFilter'
 import { Modal } from '@/components/ui/Modal'
@@ -12,13 +11,13 @@ import { Modal } from '@/components/ui/Modal'
 // ייבוא Hook ו-Zod
 import { useUser } from '@/hooks/useUser'
 import { cancellationSchema } from '@/lib/schemas'
+import type { TripRecord } from '@/lib/types'
 
 export default function MyTripsPage() {
-  const router = useRouter();
   const { user, loading: userLoading } = useUser('/');
 
   const [tripsLoading, setTripsLoading] = useState(true);
-  const [trips, setTrips] = useState<any[]>([]);
+  const [trips, setTrips] = useState<Array<TripRecord & { details?: Record<string, unknown>; cancellation_reason?: string }>>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
@@ -81,8 +80,9 @@ export default function MyTripsPage() {
   };
 
   const executeDeleteDraft = async (id: string) => {
-      const { error } = await supabase.from('trips').delete().eq('id', id);
-      if (!error) {
+      const res = await fetch(`/api/trips/${id}`, { method: 'DELETE' });
+      const payload = await res.json();
+      if (res.ok) {
           setTrips(prev => prev.filter(t => t.id !== id));
           setModal(prev => ({...prev, isOpen: false}));
       } else {
@@ -90,7 +90,7 @@ export default function MyTripsPage() {
               isOpen: true,
               type: 'error',
               title: 'שגיאה',
-              message: 'שגיאה במחיקה: ' + error.message,
+              message: 'שגיאה במחיקה: ' + (payload.error || 'שגיאה לא ידועה'),
               confirmText: 'סגור',
               cancelText: '',
               onConfirm: undefined
@@ -122,15 +122,18 @@ export default function MyTripsPage() {
 
       try {
           const trip = trips.find(t => t.id === pendingTripId);
+          if (!trip) {
+            throw new Error('הטיול לא נמצא');
+          }
           const updatedDetails = { ...trip.details, cancellationReason: cancelReason };
           
-          const { error } = await supabase.from('trips').update({
-              status: 'cancelled',
-              cancellation_reason: cancelReason, 
-              details: updatedDetails
-          }).eq('id', pendingTripId);
-          
-          if (error) throw error;
+          const res = await fetch(`/api/trips/${pendingTripId}/cancel`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason: cancelReason }),
+          });
+          const payload = await res.json();
+          if (!res.ok) throw new Error(payload.error || 'שגיאה בביטול');
           
           setTrips(prev => prev.map(t => t.id === pendingTripId ? {...t, status: 'cancelled', cancellation_reason: cancelReason, details: updatedDetails} : t));
           setShowCustomCancelModal(false);
@@ -145,12 +148,13 @@ export default function MyTripsPage() {
               cancelText: ''
           });
 
-      } catch (e: any) { 
+      } catch (e: unknown) { 
+          const message = e instanceof Error ? e.message : 'שגיאה לא ידועה';
           setModal({
               isOpen: true,
               type: 'error',
               title: 'שגיאה',
-              message: 'לא ניתן היה לבטל את הפעילות: ' + e.message,
+              message: 'לא ניתן היה לבטל את הפעילות: ' + message,
               onConfirm: undefined,
               confirmText: 'סגור',
               cancelText: ''
@@ -170,9 +174,10 @@ export default function MyTripsPage() {
       else if (activeFilter === 'past') matchesFilter = tripDate < today;
       else if (activeFilter !== 'all') matchesFilter = t.status === activeFilter;
 
+      const tripType = typeof t.details?.tripType === 'string' ? t.details.tripType : '';
       const matchesType = selectedTypes.length === 0 
         ? true 
-        : selectedTypes.includes(t.details?.tripType);
+        : selectedTypes.includes(tripType);
 
       const matchesSearch = t.name.toLowerCase().includes(searchTerm.toLowerCase());
 

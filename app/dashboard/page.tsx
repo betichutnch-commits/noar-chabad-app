@@ -6,7 +6,6 @@ import { Header } from '@/components/layout/Header'
 import { 
   Loader2, Search, MapPin, ShieldAlert, Sun, Trash2, Calendar
 } from 'lucide-react'
-import { useRouter } from 'next/navigation'
 import { TripCard } from '@/components/TripCard' 
 import { formatHebrewDate } from '@/lib/dateUtils'
 import { MultiSelectFilter } from '@/components/ui/MultiSelectFilter'
@@ -15,13 +14,13 @@ import { Modal } from '@/components/ui/Modal'
 // ייבוא Hook ו-Zod
 import { useUser } from '@/hooks/useUser'
 import { cancellationSchema } from '@/lib/schemas'
+import type { TripRecord } from '@/lib/types'
 
 export default function DashboardPage() {
-  const router = useRouter();
   const { user, loading: userLoading } = useUser('/');
 
   const [tripsLoading, setTripsLoading] = useState(true);
-  const [trips, setTrips] = useState<any[]>([]);
+  const [trips, setTrips] = useState<Array<TripRecord & { details?: Record<string, unknown>; cancellation_reason?: string }>>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
@@ -83,8 +82,9 @@ export default function DashboardPage() {
   };
 
   const executeDeleteDraft = async (id: string) => {
-      const { error } = await supabase.from('trips').delete().eq('id', id);
-      if (!error) {
+      const res = await fetch(`/api/trips/${id}`, { method: 'DELETE' });
+      const payload = await res.json();
+      if (res.ok) {
           setTrips(prev => prev.filter(t => t.id !== id));
           setModal(prev => ({...prev, isOpen: false}));
       } else {
@@ -92,7 +92,7 @@ export default function DashboardPage() {
               isOpen: true,
               type: 'error',
               title: 'שגיאה',
-              message: 'שגיאה במחיקה: ' + error.message,
+              message: 'שגיאה במחיקה: ' + (payload.error || 'שגיאה לא ידועה'),
               confirmText: 'סגור',
               cancelText: '',
               onConfirm: undefined
@@ -125,14 +125,17 @@ export default function DashboardPage() {
 
       try {
           const trip = trips.find(t => t.id === cancelTripId);
+          if (!trip) {
+            throw new Error('הטיול לא נמצא');
+          }
           const updatedDetails = { ...trip.details, cancellationReason: cancelReason };
-          const { error } = await supabase.from('trips').update({
-              status: 'cancelled',
-              cancellation_reason: cancelReason, 
-              details: updatedDetails
-          }).eq('id', cancelTripId);
-          
-          if (error) throw error;
+          const res = await fetch(`/api/trips/${cancelTripId}/cancel`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason: cancelReason }),
+          });
+          const payload = await res.json();
+          if (!res.ok) throw new Error(payload.error || 'שגיאה בביטול');
           
           setTrips(prev => prev.map(t => t.id === cancelTripId ? {...t, status: 'cancelled', cancellation_reason: cancelReason, details: updatedDetails} : t));
           setShowCancelModal(false);
@@ -147,12 +150,13 @@ export default function DashboardPage() {
               onConfirm: undefined
           });
 
-      } catch (e: any) { 
+      } catch (e: unknown) { 
+          const message = e instanceof Error ? e.message : 'שגיאה לא ידועה';
           setModal({
               isOpen: true,
               type: 'error',
               title: 'שגיאה',
-              message: 'שגיאה בביטול: ' + e.message,
+              message: 'שגיאה בביטול: ' + message,
               confirmText: 'סגור',
               cancelText: '',
               onConfirm: undefined
@@ -171,7 +175,8 @@ export default function DashboardPage() {
       if (t.status === 'cancelled') return false; 
       
       const matchesStatus = activeFilter === 'all' ? true : t.status === activeFilter;
-      const matchesType = selectedTypes.length === 0 ? true : selectedTypes.includes(t.details?.tripType);
+      const tripType = typeof t.details?.tripType === 'string' ? t.details.tripType : '';
+      const matchesType = selectedTypes.length === 0 ? true : selectedTypes.includes(tripType);
       const matchesSearch = t.name.toLowerCase().includes(searchTerm.toLowerCase());
       
       return matchesStatus && matchesType && matchesSearch;
@@ -245,7 +250,7 @@ export default function DashboardPage() {
               <div className="flex flex-col md:flex-row justify-between items-end gap-4">
                   <div className="flex gap-2 bg-white p-1.5 rounded-2xl border border-gray-100 w-full md:w-auto overflow-x-auto no-scrollbar shadow-sm">
                       {['all', 'approved', 'pending', 'rejected', 'draft'].map(f => {
-                          const labels: any = { all: 'הכל', approved: 'אושר', pending: 'בבדיקה', rejected: 'נדחה', draft: 'טיוטות' };
+                          const labels: Record<string, string> = { all: 'הכל', approved: 'אושר', pending: 'בבדיקה', rejected: 'נדחה', draft: 'טיוטות' };
                           const isActive = activeFilter === f;
                           return (<button key={f} onClick={() => setActiveFilter(f)} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex-1 md:flex-none ${isActive ? 'bg-[#00BCD4] text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>{labels[f]}</button>)
                       })}

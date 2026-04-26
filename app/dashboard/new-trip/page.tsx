@@ -6,7 +6,7 @@ import { Header } from '@/components/layout/Header'
 import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import { 
-  Calendar, MapPin, AlertTriangle, Save, CheckCircle, FileUp, 
+  MapPin, AlertTriangle, Save, CheckCircle, FileUp, 
   Flag, ChevronDown, ChevronUp, Lock, Unlock, Check, Trash2, Loader2, Link as LinkIcon,
   Home, ArrowRight, FileEdit, User, Phone, CreditCard, Mail, Plus, X, Briefcase, UserPlus, Edit2, MessageSquare
 } from 'lucide-react'
@@ -21,6 +21,33 @@ import { getHebrewDateString } from '@/lib/dateUtils'
 // ייבוא Hook ו-Zod
 import { useUser } from '@/hooks/useUser'
 import { tripGeneralSchema, tripLineSchema, staffSchema } from '@/lib/schemas'
+
+type SecondaryStaffData = {
+  name: string;
+  role: string;
+  idNumber: string;
+  dob: string;
+  phone: string;
+  email: string;
+};
+
+type UploadedFileRef = { path?: string; url?: string; name: string } | null;
+
+type TimelineLine = {
+  id: string;
+  date: string;
+  locationType: string;
+  locationValue: string;
+  category: string;
+  subCategory: string;
+  finalSubCategory: string;
+  finalLocation: string;
+  otherDetail: string;
+  details: string;
+  requiresLicense: boolean;
+  licenseFile: UploadedFileRef;
+  insuranceFile: UploadedFileRef;
+};
 
 function NewTripContent() {
   const router = useRouter();
@@ -91,7 +118,7 @@ function NewTripContent() {
       coordEmail: '',
       coordDob: '',
 
-      secondaryStaffObj: null as any 
+      secondaryStaffObj: null as SecondaryStaffData | null
   });
 
   // State לטופס הוספת אחראי נוסף
@@ -99,7 +126,7 @@ function NewTripContent() {
   const [isVerifyingStaff, setIsVerifyingStaff] = useState(false);
   const [newStaffData, setNewStaffData] = useState({ name: '', role: '', idNumber: '', dob: '', phone: '', email: '' });
 
-  const [timeline, setTimeline] = useState<any[]>([]);
+  const [timeline, setTimeline] = useState<TimelineLine[]>([]);
   const [currentLine, setCurrentLine] = useState({ 
     date: '', locationType: 'custom', locationValue: '', category: '', subCategory: '', 
     otherDetail: '', details: '', 
@@ -119,7 +146,7 @@ function NewTripContent() {
   };
 
   const t = (key: string) => {
-      const dict: any = {
+      const dict: Record<string, Record<'male' | 'female' | 'mixed', string>> = {
           'save_draft': { male: 'שמור כטיוטה', female: 'שמרי כטיוטה', mixed: 'שמור/שמרי כטיוטה' },
           'submit': { male: 'שלח בקשה', female: 'שלחי בקשה', mixed: 'שליחת בקשה' },
           'select_type': { male: 'בחר סוג פעילות', female: 'בחרי סוג פעילות', mixed: 'בחירת סוג פעילות' },
@@ -196,11 +223,11 @@ function NewTripContent() {
         if (diffHours < 48 && diffTime > -86400000) setIsUrgentError(true);
         else setIsUrgentError(false);
     } else setIsUrgentError(false);
-  }, [generalInfo.startDate, generalInfo.endDate]);
+  }, [generalInfo.startDate, generalInfo.endDate, currentLine.date]);
 
   const getNextDate = (d: string) => { if(!d) return ''; const x=new Date(d); x.setDate(x.getDate()+1); return x.toISOString().split('T')[0]; };
   const toggleStaffAge = (age: string) => setGeneralInfo(prev => ({ ...prev, staffAges: prev.staffAges.includes(age) ? prev.staffAges.filter(a => a !== age) : [...prev.staffAges, age] }));
-  const isLicenseRequired = (cat: string, sub: string) => CATEGORIES[cat]?.options.find((o: any) => o.label === sub)?.license || false;
+  const isLicenseRequired = (cat: string, sub: string) => CATEGORIES[cat]?.options.find((o: { label: string; license: boolean }) => o.label === sub)?.license || false;
 
   const handleTypeSelect = (typeId: string) => {
       if (typeId === "אחר") setIsOtherSelected(true);
@@ -244,7 +271,7 @@ function NewTripContent() {
           }));
           setShowAddStaffForm(false);
           setNewStaffData({ name: '', role: '', idNumber: '', dob: '', phone: '', email: '' });
-      } catch (err) {
+      } catch {
           showModal('error', 'שגיאה', 'אירעה שגיאה באימות הנתונים.');
       } finally {
           setIsVerifyingStaff(false);
@@ -306,29 +333,48 @@ function NewTripContent() {
   const handleRemoveLine = (id: string, e: React.MouseEvent) => { e.stopPropagation(); setTimeline(timeline.filter(item => item.id !== id)); };
 
   const handleUpload = async (file: File, type: 'license' | 'insurance', itemId?: string) => {
-    if(!file) return;
+    if (!file) return;
+    if (!user) {
+        showModal('error', 'שגיאה', 'משתמש לא מחובר');
+        return;
+    }
+
+    // 1. בדיקת סוג קובץ (אבטחה)
+    const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
+    if (!allowedTypes.includes(file.type)) {
+        showModal('error', 'קובץ לא נתמך', 'ניתן להעלות רק קבצי תמונה (JPG/PNG) או PDF.');
+        return;
+    }
+
     if (itemId) setUploadingFileId(`${itemId}_${type}`);
     else { if(type === 'license') setIsUploadingLicense(true); else setIsUploadingInsurance(true); }
 
     try {
         const fileExt = file.name.split('.').pop();
-        const storageName = `${user.id}/${Date.now()}_${type}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-        const { error } = await supabase.storage.from('trip-files').upload(storageName, file);
+        // אבטחה: שימוש בתיקייה פרטית לפי מזהה משתמש
+        const storagePath = `${user.id}/${Date.now()}_${type}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+        
+        const { data, error } = await supabase.storage.from('trip-files').upload(storagePath, file);
+        
         if (error) throw error;
-        const { data: { publicUrl } } = supabase.storage.from('trip-files').getPublicUrl(storageName);
-        const fileObj = { url: publicUrl, name: file.name };
+
+        // שינוי קריטי: שומרים את ה-path ולא את ה-publicUrl
+        const fileObj = { path: data.path, name: file.name };
         
         if (itemId) setTimeline(prev => prev.map(item => item.id === itemId ? { ...item, [type === 'license' ? 'licenseFile' : 'insuranceFile']: fileObj } : item));
         else setCurrentLine(prev => ({ ...prev, [type === 'license' ? 'licenseFile' : 'insuranceFile']: fileObj }));
-    } catch (e: any) { showModal('error', 'שגיאה', 'שגיאה בהעלאה: ' + e.message); } 
-    finally { 
+
+    } catch (e: unknown) { 
+        const message = e instanceof Error ? e.message : 'שגיאה לא ידועה';
+        showModal('error', 'שגיאה', 'שגיאה בהעלאה: ' + message); 
+    } finally { 
         if (itemId) setUploadingFileId(null); 
         else { if(type === 'license') setIsUploadingLicense(false); else setIsUploadingInsurance(false); } 
     }
   };
 
-  const handleExistingLineDualUpload = async (event: any, itemId: string, type: 'license' | 'insurance') => {
-    const file = event.target.files[0];
+  const handleExistingLineDualUpload = async (event: React.ChangeEvent<HTMLInputElement>, itemId: string, type: 'license' | 'insurance') => {
+    const file = event.target.files?.[0];
     if (!file) return;
     event.target.value = '';
     handleUpload(file, type, itemId);
@@ -342,6 +388,10 @@ function NewTripContent() {
   };
 
   const executeSubmission = async (status: 'pending' | 'draft') => {
+    if (!user) {
+        showModal('error', 'שגיאה', 'משתמש לא מחובר');
+        return;
+    }
     setLoading(true);
     try {
         const tripData = {
@@ -355,25 +405,22 @@ function NewTripContent() {
             details: { ...generalInfo, timeline }
         };
 
-        let error;
         let newId = editId;
-
-        if (editId) {
-            const { error: err } = await supabase.from('trips').update(tripData).eq('id', editId);
-            error = err;
-        } else {
-            const { data, error: err } = await supabase.from('trips').insert([tripData]).select().single();
-            error = err;
-            if (data) newId = data.id;
-        }
-
-        if (error) throw error;
+        const res = await fetch('/api/trips/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ editId, status, tripData }),
+        });
+        const payload = await res.json();
+        if (!res.ok) throw new Error(payload.error || 'שגיאה בשמירת הטיול');
+        if (payload.id) newId = payload.id as string;
         
         if (status === 'draft') return newId;
         else showModal('success', 'הטיול נשלח', 'הטיול נשלח בהצלחה! תוך 48 שעות תתקבל תשובה.');
 
-    } catch(e: any) { 
-        showModal('error', 'שגיאה', 'שגיאה: ' + e.message); 
+    } catch(e: unknown) { 
+        const message = e instanceof Error ? e.message : 'שגיאה לא ידועה';
+        showModal('error', 'שגיאה', 'שגיאה: ' + message); 
         throw e;
     } finally { 
         setLoading(false); 
@@ -468,7 +515,7 @@ function NewTripContent() {
                                     <div className="flex gap-2">
                                         <Input 
                                             value={tempOtherType}
-                                            onChange={(e: any) => setTempOtherType(e.target.value)}
+                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTempOtherType(e.target.value)}
                                             placeholder="נא לפרט..." 
                                             autoFocus
                                             className="focus:!border-[#E91E63] focus:!ring-0"
@@ -523,7 +570,7 @@ function NewTripContent() {
                                   <Input 
                                       label={currentLogic.nameLabel}
                                       value={generalInfo.name} 
-                                      onChange={(e: any) => setGeneralInfo({...generalInfo, name: e.target.value})} 
+                                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setGeneralInfo({...generalInfo, name: e.target.value})} 
                                       placeholder={currentLogic.namePlaceholder} 
                                       autoFocus 
                                       className="focus:!border-[#E91E63] focus:!ring-0"
@@ -605,7 +652,7 @@ function NewTripContent() {
                                 label='ס"ה כמות חניכים' 
                                 type="number" 
                                 value={generalInfo.chanichimCount} 
-                                onChange={(e: any) => setGeneralInfo({...generalInfo, chanichimCount: e.target.value})} 
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setGeneralInfo({...generalInfo, chanichimCount: e.target.value})} 
                                 className="focus:!border-[#E91E63] focus:!ring-0"
                             />
                         </div>
@@ -615,7 +662,7 @@ function NewTripContent() {
                                 <label className="text-xs font-bold text-gray-500 group-hover:!text-[#E91E63] transition-colors">
                                     {currentLogic.staffLabel}
                                 </label>
-                                <span className="text-[10px] text-gray-400 font-normal">(ניתן לבחור מס' אפשרויות)</span>
+                                <span className="text-[10px] text-gray-400 font-normal">(ניתן לבחור מס׳ אפשרויות)</span>
                             </div>
                             
                             <div className="flex flex-wrap gap-1 items-center">
@@ -650,7 +697,7 @@ function NewTripContent() {
                                 className="bg-[#E0F7FA] font-bold text-[#00BCD4] focus:!border-[#E91E63] focus:!ring-0"
                                 placeholder="חניכים + צוות" 
                                 value={generalInfo.totalTravelers} 
-                                onChange={(e: any) => setGeneralInfo({...generalInfo, totalTravelers: e.target.value})} 
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setGeneralInfo({...generalInfo, totalTravelers: e.target.value})} 
                             />
                         </div>
                     </div>
@@ -668,7 +715,7 @@ function NewTripContent() {
                           const catConfig = CATEGORIES[item.category];
                           const CatIcon = catConfig?.icon || Flag;
                           const isExpanded = expandedItem === item.id;
-                          const colorClass = getColorHex(catConfig?.color);
+                          const colorClass = getColorHex(catConfig?.color || '');
                           const isMissingLicense = item.requiresLicense && (!item.licenseFile || !item.insuranceFile);
 
                           return (
@@ -718,7 +765,7 @@ function NewTripContent() {
                                                  <div className={`p-3 rounded-xl border flex items-center justify-between gap-2 ${item.licenseFile ? 'bg-green-50 border-green-200' : 'bg-white border-orange-200'}`}>
                                                      <div className="text-xs truncate flex-1">
                                                          <span className="block font-bold text-gray-500 mb-0.5">רישוי עסק:</span>
-                                                         {item.licenseFile ? <a href={item.licenseFile.url} target="_blank" rel="noreferrer" className="text-green-700 font-bold hover:underline flex items-center gap-1"><LinkIcon size={12}/> {item.licenseFile.name}</a> : <span className="text-red-500 font-bold">חסר קובץ!</span>}
+                                                         {item.licenseFile ? <a href={item.licenseFile.path || item.licenseFile.url || '#'} target="_blank" rel="noreferrer" className="text-green-700 font-bold hover:underline flex items-center gap-1"><LinkIcon size={12}/> {item.licenseFile.name}</a> : <span className="text-red-500 font-bold">חסר קובץ!</span>}
                                                      </div>
                                                      <label className="cursor-pointer p-2 bg-white border border-gray-200 rounded-lg hover:!border-[#E91E63] text-gray-400 hover:!text-[#E91E63] transition-colors shadow-sm">
                                                          {uploadingFileId === `${item.id}_license` ? <Loader2 size={16} className="animate-spin"/> : <FileUp size={16}/>}
@@ -729,11 +776,11 @@ function NewTripContent() {
                                                  <div className={`p-3 rounded-xl border flex items-center justify-between gap-2 ${item.insuranceFile ? 'bg-green-50 border-green-200' : 'bg-white border-orange-200'}`}>
                                                      <div className="text-xs truncate flex-1">
                                                          <span className="block font-bold text-gray-500 mb-0.5">ביטוח:</span>
-                                                         {item.insuranceFile ? <a href={item.insuranceFile.url} target="_blank" rel="noreferrer" className="text-green-700 font-bold hover:underline flex items-center gap-1"><LinkIcon size={12}/> {item.insuranceFile.name}</a> : <span className="text-red-500 font-bold">חסר קובץ!</span>}
+                                                         {item.insuranceFile ? <a href={item.insuranceFile.path || item.insuranceFile.url || '#'} target="_blank" rel="noreferrer" className="text-green-700 font-bold hover:underline flex items-center gap-1"><LinkIcon size={12}/> {item.insuranceFile.name}</a> : <span className="text-red-500 font-bold">חסר קובץ!</span>}
                                                      </div>
                                                      <label className="cursor-pointer p-2 bg-white border border-gray-200 rounded-lg hover:!border-[#E91E63] text-gray-400 hover:!text-[#E91E63] transition-colors shadow-sm">
                                                          {isUploadingInsurance ? <Loader2 size={16} className="animate-spin" /> : <FileUp size={16}/>}
-                                                         <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => handleUpload(e.target.files![0], 'insurance')} disabled={isUploadingInsurance} />
+                                                        <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => { const file = e.target.files?.[0]; if (file) handleUpload(file, 'insurance'); }} disabled={isUploadingInsurance} />
                                                      </label>
                                                  </div>
                                             </div>
@@ -763,7 +810,7 @@ function NewTripContent() {
                                         value={currentLine.locationValue}
                                         readOnly={currentLine.locationType === 'branch'}
                                         onFocus={() => { if (currentLine.locationType !== 'branch') setShowLocationSuggestions(true); }}
-                                        onChange={(e: any) => { setCurrentLine({...currentLine, locationValue: e.target.value, locationType: 'custom'}); setShowLocationSuggestions(true); }}
+                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setCurrentLine({...currentLine, locationValue: e.target.value, locationType: 'custom'}); setShowLocationSuggestions(true); }}
                                         onBlur={() => setTimeout(() => setShowLocationSuggestions(false), 200)}
                                         className="focus:!border-[#E91E63] focus:!ring-0"
                                     />
@@ -785,7 +832,7 @@ function NewTripContent() {
                                         </div>
                                         {showCategoryDropdown && (
                                             <div className="absolute top-full right-0 w-48 mt-1 bg-white border border-gray-200 rounded-xl shadow-2xl z-[100] overflow-hidden">
-                                                {Object.entries(CATEGORIES).map(([key, val]: any, index) => {
+                                                {Object.entries(CATEGORIES).map(([key, val], index) => {
                                                     const Icon = val.icon; const colors = ['text-[#00BCD4]', 'text-[#8BC34A]', 'text-[#E91E63]']; const bgs = ['hover:bg-cyan-50', 'hover:bg-green-50', 'hover:bg-pink-50'];
                                                     return (<div key={key} className={`p-3 text-xs text-gray-700 ${bgs[index % 3]} cursor-pointer border-b border-gray-50 flex items-center gap-3 transition-colors`} onClick={() => { setCurrentLine({...currentLine, category: key, subCategory: '', otherDetail: ''}); setShowCategoryDropdown(false); }}><Icon size={16} className={colors[index % 3]} /><span className="font-bold">{val.label}</span></div>)
                                                 })}
@@ -796,11 +843,11 @@ function NewTripContent() {
                                     <div className="flex-[1.5] relative">
                                         <label className="text-xs font-bold text-gray-400 mb-1.5 block">פירוט ההתרחשות</label>
                                         {currentLine.subCategory === 'אחר' ? (
-                                            <div className="relative"><Input placeholder="פרט..." autoFocus value={currentLine.otherDetail} onChange={(e: any) => setCurrentLine({...currentLine, otherDetail: e.target.value})} className="focus:!border-[#E91E63] focus:!ring-0" /><div className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 cursor-pointer font-bold" onClick={() => setCurrentLine({...currentLine, subCategory: ''})}>X</div></div>
+                                            <div className="relative"><Input placeholder="פרט..." autoFocus value={currentLine.otherDetail} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCurrentLine({...currentLine, otherDetail: e.target.value})} className="focus:!border-[#E91E63] focus:!ring-0" /><div className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 cursor-pointer font-bold" onClick={() => setCurrentLine({...currentLine, subCategory: ''})}>X</div></div>
                                         ) : (
                                             <><div className={`w-full text-xs p-2 rounded-lg border border-gray-200 h-[52px] flex items-center justify-between px-3 transition-all ${!currentLine.category ? 'bg-gray-100 cursor-not-allowed opacity-50' : 'hover:!border-[#E91E63] bg-white cursor-pointer'}`} onClick={() => { if(currentLine.category) setShowSubCategoryDropdown(!showSubCategoryDropdown) }}><span className={`font-bold ${currentLine.subCategory ? 'text-gray-800' : 'text-gray-400'}`}>{currentLine.subCategory || (currentLine.category ? 'בחר פירוט...' : '-')}</span><ChevronDown size={16} className="text-gray-400" /></div>
                                             {showSubCategoryDropdown && currentLine.category && (
-                                                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-2xl z-[100] overflow-hidden max-h-48 overflow-y-auto">{CATEGORIES[currentLine.category]?.options.map((opt: any) => (<div key={opt.label} className="p-3 text-xs text-gray-700 hover:bg-pink-50 hover:text-[#E91E63] cursor-pointer border-b border-gray-50 font-bold transition-colors" onClick={() => { setCurrentLine({...currentLine, subCategory: opt.label}); setShowSubCategoryDropdown(false); }}>{opt.label}</div>))}</div>
+                                                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-2xl z-[100] overflow-hidden max-h-48 overflow-y-auto">{CATEGORIES[currentLine.category]?.options.map((opt) => (<div key={opt.label} className="p-3 text-xs text-gray-700 hover:bg-pink-50 hover:text-[#E91E63] cursor-pointer border-b border-gray-50 font-bold transition-colors" onClick={() => { setCurrentLine({...currentLine, subCategory: opt.label}); setShowSubCategoryDropdown(false); }}>{opt.label}</div>))}</div>
                                             )}
                                             {showSubCategoryDropdown && <div className="fixed inset-0 z-[90] cursor-default" onClick={() => setShowSubCategoryDropdown(false)}></div>}</>
                                         )}
@@ -809,19 +856,19 @@ function NewTripContent() {
                                 <div className="md:col-span-4 flex gap-2 items-end w-full">
                                     {currentLine.subCategory === 'לינת מבנה' ? (
                                         <div className="flex-grow flex flex-col md:flex-row gap-2">
-                                            <div className="flex-1"><Input label="שם המקום/כתובת (חובה)" placeholder="שם המקום/כתובת" value={currentLine.otherDetail} onChange={(e: any) => setCurrentLine({...currentLine, otherDetail: e.target.value})} className="focus:!border-[#E91E63] focus:!ring-0" /></div>
-                                            <div className="flex-1"><Input label="פרטים נוספים" placeholder="הערות..." value={currentLine.details} onChange={(e: any) => setCurrentLine({...currentLine, details: e.target.value})} className="focus:!border-[#E91E63] focus:!ring-0" /></div>
+                                            <div className="flex-1"><Input label="שם המקום/כתובת (חובה)" placeholder="שם המקום/כתובת" value={currentLine.otherDetail} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCurrentLine({...currentLine, otherDetail: e.target.value})} className="focus:!border-[#E91E63] focus:!ring-0" /></div>
+                                            <div className="flex-1"><Input label="פרטים נוספים" placeholder="הערות..." value={currentLine.details} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCurrentLine({...currentLine, details: e.target.value})} className="focus:!border-[#E91E63] focus:!ring-0" /></div>
                                         </div>
                                     ) : (
                                         <div className="flex-grow relative w-full">
                                             <div className="flex justify-between items-end mb-1.5"><label className="text-xs font-bold text-gray-400 block">{currentLine.category === 'hiking' ? 'פירוט המסלול' : 'פרטים נוספים'}</label>{currentLine.category === 'hiking' && (<a href="https://mokedteva.co.il/InfoCenter/TrackWizard" target="_blank" rel="noreferrer" className="text-[10px] font-bold text-[#E91E63] flex items-center gap-1 hover:underline"><LinkIcon size={10} />לכניסה לאשף המסלולים של מוקד טבע</a>)}</div>
-                                            <Input placeholder={currentLine.category === 'hiking' ? 'מס\' המסלול וכו\'' : 'פרטים נוספים...'} value={currentLine.details} onChange={(e: any) => setCurrentLine({...currentLine, details: e.target.value})} className="focus:!border-[#E91E63] focus:!ring-0" />
+                                            <Input placeholder={currentLine.category === 'hiking' ? 'מס\' המסלול וכו\'' : 'פרטים נוספים...'} value={currentLine.details} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCurrentLine({...currentLine, details: e.target.value})} className="focus:!border-[#E91E63] focus:!ring-0" />
                                         </div>
                                     )}
                                     <div className="w-full md:w-auto mt-2 md:mt-0">
                                         <button onClick={handleAddLine} className="bg-[#8BC34A] hover:bg-[#7CB342] text-white h-[52px] w-full md:w-[60px] rounded-lg flex items-center justify-center shadow-lg transition-all active:scale-95 flex-shrink-0 mb-[1px]" title="לאישור השורה ופתיחת שורה חדשה">
                                             <Check size={28} strokeWidth={3} />
-                                            <span className="md:hidden mr-2 font-bold">הוסף שורה ללו"ז</span>
+                                            <span className="md:hidden mr-2 font-bold">הוסף שורה ללו״ז</span>
                                         </button>
                                     </div>
                                 </div>
@@ -918,12 +965,12 @@ function NewTripContent() {
                                     </div>
                                     
                                     <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
-                                        <Input label="שם מלא" icon={<User size={14}/>} value={newStaffData.name} onChange={(e: any) => setNewStaffData({...newStaffData, name: e.target.value})} className="focus:!border-[#E91E63] focus:!ring-0" />
-                                        <Input label="תפקיד בארגון" icon={<Briefcase size={14}/>} value={newStaffData.role} onChange={(e: any) => setNewStaffData({...newStaffData, role: e.target.value})} className="focus:!border-[#E91E63] focus:!ring-0" />
-                                        <Input label="תעודת זהות" icon={<CreditCard size={14}/>} value={newStaffData.idNumber} onChange={(e: any) => setNewStaffData({...newStaffData, idNumber: e.target.value})} className="focus:!border-[#E91E63] focus:!ring-0" />
-                                        <Input label="תאריך לידה" type="date" value={newStaffData.dob} onChange={(e: any) => setNewStaffData({...newStaffData, dob: e.target.value})} className="focus:!border-[#E91E63] focus:!ring-0" />
-                                        <Input label="טלפון" icon={<Phone size={14}/>} type="tel" value={newStaffData.phone} onChange={(e: any) => setNewStaffData({...newStaffData, phone: e.target.value})} className="focus:!border-[#E91E63] focus:!ring-0" />
-                                        <Input label="אימייל" icon={<Mail size={14}/>} type="email" value={newStaffData.email} onChange={(e: any) => setNewStaffData({...newStaffData, email: e.target.value})} className="text-left focus:!border-[#E91E63] focus:!ring-0" dir="ltr"/>
+                                        <Input label="שם מלא" icon={<User size={14}/>} value={newStaffData.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewStaffData({...newStaffData, name: e.target.value})} className="focus:!border-[#E91E63] focus:!ring-0" />
+                                        <Input label="תפקיד בארגון" icon={<Briefcase size={14}/>} value={newStaffData.role} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewStaffData({...newStaffData, role: e.target.value})} className="focus:!border-[#E91E63] focus:!ring-0" />
+                                        <Input label="תעודת זהות" icon={<CreditCard size={14}/>} value={newStaffData.idNumber} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewStaffData({...newStaffData, idNumber: e.target.value})} className="focus:!border-[#E91E63] focus:!ring-0" />
+                                        <Input label="תאריך לידה" type="date" value={newStaffData.dob} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewStaffData({...newStaffData, dob: e.target.value})} className="focus:!border-[#E91E63] focus:!ring-0" />
+                                        <Input label="טלפון" icon={<Phone size={14}/>} type="tel" value={newStaffData.phone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewStaffData({...newStaffData, phone: e.target.value})} className="focus:!border-[#E91E63] focus:!ring-0" />
+                                        <Input label="אימייל" icon={<Mail size={14}/>} type="email" value={newStaffData.email} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewStaffData({...newStaffData, email: e.target.value})} className="text-left focus:!border-[#E91E63] focus:!ring-0" dir="ltr"/>
                                     </div>
                                     <div className="flex justify-end">
                                         <button onClick={handleSaveStaff} disabled={isVerifyingStaff} className="bg-[#E91E63] text-white px-6 py-3 rounded-lg font-bold hover:bg-pink-600 transition-colors shadow-md text-xs flex items-center gap-2 h-[52px]">
