@@ -10,14 +10,12 @@ import { Save, User, Mail, Lock, ShieldCheck, Camera, Loader2 } from 'lucide-rea
 import { useUser } from '@/hooks/useUser'
 import { profileSchema } from '@/lib/schemas'
 import { saveUserProfile } from '@/lib/profile'
-import { formatUserRoleLabel, isManagerUser } from '@/lib/auth'
+import { formatUserRoleLabel } from '@/lib/auth'
 import { NotificationPreferencesPanel } from '@/components/NotificationPreferencesPanel'
-import { PushAdminTestPanel } from '@/components/PushAdminTestPanel'
 import Image from 'next/image'
 
 export default function ManagerProfile() {
   const { user, profile, loading: userLoading, refresh } = useUser('/');
-  const isAdminLike = isManagerUser(user, profile)
 
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -238,7 +236,6 @@ export default function ManagerProfile() {
 
           <div className="mt-8">
             <NotificationPreferencesPanel userId={user?.id} />
-            <PushAdminTestPanel enabled={isAdminLike} />
           </div>
       </div>
     </>

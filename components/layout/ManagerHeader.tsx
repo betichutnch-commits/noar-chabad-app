@@ -110,7 +110,7 @@ export const ManagerHeader = ({ title }: { title: string }) => {
                                   aria-label="מחיקת כל ההודעות החדשות"
                                   onClick={() => void clearAllUnreadMessages()}
                                   disabled={clearingMessages || unreadMessagesList.length === 0}
-                                  className="text-[11px] font-bold hover:underline disabled:opacity-60 disabled:no-underline"
+                                  className="text-[11px] font-bold border border-white/70 rounded-md px-2 py-1 hover:bg-white/10 disabled:opacity-60 disabled:hover:bg-transparent"
                                 >
                                   {clearingMessages ? 'מסמן...' : 'סמן הכל כנקרא'}
                                 </button>
@@ -147,8 +147,6 @@ export const ManagerHeader = ({ title }: { title: string }) => {
                                                         <span className="text-gray-600 font-medium">{mainRole}</span>
                                                     </>
                                                 )}
-                                                
-                                                {m.category === 'bug' && <span className="mr-auto text-[9px] bg-red-100 text-red-600 px-1.5 rounded-full font-bold">תקלה</span>}
                                             </div>
                                             <div className="flex gap-2 text-xs text-gray-500 items-center min-w-0">
                                                 <Mail size={12} className="text-brand-cyan mt-0.5 shrink-0"/>

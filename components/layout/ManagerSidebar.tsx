@@ -7,10 +7,8 @@ import { usePathname } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { getCoordinatorsPluralTitle, getDeptTripsOfficerTitle } from '@/lib/auth'
 import { 
-  LayoutDashboard, CheckSquare, Users, FileBarChart, Settings, LogOut, Mail, User, X, ClipboardList
+  LayoutDashboard, CheckSquare, Users, LogOut, Mail, User, X, ClipboardList, FileBarChart, Settings
 } from 'lucide-react'
-
-const ADMIN_EMAIL = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || 'avremihalperin@gmail.com';
 
 interface SidebarProps {
     isOpen?: boolean;
@@ -19,7 +17,6 @@ interface SidebarProps {
 
 export const ManagerSidebar = ({ isOpen = true, onClose }: SidebarProps) => {
   const pathname = usePathname();
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [role, setRole] = useState<string>('');
   const [department, setDepartment] = useState<string>('');
   const [counts, setCounts] = useState({ pendingTrips: 0, pendingUsers: 0, pendingDeptReview: 0 });
@@ -28,10 +25,6 @@ export const ManagerSidebar = ({ isOpen = true, onClose }: SidebarProps) => {
     const checkRoleAndCounts = async () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
-
-        if (user.email === ADMIN_EMAIL || user.user_metadata?.contact_email === ADMIN_EMAIL) {
-            setIsSuperAdmin(true);
-        }
 
         const { data: profile } = await supabase
             .from('profiles')
@@ -77,7 +70,6 @@ export const ManagerSidebar = ({ isOpen = true, onClose }: SidebarProps) => {
   }, []);
 
   const isOfficer = role === 'dept_trips_officer';
-  const isSafetyManager = !isOfficer;
 
   const officerMenu = [
       {
@@ -115,6 +107,7 @@ export const ManagerSidebar = ({ isOpen = true, onClose }: SidebarProps) => {
         badgeColor: 'bg-purple-500',
     },
     { label: 'דוחות ונתונים', href: '/manager/reports', icon: FileBarChart },
+    { label: 'הגדרות מערכת', href: '/manager/settings', icon: Settings },
     { label: 'פרופיל אישי', href: '/manager/profile', icon: User },
   ];
 
@@ -129,10 +122,6 @@ export const ManagerSidebar = ({ isOpen = true, onClose }: SidebarProps) => {
   };
 
   const menuItems: MenuItem[] = isOfficer ? officerMenu : safetyMenu;
-
-  if (isSuperAdmin && isSafetyManager) {
-      menuItems.push({ label: 'הגדרות מערכת', href: '/manager/settings', icon: Settings });
-  }
 
   const handleLogout = async () => {
     await supabase.auth.signOut();

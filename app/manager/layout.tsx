@@ -35,6 +35,7 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
   }, [loading, user, profile, pathname, router]);
   
   const [activeBubble, setActiveBubble] = useState<'messages' | 'users' | null>(null);
+  const [clearingMessages, setClearingMessages] = useState(false);
   const fabContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -63,6 +64,23 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
       .split(' ')
       .find((cls) => cls.startsWith('text-'));
     return textClass || 'text-gray-500';
+  };
+
+  const clearAllRecentMessages = async () => {
+    if (clearingMessages || recentMessages.length === 0) return;
+    setClearingMessages(true);
+    try {
+      await Promise.all(
+        recentMessages.map((m) =>
+          fetch(`/api/contact-messages/${m.id}/treated`, {
+            method: 'POST',
+            credentials: 'include',
+          }),
+        ),
+      );
+    } finally {
+      setClearingMessages(false);
+    }
   };
 
   return (
@@ -142,7 +160,16 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
                         <div className="absolute bottom-16 left-0 w-72 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden animate-fadeIn origin-bottom-left z-20">
                             <div className="bg-brand-cyan p-3 flex justify-between items-center text-white">
                                 <span className="text-sm font-bold flex items-center gap-2"><Mail size={16}/> הודעות חדשות</span>
-                                <button onClick={() => setActiveBubble(null)}><X size={16}/></button>
+                                <div className="flex items-center gap-3">
+                                    <button
+                                      onClick={() => void clearAllRecentMessages()}
+                                      disabled={clearingMessages || recentMessages.length === 0}
+                                      className="text-[11px] font-bold border border-white/70 rounded-md px-2 py-1 hover:bg-white/10 disabled:opacity-60 disabled:hover:bg-transparent"
+                                    >
+                                      {clearingMessages ? 'מסמן...' : 'סמן הכל כנקרא'}
+                                    </button>
+                                    <button onClick={() => setActiveBubble(null)}><X size={16}/></button>
+                                </div>
                             </div>
                             <div className="max-h-60 overflow-y-auto bg-gray-50/50">
                                 {recentMessages.map((m) => {
@@ -166,8 +193,6 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
                                                         <span className="text-gray-500 font-medium">{details.mainRole}</span>
                                                     </>
                                                 )}
-                                                
-                                                {m.category === 'bug' && <span className="mr-auto text-[9px] bg-red-100 text-red-600 px-1.5 rounded-full font-bold">תקלה</span>}
                                             </div>
                                             
                                             <div className="text-xs text-gray-500 truncate flex items-center gap-1.5 min-w-0">
