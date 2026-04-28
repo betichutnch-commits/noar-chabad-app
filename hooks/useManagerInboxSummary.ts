@@ -20,25 +20,27 @@ const findValue = (obj: Record<string, unknown> | null | undefined, keys: string
 };
 
 const resolveUserDetails = (meta: Record<string, unknown>): DisplayDetails => {
+  const nickname = String(meta.nickname || meta.nick_name || '').trim();
   const fullName = String(meta.full_name || meta.name || meta.official_name || "משתמש");
+  const displayName = nickname || fullName;
   const role = String(meta.role || "user").toLowerCase().trim();
   const department = String(findValue(meta, ["department", "dept", "mador", "unit", "agaf", "מחלקה", "מדור"]) || "");
   const branch = String(findValue(meta, ["branch_name", "branch", "snif", "location", "area", "city", "place", "סניף", "שם סניף"]) || "");
 
   if (role.includes("coordinator") || role === "רכז" || role.includes("rakaz") || branch) {
     const title = getCoordinatorRoleTitle(department);
-    return { fullName, mainRole: branch ? `${title} ${branch}` : title, secondaryInfo: department };
+    return { fullName: displayName, mainRole: branch ? `${title} ${branch}` : title, secondaryInfo: department };
   }
   if (role.includes("dept_trips_officer") || role === "officer") {
-    return { fullName, mainRole: getDeptTripsOfficerTitle(department), secondaryInfo: department || "כללי" };
+    return { fullName: displayName, mainRole: getDeptTripsOfficerTitle(department), secondaryInfo: department || "כללי" };
   }
   if (role.includes("staff") || role.includes("mate") || role.includes("hq") || role === "office" || role.includes("dept_staff")) {
-    return { fullName, mainRole: "צוות מטה", secondaryInfo: department || "כללי" };
+    return { fullName: displayName, mainRole: "צוות מטה", secondaryInfo: department || "כללי" };
   }
   if (role.includes("manager") || role.includes("admin") || role.includes("head") || role === "safety_admin") {
-    return { fullName, mainRole: "מנהל מערכת", secondaryInfo: "" };
+    return { fullName: displayName, mainRole: "מנהל מערכת", secondaryInfo: "" };
   }
-  return { fullName, mainRole: "משתמש", secondaryInfo: branch || department };
+  return { fullName: displayName, mainRole: "משתמש", secondaryInfo: branch || department };
 };
 
 export const useManagerInboxSummary = () => {

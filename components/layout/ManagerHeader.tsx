@@ -112,7 +112,7 @@ export const ManagerHeader = ({ title }: { title: string }) => {
                                   disabled={clearingMessages || unreadMessagesList.length === 0}
                                   className="text-[11px] font-bold hover:underline disabled:opacity-60 disabled:no-underline"
                                 >
-                                  {clearingMessages ? 'מוחק...' : 'מחיקת כולן'}
+                                  {clearingMessages ? 'מסמן...' : 'סמן הכל כנקרא'}
                                 </button>
                                 <button aria-label="סגירת חלון הודעות" onClick={() => setIsBellOpen(false)}><X size={16}/></button>
                             </div>

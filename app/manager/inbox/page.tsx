@@ -43,6 +43,7 @@ interface Message {
   replied_at?: string;
   profiles?: {
     full_name: string;
+    nickname?: string;
     phone: string;
     avatar_url: string;
     email?: string;
@@ -134,15 +135,40 @@ export default function InboxPage() {
         
         const { data: profiles } = await supabase
             .from('profiles')
-            .select('id, full_name, phone, avatar_url, email, role, department')
+            .select('id, full_name, nickname, phone, avatar_url, email, role, department')
             .in('id', userIds);
+
+        const { data: usersMeta } = await supabase
+            .from('users_management_view')
+            .select('id, raw_user_meta_data')
+            .in('id', userIds);
+
+        const displayNameById = new Map<string, string>();
+        for (const row of usersMeta || []) {
+          const meta = (row.raw_user_meta_data || {}) as Record<string, unknown>;
+          const nickname = String(meta.nickname || meta.nick_name || '').trim();
+          const fullName = String(meta.full_name || meta.name || meta.official_name || '').trim();
+          if (nickname) {
+            displayNameById.set(String(row.id), nickname);
+          } else if (fullName) {
+            displayNameById.set(String(row.id), fullName);
+          }
+        }
 
         const combined = filteredMsgs.map(msg => {
             const userProfile = profiles?.find(p => p.id === msg.user_id);
             const roleLabel = getUserRoleShortLabel(userProfile?.role, userProfile?.department);
+            const displayName =
+              displayNameById.get(String(msg.user_id)) ||
+              String(userProfile?.nickname || '').trim() ||
+              String(userProfile?.full_name || '').trim() ||
+              'משתמש לא נמצא';
             return {
                 ...msg,
-                profiles: userProfile || { full_name: 'משתמש לא נמצא', phone: '', avatar_url: '', role: 'user', department: '-' },
+                profiles: {
+                  ...(userProfile || { phone: '', avatar_url: '', role: 'user', department: '-' }),
+                  full_name: displayName,
+                },
                 displayRole: roleLabel,
             };
         });
