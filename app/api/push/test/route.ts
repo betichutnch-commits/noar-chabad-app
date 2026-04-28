@@ -3,7 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { isManagerUser } from '@/lib/auth'
 import type { User } from '@supabase/supabase-js'
 import { createSupabaseServiceRoleClient } from '@/lib/supabaseService'
-import { sendWebPushToUser } from '@/lib/notifications/push'
+import { sendWebPushToUserDetailed } from '@/lib/notifications/push'
 import { resolveRecipientUserIds } from '@/lib/notifications/recipients'
 import type { NotificationKind } from '@/lib/notifications/types'
 
@@ -114,15 +114,23 @@ export async function POST(request: Request) {
   }
 
   let sentCount = 0
+  let totalSubscriptions = 0
+  let removedSubscriptions = 0
+  const debugErrors: Array<{ statusCode: number; message: string; recipientId: string }> = []
   for (const recipientId of recipientIds) {
-    const ok = await sendWebPushToUser(admin, recipientId, {
+    const result = await sendWebPushToUserDetailed(admin, recipientId, {
       kind,
       title,
       body: message,
       url,
       inAppType: 'info',
     })
-    if (ok) sentCount += 1
+    if (result.ok) sentCount += 1
+    totalSubscriptions += result.totalSubscriptions
+    removedSubscriptions += result.removedSubscriptions
+    for (const err of result.errors) {
+      debugErrors.push({ ...err, recipientId })
+    }
   }
   const ok = sentCount > 0
 
@@ -132,6 +140,9 @@ export async function POST(request: Request) {
     target,
     totalRecipients: recipientIds.length,
     sentCount,
+    totalSubscriptions,
+    removedSubscriptions,
+    firstError: debugErrors[0] || null,
     hint:
       ok
         ? undefined

@@ -94,6 +94,9 @@ export function PushAdminTestPanel({ enabled }: Props) {
         hint?: string
         totalRecipients?: number
         sentCount?: number
+        totalSubscriptions?: number
+        removedSubscriptions?: number
+        firstError?: { statusCode?: number; message?: string; recipientId?: string } | null
       }
       if (!res.ok) {
         setLastResult(json.error || 'שגיאה בשליחת טסט')
@@ -101,9 +104,13 @@ export function PushAdminTestPanel({ enabled }: Props) {
       }
       setLastResult(
         json.ok
-          ? `נשלח בהצלחה (${json.sentCount || 0}/${json.totalRecipients || 0}).`
+          ? `נשלח בהצלחה (${json.sentCount || 0}/${json.totalRecipients || 0}), subscriptions: ${json.totalSubscriptions || 0}.`
           : json.hint
-            ? `לא נשלח. ${json.hint}`
+            ? `לא נשלח. ${json.hint}${
+                json.firstError
+                  ? ` [status=${json.firstError.statusCode || 0}] ${json.firstError.message || ''}`
+                  : ''
+              }`
             : 'לא נשלח (נכשל או אין subscriptions).',
       )
       await load()

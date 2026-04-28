@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { NotifyPayload } from './types'
 
 type WebPushModule = typeof import('web-push')
+type PushErrorLike = { statusCode?: number; body?: string; message?: string }
 
 let webPushConfigured = false
 
@@ -26,17 +27,33 @@ function configureWebPush(webpush: WebPushModule) {
   }
 }
 
-export async function sendWebPushToUser(
+export type PushSendDetails = {
+  ok: boolean
+  totalSubscriptions: number
+  sentSubscriptions: number
+  removedSubscriptions: number
+  errors: Array<{ statusCode: number; message: string }>
+  reason?: 'not_configured' | 'no_subscriptions' | 'query_error' | 'send_failed'
+}
+
+export async function sendWebPushToUserDetailed(
   admin: SupabaseClient,
   userId: string,
   payload: NotifyPayload,
-): Promise<boolean> {
+): Promise<PushSendDetails> {
   try {
     const webpush = (await import('web-push')) as WebPushModule
     configureWebPush(webpush)
     if (!webPushConfigured) {
       console.warn('[notify] web-push not configured (missing VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY)')
-      return false
+      return {
+        ok: false,
+        totalSubscriptions: 0,
+        sentSubscriptions: 0,
+        removedSubscriptions: 0,
+        errors: [],
+        reason: 'not_configured',
+      }
     }
 
     const { data: rows, error } = await admin
@@ -44,8 +61,26 @@ export async function sendWebPushToUser(
       .select('id, endpoint, p256dh, auth')
       .eq('user_id', userId)
 
-    if (error || !rows?.length) {
-      return false
+    if (error) {
+      return {
+        ok: false,
+        totalSubscriptions: 0,
+        sentSubscriptions: 0,
+        removedSubscriptions: 0,
+        errors: [{ statusCode: 0, message: error.message }],
+        reason: 'query_error',
+      }
+    }
+
+    if (!rows?.length) {
+      return {
+        ok: false,
+        totalSubscriptions: 0,
+        sentSubscriptions: 0,
+        removedSubscriptions: 0,
+        errors: [],
+        reason: 'no_subscriptions',
+      }
     }
 
     const body = JSON.stringify({
@@ -54,7 +89,9 @@ export async function sendWebPushToUser(
       url: payload.url,
     })
 
-    let anyOk = false
+    let sentSubscriptions = 0
+    let removedSubscriptions = 0
+    const errors: Array<{ statusCode: number; message: string }> = []
     for (const row of rows) {
       try {
         await webpush.sendNotification(
@@ -68,24 +105,54 @@ export async function sendWebPushToUser(
           body,
           { TTL: 60 * 60 },
         )
-        anyOk = true
+        sentSubscriptions += 1
         await admin
           .from('push_subscriptions')
           .update({ last_used_at: new Date().toISOString() })
           .eq('id', row.id as string)
       } catch (e: unknown) {
+        const err = (e || {}) as PushErrorLike
         const statusCode =
-          e && typeof e === 'object' && 'statusCode' in e ? (e as { statusCode: number }).statusCode : 0
+          typeof err.statusCode === 'number' ? err.statusCode : 0
+        const message =
+          String(err.body || err.message || 'web-push send failed')
+            .replace(/\s+/g, ' ')
+            .slice(0, 260)
         if (statusCode === 404 || statusCode === 410) {
           await admin.from('push_subscriptions').delete().eq('id', row.id as string)
+          removedSubscriptions += 1
         } else {
           console.warn('[notify] web-push send failed', statusCode, e)
         }
+        errors.push({ statusCode, message })
       }
     }
-    return anyOk
+    return {
+      ok: sentSubscriptions > 0,
+      totalSubscriptions: rows.length,
+      sentSubscriptions,
+      removedSubscriptions,
+      errors,
+      reason: sentSubscriptions > 0 ? undefined : 'send_failed',
+    }
   } catch (e) {
     console.warn('[notify] web-push module or send error', e)
-    return false
+    return {
+      ok: false,
+      totalSubscriptions: 0,
+      sentSubscriptions: 0,
+      removedSubscriptions: 0,
+      errors: [{ statusCode: 0, message: String((e as { message?: string })?.message || 'module_error') }],
+      reason: 'send_failed',
+    }
   }
+}
+
+export async function sendWebPushToUser(
+  admin: SupabaseClient,
+  userId: string,
+  payload: NotifyPayload,
+): Promise<boolean> {
+  const result = await sendWebPushToUserDetailed(admin, userId, payload)
+  return result.ok
 }
