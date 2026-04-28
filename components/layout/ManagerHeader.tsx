@@ -21,6 +21,24 @@ export const ManagerHeader = ({ title }: { title: string }) => {
   
   const [isBellOpen, setIsBellOpen] = useState(false);
   const [isUsersOpen, setIsUsersOpen] = useState(false);
+  const [clearingMessages, setClearingMessages] = useState(false);
+
+  const clearAllUnreadMessages = async () => {
+    if (clearingMessages || unreadMessagesList.length === 0) return;
+    setClearingMessages(true);
+    try {
+      await Promise.all(
+        unreadMessagesList.map((m) =>
+          fetch(`/api/contact-messages/${m.id}/treated`, {
+            method: 'POST',
+            credentials: 'include',
+          }),
+        ),
+      );
+    } finally {
+      setClearingMessages(false);
+    }
+  };
 
   useEffect(() => {
     const initManagerProfile = async () => {
@@ -85,7 +103,20 @@ export const ManagerHeader = ({ title }: { title: string }) => {
                 </button>
                 {isBellOpen && (
                     <div className="absolute top-full left-0 mt-4 bg-white rounded-2xl shadow-2xl border border-gray-100 w-[450px] overflow-hidden animate-fadeIn z-[100]">
-                        <div className="bg-brand-cyan p-3 flex justify-between items-center text-white"><span className="text-sm font-bold">הודעות חדשות</span><button aria-label="סגירת חלון הודעות" onClick={() => setIsBellOpen(false)}><X size={16}/></button></div>
+                        <div className="bg-brand-cyan p-3 flex justify-between items-center text-white">
+                            <span className="text-sm font-bold">הודעות חדשות</span>
+                            <div className="flex items-center gap-3">
+                                <button
+                                  aria-label="מחיקת כל ההודעות החדשות"
+                                  onClick={() => void clearAllUnreadMessages()}
+                                  disabled={clearingMessages || unreadMessagesList.length === 0}
+                                  className="text-[11px] font-bold hover:underline disabled:opacity-60 disabled:no-underline"
+                                >
+                                  {clearingMessages ? 'מוחק...' : 'מחיקת כולן'}
+                                </button>
+                                <button aria-label="סגירת חלון הודעות" onClick={() => setIsBellOpen(false)}><X size={16}/></button>
+                            </div>
+                        </div>
                         <div className="max-h-60 overflow-y-auto">
                             {unreadMessagesList.length === 0 ? (
                                 <div className="p-4 text-center text-gray-400 text-xs">אין הודעות חדשות</div>
