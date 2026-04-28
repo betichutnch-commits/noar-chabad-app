@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Loader2, Send } from 'lucide-react'
+import type { NotificationKind } from '@/lib/notifications/types'
 
 type SubRow = {
   id: string
@@ -14,11 +15,46 @@ type SubRow = {
 
 type Props = { enabled: boolean }
 
+type TestTarget =
+  | 'self'
+  | 'safety_admins'
+  | 'tech_admins'
+  | 'dept_trips_officers'
+  | 'all_managers'
+
+const TEST_KIND_OPTIONS: Array<{ value: NotificationKind; label: string }> = [
+  { value: 'contact.new', label: 'פנייה חדשה' },
+  { value: 'contact.reply', label: 'תשובה לפנייה' },
+  { value: 'trip.submitted_dept_review', label: 'טיול הוגש לאישור ראשוני' },
+  { value: 'trip.submitted_safety', label: 'טיול הוגש לבטיחות' },
+  { value: 'trip.dept_forwarded_safety', label: 'טיול הועבר לבטיחות' },
+  { value: 'trip.dept_review_coordinator', label: 'עדכון אישור ראשוני' },
+  { value: 'trip.safety_status', label: 'עדכון סטטוס מבטיחות' },
+  { value: 'trip.cancelled', label: 'ביטול טיול' },
+  { value: 'user.registration_pending', label: 'הרשמה חדשה' },
+  { value: 'user.status_changed', label: 'שינוי סטטוס משתמש' },
+  { value: 'user.role_changed', label: 'שינוי תפקיד משתמש' },
+  { value: 'trip.secondary_staff', label: 'שיבוץ צוות נוסף' },
+]
+
+const TARGET_OPTIONS: Array<{ value: TestTarget; label: string }> = [
+  { value: 'self', label: 'רק אליי' },
+  { value: 'safety_admins', label: 'כל מנהלי בטיחות' },
+  { value: 'tech_admins', label: 'כל טכני-אדמין' },
+  { value: 'dept_trips_officers', label: 'אחראי/ות טיולי מחלקה שלי' },
+  { value: 'all_managers', label: 'כל המנהלים (בטיחות + טכני)' },
+]
+
 export function PushAdminTestPanel({ enabled }: Props) {
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [subs, setSubs] = useState<SubRow[]>([])
   const [lastResult, setLastResult] = useState<string>('')
+  const [kind, setKind] = useState<NotificationKind>('contact.new')
+  const [target, setTarget] = useState<TestTarget>('self')
+  const [title, setTitle] = useState('טסט התראות Push')
+  const [message, setMessage] = useState('אם ראית את זה — הפוש עובד.')
+  const [url, setUrl] = useState('/manager/profile')
 
   const count = subs.length
 
@@ -45,12 +81,19 @@ export function PushAdminTestPanel({ enabled }: Props) {
     setSending(true)
     setLastResult('')
     try {
-      const res = await fetch('/api/push/test', { method: 'POST', credentials: 'include' })
+      const res = await fetch('/api/push/test', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind, target, title, message, url }),
+      })
       const json = (await res.json().catch(() => ({}))) as {
         ok?: boolean
         message?: string
         error?: string
         hint?: string
+        totalRecipients?: number
+        sentCount?: number
       }
       if (!res.ok) {
         setLastResult(json.error || 'שגיאה בשליחת טסט')
@@ -58,7 +101,7 @@ export function PushAdminTestPanel({ enabled }: Props) {
       }
       setLastResult(
         json.ok
-          ? 'נשלח פוש בהצלחה.'
+          ? `נשלח בהצלחה (${json.sentCount || 0}/${json.totalRecipients || 0}).`
           : json.hint
             ? `לא נשלח. ${json.hint}`
             : 'לא נשלח (נכשל או אין subscriptions).',
@@ -67,7 +110,7 @@ export function PushAdminTestPanel({ enabled }: Props) {
     } finally {
       setSending(false)
     }
-  }, [load])
+  }, [kind, target, title, message, url, load])
 
   const endpointPreview = useMemo(
     () => (s: string) => (s.length > 44 ? `${s.slice(0, 22)}…${s.slice(-18)}` : s),
@@ -82,7 +125,7 @@ export function PushAdminTestPanel({ enabled }: Props) {
         <div>
           <div className="text-sm font-black text-amber-900">טסט Push (אדמין)</div>
           <div className="text-xs text-amber-800 mt-1">
-            רשימת subscriptions שנשמרו למשתמש הזה + אפשרות לשלוח פוש טסט.
+            רשימת subscriptions שנשמרו למשתמש הזה + שליחת טסט מותאם.
           </div>
         </div>
         <Button
@@ -97,6 +140,68 @@ export function PushAdminTestPanel({ enabled }: Props) {
       </div>
 
       {lastResult && <div className="mt-3 text-xs font-bold text-amber-900">{lastResult}</div>}
+
+      <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-2">
+        <label className="text-xs font-bold text-amber-900">
+          סוג טסט
+          <select
+            value={kind}
+            onChange={(e) => setKind(e.target.value as NotificationKind)}
+            className="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-medium text-gray-800"
+          >
+            {TEST_KIND_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="text-xs font-bold text-amber-900">
+          יעד שליחה
+          <select
+            value={target}
+            onChange={(e) => setTarget(e.target.value as TestTarget)}
+            className="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-medium text-gray-800"
+          >
+            {TARGET_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="mt-2 grid grid-cols-1 gap-2">
+        <label className="text-xs font-bold text-amber-900">
+          כותרת
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-medium text-gray-800"
+            placeholder="כותרת פוש"
+          />
+        </label>
+        <label className="text-xs font-bold text-amber-900">
+          תוכן הודעה
+          <input
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-medium text-gray-800"
+            placeholder="תוכן קצר לפוש"
+          />
+        </label>
+        <label className="text-xs font-bold text-amber-900">
+          קישור פתיחה (url)
+          <input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-medium text-gray-800"
+            placeholder="/manager/profile"
+          />
+        </label>
+      </div>
 
       <div className="mt-4 text-xs font-bold text-amber-900">Subscriptions: {count}</div>
 
