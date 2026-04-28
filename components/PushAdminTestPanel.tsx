@@ -46,12 +46,23 @@ export function PushAdminTestPanel({ enabled }: Props) {
     setLastResult('')
     try {
       const res = await fetch('/api/push/test', { method: 'POST', credentials: 'include' })
-      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; message?: string; error?: string }
+      const json = (await res.json().catch(() => ({}))) as {
+        ok?: boolean
+        message?: string
+        error?: string
+        hint?: string
+      }
       if (!res.ok) {
         setLastResult(json.error || 'שגיאה בשליחת טסט')
         return
       }
-      setLastResult(json.ok ? 'נשלח פוש בהצלחה.' : 'לא נשלח (אין subscriptions או נכשל).')
+      setLastResult(
+        json.ok
+          ? 'נשלח פוש בהצלחה.'
+          : json.hint
+            ? `לא נשלח. ${json.hint}`
+            : 'לא נשלח (נכשל או אין subscriptions).',
+      )
       await load()
     } finally {
       setSending(false)

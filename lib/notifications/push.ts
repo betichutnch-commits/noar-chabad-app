@@ -23,6 +23,10 @@ export async function sendWebPushToUser(
   try {
     const webpush = (await import('web-push')) as WebPushModule
     configureWebPush(webpush)
+    if (!webPushConfigured) {
+      console.warn('[notify] web-push not configured (missing VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY)')
+      return false
+    }
 
     const { data: rows, error } = await admin
       .from('push_subscriptions')
