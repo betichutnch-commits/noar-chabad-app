@@ -30,6 +30,7 @@ export function NotificationPreferencesPanel({ userId }: Props) {
     usePushSubscription(userId)
   const [prefsLoading, setPrefsLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [pushError, setPushError] = useState('')
   const [pushEnabled, setPushEnabled] = useState(true)
   const [emailEnabled, setEmailEnabled] = useState(true)
   const [perType, setPerType] = useState<Record<string, boolean>>({})
@@ -122,7 +123,15 @@ export function NotificationPreferencesPanel({ userId }: Props) {
             </div>
             <div className="flex flex-wrap gap-2">
               {permission !== 'denied' && permission !== 'unsupported' && !isSubscribed && (
-                <Button type="button" className="text-xs" onClick={() => void subscribe()}>
+                <Button
+                  type="button"
+                  className="text-xs"
+                  onClick={async () => {
+                    setPushError('')
+                    const r = await subscribe()
+                    if (!r.ok && r.error) setPushError(r.error)
+                  }}
+                >
                   הפעלת Push
                 </Button>
               )}
@@ -132,6 +141,11 @@ export function NotificationPreferencesPanel({ userId }: Props) {
                 </Button>
               )}
             </div>
+            {pushError && (
+              <div className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                {pushError}
+              </div>
+            )}
             <label className="flex items-center justify-between gap-3 cursor-pointer">
               <span className="text-sm font-medium">לא לשלוח Push (רק במערכת)</span>
               <input

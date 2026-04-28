@@ -38,6 +38,18 @@ export async function subscribeToPush(): Promise<{ ok: boolean; error?: string }
   if (typeof window === 'undefined' || !('Notification' in window)) {
     return { ok: false, error: 'התראות לא נתמכות בדפדפן זה' }
   }
+  if (typeof window !== 'undefined' && (window as unknown as { isSecureContext?: boolean }).isSecureContext === false) {
+    return { ok: false, error: 'Push דורש HTTPS (או localhost). פתח/י את המערכת בכתובת מאובטחת.' }
+  }
+
+  const ua = navigator.userAgent || ''
+  const isIOS = /iPad|iPhone|iPod/i.test(ua)
+  const isStandalone =
+    window.matchMedia?.('(display-mode: standalone)')?.matches ||
+    (navigator as unknown as { standalone?: boolean }).standalone === true
+  if (isIOS && !isStandalone) {
+    return { ok: false, error: 'ב־iPhone/iPad צריך להוסיף למסך הבית כדי לקבל Push (Add to Home Screen).' }
+  }
   const permission = await Notification.requestPermission()
   if (permission !== 'granted') {
     return { ok: false, error: 'לא ניתנה הרשאה להתראות' }
