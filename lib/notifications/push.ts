@@ -17,8 +17,15 @@ function configureWebPush(webpush: WebPushModule) {
   const rawContact = String(process.env.VAPID_CONTACT_EMAIL || 'admin@localhost').trim()
   const contact =
     /^(mailto:|https?:\/\/)/i.test(rawContact) ? rawContact : `mailto:${rawContact}`
+  const gcmApiKey = String(process.env.GCM_API_KEY || process.env.FCM_SERVER_KEY || '')
+    .trim()
+    .replace(/^"|"$/g, '')
   if (!publicKey || !privateKey) return
   try {
+    if (gcmApiKey) {
+      // Legacy FCM endpoints may still require this key.
+      webpush.setGCMAPIKey(gcmApiKey)
+    }
     webpush.setVapidDetails(contact, publicKey, privateKey)
     webPushConfigured = true
   } catch (error) {

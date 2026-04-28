@@ -124,7 +124,7 @@
         * `lib/notifications/notify.ts` — `notifyUsers` / `notifyUserIds` למסירה מרוכזת.
         * `lib/notifications/recipients.ts` — פתרון נמענים לפי תפקיד/מחלקה.
         * `lib/notifications/inApp.ts` — כתיבה לטבלת `notifications`.
-        * `lib/notifications/push.ts` — שליחת Web Push דרך VAPID (`web-push`).
+        * `lib/notifications/push.ts` — שליחת Web Push דרך VAPID (`web-push`) עם fallback ל־`GCM_API_KEY` עבור endpoints ותיקים של FCM.
         * `lib/notifications/email.ts` — שליחת אימיילים דרך `resend`.
 
 * **`pushClient.ts`:**
