@@ -7,12 +7,23 @@ let webPushConfigured = false
 
 function configureWebPush(webpush: WebPushModule) {
   if (webPushConfigured) return
-  const publicKey = process.env.VAPID_PUBLIC_KEY
-  const privateKey = process.env.VAPID_PRIVATE_KEY
-  const contact = process.env.VAPID_CONTACT_EMAIL || 'mailto:admin@localhost'
+  const publicKey = String(process.env.VAPID_PUBLIC_KEY || '')
+    .trim()
+    .replace(/^"|"$/g, '')
+  const privateKey = String(process.env.VAPID_PRIVATE_KEY || '')
+    .trim()
+    .replace(/^"|"$/g, '')
+  const rawContact = String(process.env.VAPID_CONTACT_EMAIL || 'admin@localhost').trim()
+  const contact =
+    /^(mailto:|https?:\/\/)/i.test(rawContact) ? rawContact : `mailto:${rawContact}`
   if (!publicKey || !privateKey) return
-  webpush.setVapidDetails(contact, publicKey, privateKey)
-  webPushConfigured = true
+  try {
+    webpush.setVapidDetails(contact, publicKey, privateKey)
+    webPushConfigured = true
+  } catch (error) {
+    console.warn('[notify] invalid VAPID configuration', error)
+    webPushConfigured = false
+  }
 }
 
 export async function sendWebPushToUser(

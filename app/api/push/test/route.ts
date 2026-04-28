@@ -135,6 +135,6 @@ export async function POST(request: Request) {
     hint:
       ok
         ? undefined
-        : 'אם יש subscriptions ועדיין נכשל — בדוק שה-VAPID בוורסל תואם למפתח הציבורי שבו נרשמת (צריך רישום מחדש אחרי החלפת VAPID).',
+        : 'אם יש subscriptions ועדיין נכשל — בדוק VAPID (public+private תואמים, בלי גרשיים), ו־VAPID_CONTACT_EMAIL תקין (email או mailto:email). ייתכן שצריך רישום מחדש אחרי החלפת VAPID.',
   })
 }
