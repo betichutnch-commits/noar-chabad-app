@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { isManagerUser } from '@/lib/auth'
 import type { User } from '@supabase/supabase-js'
+import { notifyUserIds } from '@/lib/notifications'
 
 type RouteContext = { params: Promise<unknown> }
 type StaffBody = { name: string; idNumber: string; phone: string; email: string; role: string }
@@ -57,12 +58,12 @@ export async function PUT(request: Request, { params }: RouteContext) {
   const { error } = await supabase.from('trips').update({ details: updatedDetails }).eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  await supabase.from('notifications').insert({
-    user_id: existingUser.id,
+  await notifyUserIds([existingUser.id], {
+    kind: 'trip.secondary_staff',
     title: 'שיבוץ לטיול',
-    message: 'שובצת לטיול חדש. היכנס/י לפרטים במערכת.',
-    link: `/dashboard/trip/${id}`,
-    type: 'assignment',
+    body: 'שובצת לטיול חדש. היכנס/י לפרטים במערכת.',
+    url: `/dashboard/trip/${id}`,
+    inAppType: 'assignment',
   })
 
   return NextResponse.json({ ok: true, details: updatedDetails })

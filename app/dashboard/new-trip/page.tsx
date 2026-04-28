@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useRef, Suspense } from 'react'
+import React, { useState, useEffect, useRef, Suspense, useCallback } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { Header } from '@/components/layout/Header'
 import { Modal } from '@/components/ui/Modal'
@@ -138,6 +138,22 @@ function NewTripContent() {
   const [endHebrewDate, setEndHebrewDate] = useState('');
   const [isUrgentError, setIsUrgentError] = useState(false);
 
+  const buildCoordinatorDefaults = useCallback(() => {
+      const meta = (user?.user_metadata || {}) as Record<string, string | undefined>;
+      const officialName = String(profile?.official_name || meta.official_name || '').trim();
+      const lastName = String(profile?.last_name || meta.last_name || '').trim();
+      const fullNameMeta = String(meta.full_name || '').trim();
+      const fullName = [officialName, lastName].filter(Boolean).join(' ').trim() || fullNameMeta;
+
+      return {
+          coordName: fullName,
+          coordId: String(profile?.identity_number || meta.identity_number || '').trim(),
+          coordPhone: String(profile?.phone || meta.phone || '').trim(),
+          coordEmail: String(profile?.email || meta.contact_email || user?.email || '').trim(),
+          coordDob: String(profile?.birth_date || meta.birth_date || '').trim(),
+      };
+  }, [profile, user]);
+
   const checkGender = (dept: string) => {
       if (!dept) return 'mixed';
       if (['הפנסאים', 'התמים', 'בני חב"ד'].some(d => dept.includes(d))) return 'male';
@@ -160,18 +176,15 @@ function NewTripContent() {
         setUserGender(checkGender(user.user_metadata?.department));
         
         // אם זה טיול חדש (לא עריכה), נמלא את פרטי האחראי אוטומטית מהפרופיל
-        if (!editId && profile) {
+        if (!editId) {
+            const defaults = buildCoordinatorDefaults();
             setGeneralInfo(prev => ({
                 ...prev,
-                coordName: `${profile.official_name} ${profile.last_name}`,
-                coordId: profile.identity_number || '',
-                coordPhone: profile.phone || '',
-                coordEmail: profile.email || '',
-                coordDob: profile.birth_date || ''
+                ...defaults,
             }));
         }
     }
-  }, [user, profile, userLoading, editId]);
+  }, [user, userLoading, editId, buildCoordinatorDefaults]);
 
   useEffect(() => {
       const fetchTrip = async () => {

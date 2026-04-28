@@ -2,152 +2,43 @@
 
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { Bell, X, UserPlus, Users, Mail } from 'lucide-react';
+import { Bell, X, UserPlus, Users, Mail, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
-
-// פונקציית עזר למציאת ערך (לא רגישה ל-Case)
-const findValue = (obj: Record<string, unknown> | null | undefined, keys: string[]) => {
-    if (!obj) return null;
-    for (const key of keys) {
-        const found = Object.keys(obj).find(k => k.toLowerCase() === key.toLowerCase());
-        if (found && obj[found]) return obj[found];
-    }
-    return null;
-};
-
-// פונקציית תצוגה מעודכנת וחכמה יותר
-const getRoleDetails = (role: string, meta: Record<string, unknown>) => {
-  const r = (role || '').toLowerCase().trim();
-  
-  // חיפוש נתונים באגרסיביות
-  const department = String(findValue(meta, ['department', 'dept', 'mador', 'unit', 'agaf', 'מחלקה', 'מדור']) || '');
-  const branch = String(findValue(meta, ['branch_name', 'branch', 'snif', 'location', 'area', 'city', 'place', 'סניף', 'שם סניף']) || '');
-
-  // ברירת מחדל למשתנים
-  let mainRole = '';
-  let secondaryInfo = department;
-
-  // 1. זיהוי רכזים (או אם יש סניף - נתייחס כרכז)
-  if (r.includes('coordinator') || r === 'רכז' || r.includes('rakaz') || branch) {
-      const isFemale = department.includes('בת מלך') || department.includes('בנות');
-      const title = isFemale ? 'רכזת סניף' : 'רכז סניף';
-      
-      // אם יש שם סניף, נציג אותו צמוד לתפקיד
-      if (branch) {
-          mainRole = `${title} ${branch}`;
-      } else {
-          mainRole = title; // רק התואר אם אין שם סניף
-      }
-  }
-  // 2. זיהוי צוות מטה
-  else if (r.includes('staff') || r.includes('mate') || r.includes('hq') || r === 'office' || r.includes('dept_staff')) {
-      mainRole = 'צוות מטה';
-  }
-  // 3. זיהוי מנהלים
-  else if (r.includes('manager') || r.includes('admin') || r.includes('head') || r === 'safety_admin') {
-      mainRole = 'מנהל מערכת';
-      secondaryInfo = ''; // למנהל בדרך כלל לא מציגים מחלקה בבועה
-  }
-  // 4. אחר / לא זוהה - מציג את מה שיש
-  else {
-      mainRole = r || 'משתמש'; // מציג את התפקיד הגולמי אם לא זוהה
-      if (branch) mainRole += ` ${branch}`;
-  }
-
-  return { mainRole, secondaryInfo };
-};
+import { useManagerInboxSummary } from '@/hooks/useManagerInboxSummary';
+import { formatUserRoleLabel } from '@/lib/auth';
+import { parseMessageSubject } from '@/lib/inbox';
 
 export const ManagerHeader = ({ title }: { title: string }) => {
   // אתחול עם ערכים דיפולטיביים
-  const [managerProfile, setManagerProfile] = useState<{ full_name: string; avatar_url: string | null; is_tech_admin?: boolean }>({ full_name: 'מנהל מערכת', avatar_url: null });
-  const [counts, setCounts] = useState({ newUsers: 0, newMessages: 0 });
-  const [pendingUsersList, setPendingUsersList] = useState<Array<{ id: string; raw_user_meta_data?: Record<string, string> }>>([]);
-  const [unreadMessagesList, setUnreadMessagesList] = useState<Array<{ id: string; category?: string; subject?: string; displayDetails?: { fullName: string; mainRole: string; secondaryInfo: string } }>>([]);
+  const [managerProfile, setManagerProfile] = useState<{
+    full_name: string;
+    avatar_url: string | null;
+    is_tech_admin?: boolean;
+    role_label: string;
+  }>({ full_name: 'מנהל מערכת', avatar_url: null, role_label: 'מחלקת בטיחות ומפעלים' });
+  const { counts, pendingUsersList, unreadMessagesList } = useManagerInboxSummary();
   
   const [isBellOpen, setIsBellOpen] = useState(false);
   const [isUsersOpen, setIsUsersOpen] = useState(false);
 
   useEffect(() => {
-    const initData = async () => {
-        try {
-            // 1. נתוני המנהל (מיידי)
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user) {
-                const meta = user.user_metadata || {};
-                setManagerProfile({
-                    full_name: meta.full_name || meta.official_name || meta.name || 'מנהל מערכת',
-                    avatar_url: meta.avatar_url,
-                    is_tech_admin: meta.role === 'admin' || meta.role === 'safety_admin'
-                });
-            }
-
-            // בדיקת הרשאות טכניות
-            const isTechAdmin = user?.user_metadata?.role === 'admin' || user?.user_metadata?.role === 'safety_admin';
-
-            // 2. משתמשים ממתינים
-            const { data: usersView } = await supabase.from('users_management_view').select('*');
-            const pendingUsers = usersView?.filter((u: { raw_user_meta_data?: Record<string, string> }) => u.raw_user_meta_data?.status === 'pending').slice(0, 5) || [];
-            setPendingUsersList(pendingUsers);
-
-            // 3. הודעות לפעמון
-            let msgQuery = supabase.from('contact_messages')
-                .select('*')
-                .neq('status', 'treated')
-                .neq('status', 'closed');
-
-            if (!isTechAdmin) {
-                msgQuery = msgQuery.neq('category', 'bug');
-            }
-
-            const { data: rawMessages } = await msgQuery
-                .order('created_at', { ascending: false })
-                .limit(5);
-
-            if (rawMessages && rawMessages.length > 0) {
-                const userIds = rawMessages.map(m => m.user_id);
-                // שליפת פרטים מלאים מ-View הניהול
-                const { data: usersDetails } = await supabase
-                    .from('users_management_view')
-                    .select('id, raw_user_meta_data')
-                    .in('id', userIds);
-
-                const mergedMessages = rawMessages.map(msg => {
-                    const userDetail = usersDetails?.find(u => u.id === msg.user_id);
-                    // כאן אנו מבטיחים שתמיד יהיה אובייקט, גם אם ריק
-                    const meta = userDetail?.raw_user_meta_data || {};
-                    
-                    const fullName = meta.full_name || meta.name || meta.official_name || 'משתמש';
-                    const role = meta.role || 'user';
-                    
-                    // חישוב הפרטים לתצוגה
-                    const details = getRoleDetails(role, meta);
-
-                    return {
-                        ...msg,
-                        displayDetails: { fullName, ...details }
-                    };
-                });
-
-                setUnreadMessagesList(mergedMessages);
-                setCounts({ newUsers: pendingUsers.length, newMessages: mergedMessages.length });
-            } else {
-                setUnreadMessagesList([]);
-                setCounts({ newUsers: pendingUsers.length, newMessages: 0 });
-            }
-
-        } catch (error) {
-            console.error("Header Error:", error);
-        }
+    const initManagerProfile = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const meta = user.user_metadata || {};
+      setManagerProfile({
+        full_name: meta.full_name || meta.official_name || meta.name || 'מנהל מערכת',
+        avatar_url: meta.avatar_url,
+        is_tech_admin: meta.role === 'admin' || meta.role === 'safety_admin',
+        role_label: formatUserRoleLabel({
+          role: meta.role,
+          department: meta.department,
+          branchName: meta.branch_name || meta.branch,
+        }),
+      });
     };
-
-    initData();
-
-    const channel = supabase.channel('header_realtime')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'contact_messages' }, () => initData())
-        .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
+    initManagerProfile();
   }, []);
 
   return (
@@ -202,13 +93,22 @@ export const ManagerHeader = ({ title }: { title: string }) => {
                                 unreadMessagesList.map((m) => {
                                     // חילוץ בטוח עם ערכי ברירת מחדל
                                     const { fullName, mainRole, secondaryInfo } = m.displayDetails || { fullName: 'משתמש', mainRole: '', secondaryInfo: '' };
+                                    const parsedSubject = parseMessageSubject(String(m.subject || ''));
                                     
                                     return (
                                         <Link key={m.id} href="/manager/inbox" onClick={() => setIsBellOpen(false)} className="block p-3 border-b border-gray-50 hover:bg-cyan-50 transition-colors group">
-                                            <div className="flex items-center flex-wrap text-xs mb-1 gap-1.5">
+                                            <div className="flex items-center text-xs mb-1 gap-1.5 min-w-0 overflow-hidden whitespace-nowrap">
                                                 {/* שם מלא */}
                                                 <span className="font-bold text-gray-900">{fullName}</span>
-                                                
+
+                                                {/* מפריד + מחלקה (אם יש) */}
+                                                {secondaryInfo && (
+                                                    <>
+                                                        <span className="text-gray-300">|</span>
+                                                        <span className="text-brand-cyan font-bold">{secondaryInfo}</span>
+                                                    </>
+                                                )}
+
                                                 {/* מפריד + תפקיד וסניף (אם יש) */}
                                                 {mainRole && (
                                                     <>
@@ -217,19 +117,14 @@ export const ManagerHeader = ({ title }: { title: string }) => {
                                                     </>
                                                 )}
                                                 
-                                                {/* מפריד + מחלקה (אם יש) */}
-                                                {secondaryInfo && (
-                                                    <>
-                                                        <span className="text-gray-300">|</span>
-                                                        <span className="text-brand-cyan font-bold">{secondaryInfo}</span>
-                                                    </>
-                                                )}
-                                                
                                                 {m.category === 'bug' && <span className="mr-auto text-[9px] bg-red-100 text-red-600 px-1.5 rounded-full font-bold">תקלה</span>}
                                             </div>
-                                            <div className="flex gap-2 text-xs text-gray-500">
+                                            <div className="flex gap-2 text-xs text-gray-500 items-center min-w-0">
                                                 <Mail size={12} className="text-brand-cyan mt-0.5 shrink-0"/>
-                                                <span className="line-clamp-1">{m.subject}</span>
+                                                <span className="line-clamp-1">{parsedSubject.cleanSubject}</span>
+                                                <span className={`shrink-0 inline-flex items-center justify-center w-4 h-4 rounded ${parsedSubject.type === 'bug' ? 'text-red-600 bg-red-50' : 'text-cyan-700 bg-cyan-50'}`}>
+                                                  {parsedSubject.type === 'bug' ? <AlertTriangle size={10}/> : <Mail size={10}/>}
+                                                </span>
                                             </div>
                                         </Link>
                                     );
@@ -250,7 +145,7 @@ export const ManagerHeader = ({ title }: { title: string }) => {
                         {managerProfile.full_name}
                     </div>
                     <div className="text-sm text-brand-green font-medium text-left">
-                        מחלקת בטיחות ומפעלים
+                        {managerProfile.role_label}
                     </div>
                 </div>
                 <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-gray-800 to-black flex items-center justify-center text-white font-bold text-2xl shadow-lg border-[3px] border-white ring-1 ring-gray-100 shrink-0 overflow-hidden relative">

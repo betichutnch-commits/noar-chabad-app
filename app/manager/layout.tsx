@@ -1,212 +1,73 @@
 "use client"
 
 import React, { useState, useEffect, useRef } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { ManagerSidebar } from '@/components/layout/ManagerSidebar'; 
-import { Menu, Bell, UserPlus, X, Mail, Users } from 'lucide-react';
+import { Menu, Bell, UserPlus, X, Mail, Users, AlertTriangle } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabaseClient';
 import { useUser } from '@/hooks/useUser';
-
-type MetadataRecord = Record<string, string | undefined>;
-type UserProfileLite = {
-  role?: string | null;
-  department?: string | null;
-  branch?: string | null;
-  branch_name?: string | null;
-  full_name?: string | null;
-};
-type DisplayDetails = { fullName: string; roleTitle: string; secondaryInfo: string };
-type RecentMessage = { id: string; user_id: string; subject?: string; category?: string; sender_name?: string; profiles?: UserProfileLite | null; displayDetails?: DisplayDetails };
-type RecentUser = { id: string; raw_user_meta_data?: MetadataRecord };
-
-// ----------------------------------------------------------------------
-// 1. פונקציות עזר
-// ----------------------------------------------------------------------
-
-// מציאת ערך (לא רגיש לאותיות גדולות/קטנות)
-const findValue = (obj: Record<string, unknown> | null | undefined, keys: string[]) => {
-    if (!obj) return null;
-    for (const key of keys) {
-        const found = Object.keys(obj).find(k => k.toLowerCase() === key.toLowerCase());
-        if (found && obj[found]) return obj[found];
-    }
-    return null;
-};
-
-// פונקציה למיזוג וחישוב התצוגה (שם, תפקיד, מיקום)
-const resolveUserDetails = (profile: UserProfileLite | null | undefined, meta: MetadataRecord | null | undefined): DisplayDetails => {
-    const p = profile || {};
-    const m = meta || {};
-
-    // שליפת תפקיד (עדיפות למטא-דאטה)
-    const roleRaw = m.role || p.role || 'user';
-    const role = roleRaw.toLowerCase().trim();
-
-    // שליפת מחלקה
-    const deptKeys = ['department', 'dept', 'mador', 'unit', 'agaf', 'מחלקה', 'מדור'];
-    const department = String(findValue(m, deptKeys) || findValue(p, deptKeys) || '');
-
-    // שליפת סניף (כולל branch_name)
-    const branchKeys = ['branch_name', 'branch', 'snif', 'location', 'area', 'city', 'place', 'סניף', 'שם סניף'];
-    const branch = String(findValue(m, branchKeys) || findValue(p, branchKeys) || '');
-
-    // שליפת שם מלא (עדיפות למטא-דאטה, אח"כ לפרופיל)
-    const fullName = String(m.full_name || m.name || m.official_name || p.full_name || 'משתמש');
-
-    let roleTitle = '';
-    let secondaryInfo = '';
-
-    // 1. רכזים
-    if (role.includes('coordinator') || role === 'רכז' || role.includes('rakaz')) {
-        const isFemale = department.includes('בת מלך') || department.includes('בנות');
-        const title = isFemale ? 'רכזת סניף' : 'רכז סניף';
-        
-        if (branch) {
-            roleTitle = `${title} ${branch}`;
-            secondaryInfo = department;
-        } else {
-            roleTitle = title;
-            secondaryInfo = department;
-        }
-    }
-    // 2. צוות מטה
-    else if (role.includes('staff') || role.includes('mate') || role.includes('hq') || role === 'office' || role.includes('dept_staff')) {
-        roleTitle = 'צוות מטה';
-        secondaryInfo = department || 'כללי';
-    }
-    // 3. מנהלים - כאן היה התיקון (החלפנו את r ב-role)
-    else if (role.includes('manager') || role.includes('admin') || role.includes('head') || role === 'safety_admin') {
-        roleTitle = 'מנהל מערכת';
-        secondaryInfo = '';
-    }
-    // 4. אחר
-    else {
-        roleTitle = 'משתמש';
-        secondaryInfo = branch || department;
-    }
-
-    return { fullName, roleTitle, secondaryInfo };
-};
-
-// ----------------------------------------------------------------------
+import { useManagerInboxSummary } from '@/hooks/useManagerInboxSummary';
+import { isDeptTripsOfficer, isManagerUser, formatUserRoleLabel } from '@/lib/auth';
+import { DEPARTMENTS_CONFIG } from '@/lib/constants';
+import { parseMessageSubject } from '@/lib/inbox';
+import { PushPermissionBanner } from '@/components/PushPermissionBanner';
 
 export default function ManagerLayout({ children }: { children: React.ReactNode }) {
-  const { user } = useUser();
+  const { user, profile, loading, roleChangedNotice, clearRoleChangedNotice } = useUser();
+  const pathname = usePathname();
+  const router = useRouter();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  
-  const [counts, setCounts] = useState({ newUsers: 0, newMessages: 0 });
-  const [recentMessages, setRecentMessages] = useState<RecentMessage[]>([]); 
-  const [recentUsers, setRecentUsers] = useState<RecentUser[]>([]);
+  const { counts, pendingUsersList: recentUsers, unreadMessagesList: recentMessages } = useManagerInboxSummary();
+
+  useEffect(() => {
+    if (loading || !user) return;
+    const isOfficer = isDeptTripsOfficer(user, profile);
+    const isManager = isManagerUser(user, profile);
+
+    if (isOfficer && !isManager) {
+      const allowedPrefixes = ['/manager/dept-review', '/manager/profile'];
+      const isAllowed = allowedPrefixes.some((p) => pathname?.startsWith(p));
+      if (!isAllowed) {
+        router.replace('/manager/dept-review');
+      }
+    }
+  }, [loading, user, profile, pathname, router]);
   
   const [activeBubble, setActiveBubble] = useState<'messages' | 'users' | null>(null);
   const fabContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-      const fetchData = async () => {
-          try {
-              const { data: { user } } = await supabase.auth.getUser();
-              if (!user) return;
-
-              // 1. בדיקת הרשאה טכנית
-              const { data: profile } = await supabase.from('profiles')
-                .select('is_tech_admin')
-                .eq('id', user.id)
-                .single();
-              
-              const isTechAdmin = profile?.is_tech_admin || false;
-
-              // 2. משתמשים ממתינים
-              const { data: users, count: userCount } = await supabase.from('users_management_view')
-                .select('*', { count: 'exact' })
-                .eq('raw_user_meta_data->>status', 'pending')
-                .limit(5);
-
-              // 3. הודעות
-              let msgQuery = supabase.from('contact_messages')
-                .select(`
-                    *,
-                    profiles (*)
-                `, { count: 'exact' })
-                .neq('status', 'treated')
-                .neq('status', 'closed');
-
-              if (!isTechAdmin) {
-                  msgQuery = msgQuery.neq('category', 'bug');
-              }
-
-              const { data: msgs, count: msgCount } = await msgQuery
-                .order('created_at', { ascending: false })
-                .limit(5);
-
-              // 4. עיבוד נתונים
-              let processedMessages: RecentMessage[] = [];
-              if (msgs && msgs.length > 0) {
-                  try {
-                      const userIds = msgs.map(m => m.user_id);
-                      const { data: usersDetails } = await supabase
-                          .from('users_management_view')
-                          .select('id, raw_user_meta_data')
-                          .in('id', userIds);
-
-                      processedMessages = msgs.map((msg: RecentMessage) => {
-                          const userMetaEntry = usersDetails?.find(u => u.id === msg.user_id);
-                          const meta = userMetaEntry?.raw_user_meta_data || {};
-                          const profile = msg.profiles || {};
-
-                          const details = resolveUserDetails(profile, meta);
-
-                          return {
-                              ...msg,
-                              displayDetails: details
-                          };
-                      });
-                  } catch (err) {
-                      console.error("Error processing messages:", err);
-                      processedMessages = msgs.map((msg: RecentMessage) => ({
-                          ...msg,
-                          displayDetails: { 
-                              fullName: msg.sender_name || 'משתמש', 
-                              roleTitle: '', 
-                              secondaryInfo: '' 
-                          }
-                      }));
-                  }
-              }
-
-              setCounts({ newMessages: msgCount || 0, newUsers: userCount || 0 });
-              setRecentMessages(processedMessages);
-              setRecentUsers(users || []);
-
-          } catch (error) {
-              console.error("Layout Fetch Error:", error);
-          }
-      };
-
-      fetchData();
-
-      const channel = supabase.channel('mobile_manager_updates')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'contact_messages' }, () => fetchData())
-        .subscribe();
-
-      const handleClickOutside = (event: MouseEvent) => {
-        if (fabContainerRef.current && !fabContainerRef.current.contains(event.target as Node)) {
-            setActiveBubble(null);
-        }
-      };
-      document.addEventListener("mousedown", handleClickOutside);
-      
-      return () => {
-          document.removeEventListener("mousedown", handleClickOutside);
-          supabase.removeChannel(channel);
-      };
-
+    const handleClickOutside = (event: MouseEvent) => {
+      if (fabContainerRef.current && !fabContainerRef.current.contains(event.target as Node)) {
+        setActiveBubble(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
   }, []);
 
   const hasAnyAlerts = counts.newMessages > 0 || counts.newUsers > 0;
 
+  const normalizeDepartment = (department?: string) =>
+    String(department || '').trim().replace(/״/g, '"').replace(/\s+/g, ' ');
+
+  const getDepartmentTextClass = (department?: string) => {
+    const key = normalizeDepartment(department);
+    if (!key) return 'text-gray-500';
+    const config = DEPARTMENTS_CONFIG[key];
+    if (!config) return 'text-gray-500';
+    const textClass = config.color
+      .split(' ')
+      .find((cls) => cls.startsWith('text-'));
+    return textClass || 'text-gray-500';
+  };
+
   return (
     <div className="min-h-screen bg-surface-base dir-rtl font-sans text-right relative">
+      <PushPermissionBanner userId={user?.id} />
       
       {/* Mobile Header */}
       <div className="md:hidden flex items-center justify-between px-4 py-3 bg-white/95 backdrop-blur-md border-b border-gray-200 sticky top-0 z-40 shadow-sm h-16">
@@ -229,7 +90,11 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
                      {user?.user_metadata?.full_name || 'מנהל'}
                  </span>
                  <span className="text-[9px] font-light text-brand-green mt-0.5">
-                     מחלקת בטיחות ומפעלים
+                     {formatUserRoleLabel({
+                       role: user?.user_metadata?.role,
+                       department: user?.user_metadata?.department,
+                       branchName: user?.user_metadata?.branch_name || user?.user_metadata?.branch,
+                     })}
                  </span>
              </div>
              <div className="w-8 h-8 rounded-full bg-gray-800 text-white flex items-center justify-center overflow-hidden border-2 border-white shadow-sm ring-1 ring-gray-100">
@@ -250,6 +115,21 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
       <div className="md:mr-64 mr-0 transition-all duration-300 min-h-screen pb-24">
         {children}
       </div>
+
+      {roleChangedNotice && (
+        <div className="fixed top-20 md:top-6 left-1/2 -translate-x-1/2 z-[90] w-[92vw] max-w-md">
+          <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-2xl shadow-lg px-4 py-3 flex items-start gap-3">
+            <div className="text-sm font-bold flex-1">{roleChangedNotice}</div>
+            <button
+              onClick={clearRoleChangedNotice}
+              className="text-emerald-700/80 hover:text-emerald-900 text-xs font-bold"
+              aria-label="סגור הודעה"
+            >
+              סגור
+            </button>
+          </div>
+        </div>
+      )}
       
       {/* FABs */}
       {hasAnyAlerts && (
@@ -266,31 +146,36 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
                             </div>
                             <div className="max-h-60 overflow-y-auto bg-gray-50/50">
                                 {recentMessages.map((m) => {
-                                    const details = m.displayDetails || { fullName: 'משתמש', roleTitle: '', secondaryInfo: '' };
+                                    const details = m.displayDetails || { fullName: 'משתמש', mainRole: '', secondaryInfo: '' };
+                                    const parsedSubject = parseMessageSubject(String(m.subject || ''));
                                     
                                     return (
                                         <Link key={m.id} href="/manager/inbox" onClick={() => setActiveBubble(null)} className="block p-3 border-b border-gray-100 bg-white hover:bg-cyan-50">
-                                            <div className="flex flex-wrap items-center gap-1.5 mb-1 text-[10px]">
+                                            <div className="flex items-center gap-1.5 mb-1 text-[10px] min-w-0 overflow-hidden whitespace-nowrap">
                                                 <span className="font-black text-gray-800">{details.fullName}</span>
-                                                
-                                                {details.roleTitle && (
-                                                    <>
-                                                        <span className="text-gray-300">|</span>
-                                                        <span className="text-gray-500 font-medium">{details.roleTitle}</span>
-                                                    </>
-                                                )}
-                                                
                                                 {details.secondaryInfo && (
                                                     <>
                                                         <span className="text-gray-300">|</span>
-                                                        <span className="text-brand-cyan font-bold">{details.secondaryInfo}</span>
+                                                        <span className={`font-bold ${getDepartmentTextClass(details.secondaryInfo)}`}>{details.secondaryInfo}</span>
+                                                    </>
+                                                )}
+                                                
+                                                {details.mainRole && (
+                                                    <>
+                                                        <span className="text-gray-300">|</span>
+                                                        <span className="text-gray-500 font-medium">{details.mainRole}</span>
                                                     </>
                                                 )}
                                                 
                                                 {m.category === 'bug' && <span className="mr-auto text-[9px] bg-red-100 text-red-600 px-1.5 rounded-full font-bold">תקלה</span>}
                                             </div>
                                             
-                                            <div className="text-xs text-gray-500 truncate">{m.subject}</div>
+                                            <div className="text-xs text-gray-500 truncate flex items-center gap-1.5 min-w-0">
+                                              <span className="truncate">{parsedSubject.cleanSubject}</span>
+                                              <span className={`shrink-0 inline-flex items-center justify-center w-4 h-4 rounded ${parsedSubject.type === 'bug' ? 'text-red-600 bg-red-50' : 'text-cyan-700 bg-cyan-50'}`}>
+                                                {parsedSubject.type === 'bug' ? <AlertTriangle size={10}/> : <Mail size={10}/>}
+                                              </span>
+                                            </div>
                                         </Link>
                                     );
                                 })}
@@ -323,7 +208,7 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
                                     return (
                                         <Link key={u.id} href="/manager/users" onClick={() => setActiveBubble(null)} className="block p-3 border-b border-gray-100 bg-white hover:bg-purple-50">
                                             <div className="font-bold text-gray-800 text-xs">{meta.full_name}</div>
-                                            <div className="text-[10px] text-gray-500">{meta.department}</div>
+                                            <div className={`text-[10px] font-bold ${getDepartmentTextClass(meta.department)}`}>{meta.department}</div>
                                         </Link>
                                     );
                                 })}

@@ -13,6 +13,12 @@ export const useSignedUrl = (filePath: string | undefined | null) => {
         return;
       }
 
+      // תמיכה לאחור: אם זה כבר URL מלא, אין צורך ב-signed URL
+      if (filePath.startsWith('http')) {
+        if (isMounted) setSignedUrl(filePath);
+        return;
+      }
+
       // מקבלים רק נתיבי storage פנימיים, לא URL חיצוני מלא.
       // נתיבים תקפים: "folder/file.png" או "trip-files/folder/file.png"
       const normalizedPath = filePath.startsWith('trip-files/') ? filePath.slice('trip-files/'.length) : filePath;

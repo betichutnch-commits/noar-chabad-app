@@ -77,11 +77,22 @@ export default function ManagerTripView({ params }: { params: Promise<{ id: stri
     }
   }, [id, router, user, userLoading, profile]);
 
-  const handleStatusUpdate = (newStatus: 'approved' | 'rejected') => {
+  const handleStatusUpdate = (newStatus: 'approved' | 'approved_for_execution' | 'rejected') => {
+      const isRejected = newStatus === 'rejected';
+      const actionText = isRejected
+        ? 'לדחות'
+        : newStatus === 'approved_for_execution'
+          ? 'לאשר לביצוע'
+          : 'לאשר לפרסום ותכנון';
+      const titleText = isRejected
+        ? 'דחיית טיול'
+        : newStatus === 'approved_for_execution'
+          ? 'אישור טיול לביצוע'
+          : 'אישור טיול לפרסום ותכנון';
       showModal(
           'confirm', 
-          newStatus === 'approved' ? 'אישור טיול' : 'דחיית טיול',
-          `האם אתה בטוח שברצונך ${newStatus === 'approved' ? 'לאשר' : 'לדחות'} את הטיול?\nפעולה זו תשלח עדכון לרכז.`,
+          titleText,
+          `האם אתה בטוח שברצונך ${actionText} את הטיול?\nפעולה זו תשלח עדכון לרכז.`,
           async () => {
               setProcessing(true);
               if (!trip) return;
@@ -96,7 +107,15 @@ export default function ManagerTripView({ params }: { params: Promise<{ id: stri
                   showModal('error', 'שגיאה', 'שגיאה בעדכון הסטטוס');
               } else {
                   setTrip({ ...trip, status: newStatus });
-                  showModal('success', 'בוצע', newStatus === 'approved' ? 'הטיול אושר בהצלחה!' : 'הטיול נדחה.');
+                  showModal(
+                    'success',
+                    'בוצע',
+                    newStatus === 'rejected'
+                      ? 'הטיול נדחה.'
+                      : newStatus === 'approved_for_execution'
+                        ? 'הטיול אושר לביצוע!'
+                        : 'הטיול אושר לפרסום ותכנון!',
+                  );
               }
               setProcessing(false);
           }
@@ -163,7 +182,17 @@ export default function ManagerTripView({ params }: { params: Promise<{ id: stri
                     icon={<Check size={18}/>}
                     className="flex-1 md:w-auto h-12"
                 >
-                    אשר טיול
+                    אשר לפרסום ותכנון
+                </Button>
+
+                <Button 
+                    variant="secondary" 
+                    onClick={() => handleStatusUpdate('approved_for_execution')} 
+                    isLoading={processing}
+                    icon={<Check size={18}/>}
+                    className="flex-1 md:w-auto h-12"
+                >
+                    אשר לביצוע
                 </Button>
             </div>
          </div>

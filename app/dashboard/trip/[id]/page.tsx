@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { Header } from '@/components/layout/Header'
-import { Loader2, Trash2 } from 'lucide-react'
+import { Loader2, Trash2, RotateCcw, FileEdit } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import { TripDetailsView } from '@/components/TripDetailsView'
 import { Modal } from '@/components/ui/Modal'
@@ -11,9 +11,15 @@ import { Modal } from '@/components/ui/Modal'
 // ייבוא Hook ו-Zod
 import { useUser } from '@/hooks/useUser'
 import { cancellationSchema, staffSchema } from '@/lib/schemas'
+import { normalizeTripStatus } from '@/lib/tripStatus'
 import type { TripRecord } from '@/lib/types'
 
-type TripState = TripRecord & { details: Record<string, unknown>; cancellation_reason?: string };
+type TripState = TripRecord & {
+  details: Record<string, unknown>;
+  cancellation_reason?: string;
+  dept_review_notes?: string | null;
+  dept_reviewed_at?: string | null;
+};
 
 export default function TripDetailsPage() {
   const params = useParams();
@@ -250,7 +256,30 @@ export default function TripDetailsPage() {
           </div>
       )}
 
-      <div className="p-4 md:p-8 pb-32 animate-fadeIn">
+      <div className="p-4 md:p-8 pb-32 animate-fadeIn space-y-4">
+          {normalizeTripStatus(trip.status) === 'returned_for_changes' && trip.dept_review_notes && isOwner && (
+            <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 md:p-5 flex flex-col md:flex-row md:items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
+                    <RotateCcw size={20}/>
+                </div>
+                <div className="flex-1">
+                    <div className="text-sm font-black text-orange-800 mb-1">הבקשה הוחזרה להערות</div>
+                    <p className="text-sm text-orange-900 whitespace-pre-wrap leading-relaxed">{trip.dept_review_notes}</p>
+                    {trip.dept_reviewed_at && (
+                        <div className="text-[11px] text-orange-700 mt-2">
+                            התקבל ב-{new Date(trip.dept_reviewed_at).toLocaleString('he-IL')}
+                        </div>
+                    )}
+                </div>
+                <button
+                    onClick={() => router.push(`/dashboard/new-trip?id=${trip.id}`)}
+                    className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center justify-center gap-2 self-start md:self-center shrink-0"
+                >
+                    <FileEdit size={16}/> ערוך והגש מחדש
+                </button>
+            </div>
+          )}
+
           <TripDetailsView 
             trip={trip} 
             profile={profile}

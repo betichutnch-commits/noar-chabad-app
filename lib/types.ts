@@ -19,12 +19,27 @@ export interface TripRecord {
   user_id: string;
   name: string;
   branch: string | null;
+  department?: string | null;
   coordinator_name: string | null;
   start_date: string;
-  status: "pending" | "approved" | "rejected" | string;
+  created_at?: string | null;
+  status:
+    | "draft"
+    | "pending_dept_review"
+    | "returned_for_changes"
+    | "pending"
+    | "approved"
+    | "approved_for_execution"
+    | "rejected"
+    | "cancelled"
+    | string;
   details?: {
     timeline?: Array<{ finalLocation?: string }>;
   } | null;
+  dept_review_notes?: string | null;
+  dept_reviewed_by?: string | null;
+  dept_reviewed_at?: string | null;
+  dept_forwarded_at?: string | null;
 }
 
 export interface ContactMessage {

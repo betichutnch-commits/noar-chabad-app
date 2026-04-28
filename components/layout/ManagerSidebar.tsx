@@ -5,8 +5,9 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import { getCoordinatorsPluralTitle, getDeptTripsOfficerTitle } from '@/lib/auth'
 import { 
-  LayoutDashboard, CheckSquare, Users, FileBarChart, Settings, LogOut, Mail, User, X
+  LayoutDashboard, CheckSquare, Users, FileBarChart, Settings, LogOut, Mail, User, X, ClipboardList
 } from 'lucide-react'
 
 const ADMIN_EMAIL = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL || 'avremihalperin@gmail.com';
@@ -19,52 +20,117 @@ interface SidebarProps {
 export const ManagerSidebar = ({ isOpen = true, onClose }: SidebarProps) => {
   const pathname = usePathname();
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
-  const [counts, setCounts] = useState({ pendingTrips: 0, pendingUsers: 0 });
+  const [role, setRole] = useState<string>('');
+  const [department, setDepartment] = useState<string>('');
+  const [counts, setCounts] = useState({ pendingTrips: 0, pendingUsers: 0, pendingDeptReview: 0 });
   
   useEffect(() => {
     const checkRoleAndCounts = async () => {
         const { data: { user } } = await supabase.auth.getUser();
-        if (user?.email === ADMIN_EMAIL || user?.user_metadata?.contact_email === ADMIN_EMAIL) {
+        if (!user) return;
+
+        if (user.email === ADMIN_EMAIL || user.user_metadata?.contact_email === ADMIN_EMAIL) {
             setIsSuperAdmin(true);
         }
 
-        const [trips, users] = await Promise.all([
-            supabase.from('trips').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
-            // הנחה: המשתמשים הממתינים מזוהים ע"י סטטוס בפרופיל או במטא-דאטה. 
-            // כאן נשתמש בשאילתה גנרית, תתאים אותה לדאטה בייס שלך אם צריך.
-            supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('status', 'pending')
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('role, department')
+            .eq('id', user.id)
+            .single();
+
+        const userRole = String(profile?.role || '').toLowerCase();
+        const userDepartment = String(profile?.department || '');
+        setRole(userRole);
+        setDepartment(userDepartment);
+
+        const tripsCountPromise = supabase
+            .from('trips')
+            .select('id', { count: 'exact', head: true })
+            .eq('status', 'pending');
+        const usersCountPromise = supabase
+            .from('profiles')
+            .select('id', { count: 'exact', head: true })
+            .eq('status', 'pending');
+        const officerCountPromise =
+            userRole === 'dept_trips_officer' && userDepartment
+                ? supabase
+                    .from('trips')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('status', 'pending_dept_review')
+                    .eq('department', userDepartment)
+                : null;
+
+        const [trips, users, officer] = await Promise.all([
+            tripsCountPromise,
+            usersCountPromise,
+            officerCountPromise,
         ]);
 
         setCounts({
             pendingTrips: trips.count || 0,
-            pendingUsers: users.count || 0
+            pendingUsers: users.count || 0,
+            pendingDeptReview: officer?.count || 0,
         });
     };
     checkRoleAndCounts();
   }, []);
 
-  const menuItems = [
+  const isOfficer = role === 'dept_trips_officer';
+  const isSafetyManager = !isOfficer;
+
+  const officerMenu = [
+      {
+          label: 'אישור ראשוני',
+          href: '/manager/dept-review',
+          icon: ClipboardList,
+          badge: counts.pendingDeptReview,
+          badgeColor: 'bg-brand-pink',
+          isActive: (path: string | null) =>
+              !!path && path.startsWith('/manager/dept-review') && !path.startsWith('/manager/dept-review/coordinators'),
+      },
+      {
+          label: `${getCoordinatorsPluralTitle(department)} המחלקה`,
+          href: '/manager/dept-review/coordinators',
+          icon: Users,
+      },
+      { label: 'פרופיל אישי', href: '/manager/profile', icon: User },
+  ];
+
+  const safetyMenu = [
     { label: 'לוח בקרה', href: '/manager', icon: LayoutDashboard, exact: true },
     { label: 'דואר נכנס', href: '/manager/inbox', icon: Mail },
-    { 
-        label: 'אישור טיולים', 
-        href: '/manager/approvals', 
-        icon: CheckSquare, 
-        badge: counts.pendingTrips, 
-        badgeColor: 'bg-orange-500' 
+    {
+        label: 'אישור טיולים',
+        href: '/manager/approvals',
+        icon: CheckSquare,
+        badge: counts.pendingTrips,
+        badgeColor: 'bg-orange-500',
     },
-    { 
-        label: 'ניהול משתמשים', 
-        href: '/manager/users', 
-        icon: Users, 
-        badge: counts.pendingUsers, 
-        badgeColor: 'bg-purple-500' 
+    {
+        label: 'ניהול משתמשים',
+        href: '/manager/users',
+        icon: Users,
+        badge: counts.pendingUsers,
+        badgeColor: 'bg-purple-500',
     },
     { label: 'דוחות ונתונים', href: '/manager/reports', icon: FileBarChart },
     { label: 'פרופיל אישי', href: '/manager/profile', icon: User },
   ];
 
-  if (isSuperAdmin) {
+  type MenuItem = {
+    label: string;
+    href: string;
+    icon: React.ElementType;
+    exact?: boolean;
+    badge?: number;
+    badgeColor?: string;
+    isActive?: (path: string | null) => boolean;
+  };
+
+  const menuItems: MenuItem[] = isOfficer ? officerMenu : safetyMenu;
+
+  if (isSuperAdmin && isSafetyManager) {
       menuItems.push({ label: 'הגדרות מערכת', href: '/manager/settings', icon: Settings });
   }
 
@@ -88,13 +154,17 @@ export const ManagerSidebar = ({ isOpen = true, onClose }: SidebarProps) => {
                  <Image src="/logo.png" alt="Logo" fill className="object-contain" priority />
               </div>
               <div className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-1">
-                  ממשק ניהול
+                  {isOfficer ? `${getDeptTripsOfficerTitle(department)}${department ? ` • ${department}` : ''}` : 'ממשק ניהול'}
               </div>
           </div>
 
           <nav className="flex-1 p-3 space-y-1.5 overflow-y-auto custom-scrollbar">
             {menuItems.map((item) => {
-              const isActive = item.exact ? pathname === item.href : pathname?.startsWith(item.href);
+              const isActive = item.isActive
+                ? item.isActive(pathname)
+                : item.exact
+                  ? pathname === item.href
+                  : pathname?.startsWith(item.href);
               const Icon = item.icon;
               return (
                 <Link key={item.href} href={item.href} onClick={() => { if(onClose) onClose() }}

@@ -1,208 +1,170 @@
-"use client"
+"use client";
 
-import React, { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabaseClient'
-import { ManagerHeader } from '@/components/layout/ManagerHeader'
-import { Loader2, MapPin, Search, Eye, Calendar, User, Clock, CheckCircle, XCircle } from 'lucide-react'
-import Link from 'next/link'
-import { Input } from '@/components/ui/Input'
-import { isManagerUser } from '@/lib/auth'
-import type { TripRecord } from '@/lib/types'
-
-// ייבוא Hook לניהול משתמש (לוודא שאנחנו מחוברים)
-import { useUser } from '@/hooks/useUser'
+import React, { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabaseClient";
+import { ManagerHeader } from "@/components/layout/ManagerHeader";
+import { Loader2, Search } from "lucide-react";
+import { Input } from "@/components/ui/Input";
+import { isManagerUser } from "@/lib/auth";
+import type { TripRecord } from "@/lib/types";
+import { useUser } from "@/hooks/useUser";
+import { TripCard } from "@/components/TripCard";
+import {
+  ViewModeToggle,
+  readTripsViewModeFromStorage,
+  persistTripsViewMode,
+  type TripsViewMode,
+} from "@/components/ViewModeToggle";
+import { ManagerTripsCompactTable } from "@/components/ManagerTripsCompactTable";
+import { getApprovalTripAlert } from "@/lib/managerTripListAlerts";
 
 export default function ApprovalsPage() {
-  // 1. שימוש ב-Hook
-  const { user, profile, loading: userLoading } = useUser('/');
+  const { user, profile, loading: userLoading } = useUser("/");
 
   const [loadingTrips, setLoadingTrips] = useState(true);
   const [trips, setTrips] = useState<TripRecord[]>([]);
-  const [filter, setFilter] = useState('pending');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [filter, setFilter] = useState("pending");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [viewMode, setViewMode] = useState<TripsViewMode>(() => readTripsViewModeFromStorage());
 
-  // 2. טעינת נתונים
+  const handleViewModeChange = (mode: TripsViewMode) => {
+    setViewMode(mode);
+    persistTripsViewMode(mode);
+  };
+
   useEffect(() => {
     const fetchTrips = async () => {
-        if (!user) return;
+      if (!user) return;
 
-        const isManager = isManagerUser(user, profile);
-        if (!isManager) {
-            window.location.href = '/dashboard';
-            return;
-        }
+      const isManager = isManagerUser(user, profile);
+      if (!isManager) {
+        window.location.href = "/dashboard";
+        return;
+      }
 
-        const { data } = await supabase
-            .from('trips')
-            .select('id, user_id, name, branch, coordinator_name, start_date, status, details')
-            .order('created_at', { ascending: false });
+      const { data } = await supabase
+        .from("trips")
+        .select(
+          "id, user_id, name, branch, department, coordinator_name, start_date, status, details, created_at",
+        )
+        .order("created_at", { ascending: false });
 
-        if (data) setTrips(data);
-        setLoadingTrips(false);
+      if (data) setTrips(data);
+      setLoadingTrips(false);
     };
 
     if (!userLoading && user) {
-        fetchTrips();
+      fetchTrips();
     }
   }, [user, userLoading, profile]);
 
-  const filteredTrips = trips.filter(trip => {
-      const matchesStatus = filter === 'all' ? true : trip.status === filter;
-      const matchesSearch = trip.name?.includes(searchTerm) || 
-                            trip.branch?.includes(searchTerm) || 
-                            trip.coordinator_name?.includes(searchTerm);
-      return matchesStatus && matchesSearch;
+  const filteredTrips = trips.filter((trip) => {
+    const matchesStatus =
+      filter === "all"
+        ? true
+        : filter === "approved"
+          ? trip.status === "approved" || trip.status === "approved_for_execution"
+          : trip.status === filter;
+    const matchesSearch =
+      trip.name?.includes(searchTerm) ||
+      trip.branch?.includes(searchTerm) ||
+      trip.coordinator_name?.includes(searchTerm);
+    return matchesStatus && matchesSearch;
   });
 
-  const getStatusBadge = (status: string) => {
-      const styles: Record<string, string> = {
-          approved: "bg-green-100 text-green-700 border-green-200",
-          pending: "bg-orange-100 text-orange-700 border-orange-200",
-          rejected: "bg-red-100 text-red-700 border-red-200"
-      };
-      const labels: Record<string, string> = { approved: 'אושר', pending: 'ממתין', rejected: 'נדחה' };
-      const icons: Record<string, React.ElementType> = { approved: CheckCircle, pending: Clock, rejected: XCircle };
-      const Icon = icons[status] || Clock;
-
-      return (
-          <span className={`px-3 py-1 rounded-full text-xs font-bold border w-fit flex items-center gap-1.5 ${styles[status] || styles.pending}`}>
-              <Icon size={12}/>
-              {labels[status]}
-          </span>
-      );
-  };
-
-  // בדיקת טעינה משולבת
-  if (userLoading || loadingTrips) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-brand-cyan" size={40}/></div>;
+  if (userLoading || loadingTrips) {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <Loader2 className="animate-spin text-brand-cyan" size={40} />
+      </div>
+    );
+  }
 
   return (
     <>
-        <ManagerHeader title="אישור ובקרת טיולים" />
+      <ManagerHeader title="אישור ובקרת טיולים" />
 
-        <div className="p-4 md:p-8 animate-fadeIn pb-32 max-w-[100vw] overflow-x-hidden">
-            
-            {/* סרגל כלים וחיפוש */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-                
-                {/* פילטרים */}
-                <div className="flex bg-surface-card p-1 rounded-xl border border-border-subtle shadow-sm w-full md:w-auto overflow-x-auto">
-                    {['pending', 'approved', 'rejected', 'all'].map((f) => (
-                        <button
-                            key={f}
-                            onClick={() => setFilter(f)}
-                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap flex-1 md:flex-none
-                            ${filter === f ? 'bg-gray-800 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
-                        >
-                            {f === 'pending' ? 'ממתינים' : f === 'approved' ? 'אושרו' : f === 'rejected' ? 'נדחו' : 'הכל'}
-                        </button>
-                    ))}
-                </div>
+      <div className="p-4 md:p-8 animate-fadeIn pb-32 max-w-[100vw] overflow-x-hidden md:max-w-7xl md:mx-auto">
+        <div className="flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4 mb-6">
+          <div className="flex bg-surface-card p-1 rounded-xl border border-border-subtle shadow-sm w-full md:w-auto overflow-x-auto">
+            {["pending", "approved", "approved_for_execution", "rejected", "all"].map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setFilter(f)}
+                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap flex-1 md:flex-none
+                            ${filter === f ? "bg-gray-800 text-white shadow-md" : "text-gray-500 hover:bg-gray-50"}`}
+              >
+                {f === "pending"
+                  ? "ממתינים"
+                  : f === "approved"
+                    ? "אושרו לתכנון"
+                    : f === "approved_for_execution"
+                      ? "אושרו לביצוע"
+                      : f === "rejected"
+                        ? "נדחו"
+                        : "הכל"}
+              </button>
+            ))}
+          </div>
 
-                <div className="relative w-full md:w-80">
-                    <Input 
-                        placeholder="חיפוש..." 
-                        value={searchTerm}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
-                        icon={<Search size={18}/>}
-                    />
-                </div>
+          <div className="flex flex-col-reverse md:flex-row items-stretch md:items-center gap-3 w-full md:w-auto">
+            <div className="hidden md:flex shrink-0">
+              <ViewModeToggle value={viewMode} onChange={handleViewModeChange} />
             </div>
-
-            {/* --- תצוגה 1: טבלה (רק למחשב) --- */}
-            <div className="hidden md:block bg-surface-card rounded-2xl border border-border-subtle overflow-hidden shadow-sm">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-right">
-                        <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 text-xs font-bold uppercase">
-                            <tr>
-                                <th className="p-5">שם הטיול</th>
-                                <th className="p-5">רכז / סניף</th>
-                                <th className="p-5">תאריכים</th>
-                                <th className="p-5">סטטוס</th>
-                                <th className="p-5 text-left">פעולות</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-50">
-                            {filteredTrips.map((trip) => (
-                                <tr key={trip.id} className="hover:bg-gray-50 transition-colors">
-                                    <td className="p-5">
-                                        <div className="font-bold text-gray-800">{trip.name}</div>
-                                        <div className="text-xs text-gray-400 flex items-center gap-1 mt-1">
-                                            <MapPin size={12}/> {trip.details?.timeline?.[0]?.finalLocation || 'לא צוין מיקום'}
-                                        </div>
-                                    </td>
-                                    <td className="p-5">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 font-bold text-xs shrink-0">
-                                                {trip.coordinator_name?.[0]}
-                                            </div>
-                                            <div>
-                                                <div className="font-bold text-gray-700 text-sm">{trip.coordinator_name}</div>
-                                                <div className="text-xs text-gray-400">{trip.branch}</div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="p-5 text-sm font-medium text-gray-600">
-                                        {new Date(trip.start_date).toLocaleDateString('he-IL')}
-                                    </td>
-                                    <td className="p-5">
-                                        {getStatusBadge(trip.status)}
-                                    </td>
-                                    <td className="p-5 text-left">
-                                        <Link href={`/manager/approvals/${trip.id}`}>
-                                            <button className="bg-brand-cyan hover:bg-cyan-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md shadow-cyan-100 transition-all flex items-center gap-2 ml-auto">
-                                                <Eye size={16}/> צפה וטפל
-                                            </button>
-                                        </Link>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+            <div className="relative w-full md:w-80">
+              <Input
+                placeholder="חיפוש..."
+                value={searchTerm}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+                icon={<Search size={18} />}
+              />
             </div>
-
-            {/* --- תצוגה 2: כרטיסים (רק לטלפון) --- */}
-            <div className="md:hidden space-y-4">
-                {filteredTrips.map((trip) => (
-                    <div key={trip.id} className="bg-surface-card p-5 rounded-2xl border border-border-subtle shadow-sm">
-                        
-                        {/* כותרת וסטטוס */}
-                        <div className="flex justify-between items-start mb-3">
-                            <div>
-                                <h3 className="font-black text-gray-800 text-lg">{trip.name}</h3>
-                                <div className="text-xs text-gray-500 flex items-center gap-1 mt-1">
-                                    <MapPin size={12}/> {trip.details?.timeline?.[0]?.finalLocation || 'לא צוין'}
-                                </div>
-                            </div>
-                            {getStatusBadge(trip.status)}
-                        </div>
-
-                        {/* פרטים נוספים */}
-                        <div className="bg-gray-50 rounded-xl p-3 mb-4 space-y-2 text-sm text-gray-600">
-                            <div className="flex items-center gap-2">
-                                <User size={14} className="text-gray-400"/>
-                                <span className="font-bold">{trip.coordinator_name}</span> 
-                                <span className="text-gray-400">|</span> 
-                                <span>{trip.branch}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <Calendar size={14} className="text-gray-400"/>
-                                <span>{new Date(trip.start_date).toLocaleDateString('he-IL')}</span>
-                            </div>
-                        </div>
-
-                        {/* כפתור פעולה */}
-                        <Link href={`/manager/approvals/${trip.id}`} className="block">
-                            <button className="w-full bg-brand-cyan text-white py-3 rounded-xl font-bold shadow-md shadow-cyan-100 flex items-center justify-center gap-2 active:scale-95 transition-all">
-                                <Eye size={18}/> כנס לטיפול בבקשה
-                            </button>
-                        </Link>
-                    </div>
-                ))}
-            </div>
-
-            {filteredTrips.length === 0 && <div className="p-12 text-center text-gray-400 font-medium">לא נמצאו טיולים</div>}
+          </div>
         </div>
+
+        {filteredTrips.length === 0 ? (
+          <div className="p-12 text-center text-gray-400 font-medium bg-surface-card rounded-2xl border border-dashed border-border-subtle">
+            לא נמצאו טיולים
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 gap-4 md:hidden">
+              {filteredTrips.map((trip) => (
+                <TripCard
+                  key={trip.id}
+                  trip={trip}
+                  viewerContext="manager"
+                  manageHref={`/manager/approvals/${trip.id}`}
+                  alert={getApprovalTripAlert(trip)}
+                />
+              ))}
+            </div>
+
+            <div className="hidden md:block">
+              {viewMode === "cards" ? (
+                <div className="grid grid-cols-1 gap-4">
+                  {filteredTrips.map((trip) => (
+                    <TripCard
+                      key={trip.id}
+                      trip={trip}
+                      viewerContext="manager"
+                      manageHref={`/manager/approvals/${trip.id}`}
+                      alert={getApprovalTripAlert(trip)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <ManagerTripsCompactTable
+                  trips={filteredTrips}
+                  detailHref={(id) => `/manager/approvals/${id}`}
+                  getAlert={getApprovalTripAlert}
+                />
+              )}
+            </div>
+          </>
+        )}
+      </div>
     </>
-  )
+  );
 }

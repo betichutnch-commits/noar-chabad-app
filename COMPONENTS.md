@@ -70,12 +70,26 @@
 
 ### `TripCard.tsx` (כרטיס טיול)
 * **תיאור:** הקובייה שמציגה טיול בודד ברשימה.
-* **שימוש:** בדשבורד ובמסך "הטיולים שלי".
+* **שימוש:** בדשבורד, במסך "הטיולים שלי", ובמסכי מנהלים (אישור בטיחות / אישור ראשוני במחלקה).
 * **פיצ'רים:**
     * תצוגת תאריך חכמה (למשל: "18-20/02").
     * סרגל "רכבת" המציג ויזואלית את שלבי הטיול.
-    * תגית סטטוס (ממתין/מאושר).
-    * כפתורי פעולה מהירים (עריכה/מחיקת טיוטה).
+    * תגית סטטוס (מ־`lib/tripStatus`).
+    * כפתורי פעולה מהירים לרכז (עריכה/מחיקת טיוטה, ביטול); במצב מנהל — ניווט "לפרטים" ל־`manageHref`.
+* **פרופים ניהוליים (אופציונליים):**
+    * `viewerContext`: `'coordinator'` (ברירת מחדל) או `'manager'`.
+    * `manageHref`: כתובת דף הטיפול אצל המנהל (למשל `/manager/approvals/[id]`).
+    * `showCoordinatorMeta` / `showDepartmentTag`: ברירת מחדל `true` במצב מנהל; אצל אישור ראשוני במחלקה אפשר `showDepartmentTag={false}` כשהמחלקה קבועה לכל השורות.
+    * `alert`: `{ tone: 'amber' | 'red', label: string }` להדגשת המתנה ארוכה וכדומה.
+* **ייצוא:** `getTripTypeRibbonClass` — מחלקת רקע לפי סוג טיול (למשל לנקודת צבע בטבלה קומפקטית).
+
+### `ViewModeToggle.tsx` (מצב תצוגת רשימה — מנהלים)
+* **תיאור:** מעבר בין תצוגת **כרטיסים** לתצוגה **קומפקטית** (טבלה) בדסקטופ.
+* **שימוש:** דפי `app/manager/approvals` ו־`app/manager/dept-review`. הבחירה נשמרת ב־`localStorage` (`tripsViewMode`) באמצעות `readTripsViewModeFromStorage` / `persistTripsViewMode`.
+
+### `ManagerTripsCompactTable.tsx` (טבלת טיולים קומפקטית)
+* **תיאור:** טבלת דסקטופ לסריקה מהירה: שם, רכז/סניף, מחלקה, תאריכים, משתתפים, סטטוס, התראות.
+* **שימוש:** יחד עם `ViewModeToggle` במסכי המנהלים; לחיצה על שורה פותחת את דף הטיפול (`detailHref`).
 
 ### `TripDetailsView.tsx` (תצוגת פרטי טיול מלאה)
 * **תיאור:** הרכיב המרכזי והמורכב ביותר להצגת טיול.
@@ -103,6 +117,46 @@
 * **`supabaseClient.ts`:**
     * הגדרת החיבור לבסיס הנתונים (Supabase).
     * טיפול בטעינת משתני סביבה (.env).
+
+* **`notifications/*`:**
+    * שכבת התראות מרכזית למסירה רב-ערוצית (In-app + Push + Email fallback).
+    * קבצים עיקריים:
+        * `lib/notifications/notify.ts` — `notifyUsers` / `notifyUserIds` למסירה מרוכזת.
+        * `lib/notifications/recipients.ts` — פתרון נמענים לפי תפקיד/מחלקה.
+        * `lib/notifications/inApp.ts` — כתיבה לטבלת `notifications`.
+        * `lib/notifications/push.ts` — שליחת Web Push דרך VAPID (`web-push`).
+        * `lib/notifications/email.ts` — שליחת אימיילים דרך `resend`.
+
+* **`pushClient.ts`:**
+    * לוגיקת לקוח ל־Web Push:
+        * רישום Service Worker.
+        * הרשמה/ביטול להרשמות Push.
+        * קריאה ל־API של `push/subscribe` ו־`push/unsubscribe`.
+
+## 5. Push והתראות
+**מיקום:** `components/`, `hooks/`, `public/`, `app/api/`
+
+### `PushPermissionBanner.tsx`
+* **תיאור:** באנר הרשאה להפעלת Push.
+* **שימוש:** מוטמע בלייאאוטים של משתמש ומנהל ומוצג למשתמשים שעדיין לא אישרו התראות.
+
+### `NotificationPreferencesPanel.tsx`
+* **תיאור:** פאנל העדפות התראות בפרופיל.
+* **פיצ'רים:** הפעלה/כיבוי Push, הפעלה/כיבוי אימייל, ושליטה לפי סוג אירוע.
+* **שימוש:** מוטמע בעמודי הפרופיל של משתמש ומנהל.
+
+### `usePushSubscription.ts`
+* **תיאור:** Hook סטטוס Push בצד לקוח.
+* **פלט:** `permission`, `isSubscribed`, `subscribe`, `unsubscribe`.
+
+### `public/sw.js`
+* **תיאור:** Service Worker להצגת התראות Push וניווט בלחיצה להתראה.
+
+### API Push/Prefs
+* **`app/api/push/subscribe/route.ts`:** שמירת subscription של המשתמש.
+* **`app/api/push/unsubscribe/route.ts`:** הסרת subscription.
+* **`app/api/push/vapid-public-key/route.ts`:** החזרת VAPID public key ללקוח.
+* **`app/api/notification-preferences/route.ts`:** קריאה/עדכון העדפות התראות.
 
 ---
 

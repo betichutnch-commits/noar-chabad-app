@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
+import { notifyUsers } from '@/lib/notifications'
 
 type RouteContext = { params: Promise<unknown> }
 type Body = { reason: string }
@@ -21,7 +22,7 @@ export async function POST(request: Request, { params }: RouteContext) {
 
   const { data: trip, error: fetchError } = await supabase
     .from('trips')
-    .select('id, user_id, details')
+    .select('id, user_id, details, name, department')
     .eq('id', id)
     .single()
 
@@ -43,6 +44,35 @@ export async function POST(request: Request, { params }: RouteContext) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
+  const tripName = String(trip.name || 'טיול')
+  const dept = trip.department as string | null | undefined
+
+  await notifyUsers(
+    { mode: 'safety_admins' },
+    {
+      kind: 'trip.cancelled',
+      title: 'ביטול טיול על ידי רכז',
+      body: `הטיול "${tripName}" בוטל על ידי המגיש. סיבה: ${body.reason.trim().slice(0, 200)}`,
+      url: '/manager/approvals',
+      inAppType: 'warning',
+    },
+  )
+
+  await notifyUsers(
+    {
+      mode: 'dept_trips_officers',
+      department: dept,
+      orFallbackSafetyAdmins: false,
+    },
+    {
+      kind: 'trip.cancelled',
+      title: 'ביטול טיול',
+      body: `הטיול "${tripName}" בוטל על ידי הרכז.`,
+      url: '/manager/dept-review',
+      inAppType: 'warning',
+    },
+  )
 
   return NextResponse.json({ ok: true, details: updatedDetails })
 }

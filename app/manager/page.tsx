@@ -90,11 +90,11 @@ export default function ManagerHomePage() {
                     {stats.pendingTrips > 0 && <span className="absolute top-3 right-3 flex h-2.5 w-2.5 rounded-full bg-orange-500 animate-pulse"></span>}
                 </Link>
 
-                {/* 2. רכזים חדשים */}
+                {/* 2. נרשמים חדשים */}
                 <Link href="/manager/users" className="group p-4 md:p-6 flex flex-col items-center justify-center hover:bg-purple-50/50 transition-colors cursor-pointer text-center relative dir-rtl">
                     <div className="text-purple-500 bg-purple-50 p-2 rounded-xl mb-2 group-hover:scale-110 transition-transform"><UserPlus size={20}/></div>
                     <div className="text-2xl md:text-3xl font-black text-gray-800 leading-none mb-1">{stats.pendingUsers}</div>
-                    <div className="text-xs font-bold text-gray-400 group-hover:text-purple-500">רכזים חדשים</div>
+                    <div className="text-xs font-bold text-gray-400 group-hover:text-purple-500">נרשמים חדשים</div>
                     {stats.pendingUsers > 0 && <span className="absolute top-3 right-3 flex h-2.5 w-2.5 rounded-full bg-purple-500"></span>}
                 </Link>
 

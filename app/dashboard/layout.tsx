@@ -1,12 +1,13 @@
 "use client"
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Menu, Bell, X, Mail } from 'lucide-react';
 import Image from 'next/image';
-import { supabase } from '@/lib/supabaseClient';
 import Link from 'next/link';
 import { useUser } from '@/hooks/useUser';
+import { useUnreadNotifications } from '@/hooks/useUnreadNotifications';
+import { PushPermissionBanner } from '@/components/PushPermissionBanner';
 
 const DEPT_LOGOS: Record<string, string> = {
     'בת מלך': '/logos/bat-melech.png',
@@ -18,49 +19,20 @@ const DEPT_LOGOS: Record<string, string> = {
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   // 1. שימוש ב-Hook
-  const { user } = useUser();
+  const { user, roleChangedNotice, clearRoleChangedNotice } = useUser();
   
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [unreadNotifications, setUnreadNotifications] = useState<Array<{ id: string; title: string }>>([]);
   const [isBellOpen, setIsBellOpen] = useState(false);
+  const { unreadNotifications } = useUnreadNotifications(user?.id);
 
   // נתונים נגזרים
   const deptLogo = user ? (DEPT_LOGOS[user.user_metadata?.department] || '/logo.png') : '/logo.png';
   const fullName = user?.user_metadata?.full_name || '';
   const avatarUrl = user?.user_metadata?.avatar_url || null;
 
-  // 2. ניהול התראות
-  useEffect(() => {
-    if (!user) return;
-
-    const fetchNotifications = async () => {
-        const { data } = await supabase.from('notifications')
-            .select('id, title, is_read')
-            .eq('user_id', user.id)
-            .eq('is_read', false)
-            .order('created_at', { ascending: false })
-            .limit(5);
-        setUnreadNotifications(data || []);
-    };
-
-    fetchNotifications();
-
-    const channel = supabase.channel('layout_notifications')
-        .on('postgres_changes', { 
-            event: 'INSERT', 
-            schema: 'public', 
-            table: 'notifications',
-            filter: `user_id=eq.${user.id}` 
-        }, () => {
-            fetchNotifications();
-        })
-        .subscribe();
-
-    return () => { supabase.removeChannel(channel); }
-  }, [user]);
-
   return (
     <div className="min-h-screen bg-surface-base dir-rtl text-right font-sans">
+      <PushPermissionBanner userId={user?.id} />
       
       {/* Mobile Header */}
       <div className="md:hidden flex items-center justify-between p-3 bg-white/95 backdrop-blur-md border-b border-gray-200 sticky top-0 z-40 shadow-sm h-16">
@@ -112,6 +84,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="transition-all duration-300 md:mr-56 mr-0 min-h-screen">
         {children}
       </div>
+
+      {roleChangedNotice && (
+        <div className="fixed top-20 md:top-6 left-1/2 -translate-x-1/2 z-[90] w-[92vw] max-w-md">
+          <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-2xl shadow-lg px-4 py-3 flex items-start gap-3">
+            <div className="text-sm font-bold flex-1">{roleChangedNotice}</div>
+            <button
+              onClick={clearRoleChangedNotice}
+              className="text-emerald-700/80 hover:text-emerald-900 text-xs font-bold"
+              aria-label="סגור הודעה"
+            >
+              סגור
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Mobile Floating Action Button (Notifications) */}
       <div className="fixed bottom-6 left-6 z-50 flex flex-col items-end gap-2 md:hidden">

@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
+import { isManagerUser } from '@/lib/auth'
+import type { User } from '@supabase/supabase-js'
+import { notifyUsers } from '@/lib/notifications'
 
 type SaveTripBody = {
   editId?: string | null
@@ -29,21 +32,73 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
   }
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role, department, is_tech_admin')
+    .eq('id', user.id)
+    .single()
+
+  const userLike = { id: user.id, user_metadata: user.user_metadata ?? {} } as User
+  const isManager = isManagerUser(userLike, profile)
+
+  const submissionStatus =
+    body.status === 'pending' && !isManager ? 'pending_dept_review' : body.status
+
+  const departmentForTrip =
+    body.tripData.department ?? (profile?.department ? String(profile.department) : null)
+
   const tripPayload = {
     user_id: user.id,
     coordinator_name: body.tripData.coordinator_name,
     branch: body.tripData.branch ?? null,
-    department: body.tripData.department ?? null,
+    department: departmentForTrip,
     name: body.tripData.name,
     start_date: body.tripData.start_date,
-    status: body.status,
+    status: submissionStatus,
     details: body.tripData.details,
+  }
+
+  const sendSubmitNotifications = async () => {
+    if (body.status !== 'pending') return
+    const tripName = String(body.tripData.name || 'טיול')
+    const coord = String(body.tripData.coordinator_name || 'רכז')
+
+    if (submissionStatus === 'pending_dept_review') {
+      await notifyUsers(
+        {
+          mode: 'dept_trips_officers',
+          department: departmentForTrip,
+          orFallbackSafetyAdmins: true,
+        },
+        {
+          kind: 'trip.submitted_dept_review',
+          title: 'בקשת טיול חדשה לאישור ראשוני',
+          body: `${coord} הגיש/ה את "${tripName}" לאישור במחלקה.`,
+          url: '/manager/dept-review',
+          inAppType: 'info',
+        },
+      )
+      return
+    }
+
+    if (submissionStatus === 'pending') {
+      await notifyUsers(
+        { mode: 'safety_admins' },
+        {
+          kind: 'trip.submitted_safety',
+          title: 'בקשת טיול חדשה',
+          body: `${coord} הגיש/ה את "${tripName}" למחלקת הבטיחות.`,
+          url: '/manager/approvals',
+          inAppType: 'info',
+        },
+      )
+    }
   }
 
   if (body.editId) {
     const { data: ownedTrip } = await supabase
       .from('trips')
-      .select('id, user_id')
+      .select('id, user_id, status')
       .eq('id', body.editId)
       .single()
 
@@ -51,10 +106,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const { error } = await supabase.from('trips').update(tripPayload).eq('id', body.editId)
+    const updatePayload: Record<string, unknown> = { ...tripPayload }
+    if (body.status === 'pending' && !isManager) {
+      updatePayload.dept_review_notes = null
+    }
+
+    const { error } = await supabase.from('trips').update(updatePayload).eq('id', body.editId)
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
+    await sendSubmitNotifications()
     return NextResponse.json({ id: body.editId })
   }
 
@@ -63,5 +124,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
+  await sendSubmitNotifications()
   return NextResponse.json({ id: data.id })
 }

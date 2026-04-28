@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from 'react';
-import { supabase } from '@/lib/supabaseClient';
+import React, { useState, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Bell, X, Mail } from 'lucide-react';
 import { useUser } from '@/hooks/useUser';
+import { useUnreadNotifications } from '@/hooks/useUnreadNotifications';
+import { formatUserRoleLabel, getCoordinatorRoleTitle } from '@/lib/auth';
 
 const DEPT_LOGOS: Record<string, string> = {
     'בת מלך': '/logos/bat-melech.png',
@@ -22,9 +23,8 @@ const getSimpleGreeting = (name: string) => {
 
 export const Header = ({ title }: { title: string }) => {
   const { user } = useUser();
-  
-  const [unreadNotifications, setUnreadNotifications] = useState<Array<{ id: string; title: string }>>([]);
   const [isBellOpen, setIsBellOpen] = useState(false);
+  const { unreadNotifications } = useUnreadNotifications(user?.id);
 
   // חישוב תצוגת התפקיד והסניף
   // חישוב תצוגת התפקיד והסניף
@@ -44,23 +44,17 @@ export const Header = ({ title }: { title: string }) => {
       const role = meta.role;
       const branchName = meta.branch || meta.branch_name || '';
 
-      // לוגיקה לקביעת תואר הרכז/ת
-      let roleTitle = 'רכז/ת סניף';
-      const deptCheck = department.trim();
-      
-      const maleDepts = ['הפנסאים', 'פנסאים', 'התמים', 'תמים', 'בני חב"ד', 'בני חב״ד'];
-      const femaleDepts = ['בת מלך', 'בנות חב"ד', 'בנות חב״ד'];
+      const roleTitle = getCoordinatorRoleTitle(String(department));
 
-      if (maleDepts.some(d => deptCheck.includes(d))) roleTitle = 'רכז סניף';
-      else if (femaleDepts.some(d => deptCheck.includes(d))) roleTitle = 'רכזת סניף';
-
-      // בניית הטקסט שיוצג
       let displayRole = '';
-      
+
       if (role === 'coordinator') {
           displayRole = `${roleTitle} ${branchName} | ${department}`;
       } else {
-          displayRole = department ? `צוות מטה | ${department}` : 'צוות מטה';
+          const roleLabel = formatUserRoleLabel({ role, department, branchName });
+          displayRole = department && !roleLabel.includes(department)
+              ? `${roleLabel} | ${department}`
+              : roleLabel;
       }
 
       return {
@@ -68,38 +62,8 @@ export const Header = ({ title }: { title: string }) => {
           department,
           avatarUrl: meta.avatar_url,
           displayRole,
-          // מוודא שתמיד יש ערך, גם אם המחלקה לא נמצאת בלוגואים
           logo: DEPT_LOGOS[department] || '/logo.png'
       };
-  }, [user]);
-
-  useEffect(() => {
-    if (!user) return;
-
-    const fetchNotifications = async () => {
-        const { data } = await supabase.from('notifications')
-            .select('id, title, is_read')
-            .eq('user_id', user.id)
-            .eq('is_read', false)
-            .order('created_at', { ascending: false })
-            .limit(5);
-        setUnreadNotifications(data || []);
-    };
-
-    fetchNotifications();
-
-    const channel = supabase.channel('header_notifications')
-      .on('postgres_changes', { 
-          event: 'INSERT', 
-          schema: 'public', 
-          table: 'notifications',
-          filter: `user_id=eq.${user.id}` 
-      }, () => {
-          fetchNotifications(); 
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
   }, [user]);
 
   return (

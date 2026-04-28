@@ -172,6 +172,9 @@ export default function MyTripsPage() {
       let matchesFilter = true;
       if (activeFilter === 'future') matchesFilter = tripDate >= today;
       else if (activeFilter === 'past') matchesFilter = tripDate < today;
+      else if (activeFilter === 'approved') {
+          matchesFilter = t.status === 'approved' || t.status === 'approved_for_execution';
+      }
       else if (activeFilter !== 'all') matchesFilter = t.status === activeFilter;
 
       const tripType = typeof t.details?.tripType === 'string' ? t.details.tripType : '';
@@ -226,7 +229,10 @@ export default function MyTripsPage() {
                   <div className="flex gap-2 bg-surface-card p-1.5 rounded-2xl border border-border-subtle w-full md:w-auto overflow-x-auto no-scrollbar shadow-sm">
                       {[
                           { id: 'all', label: 'כל הטיולים' }, { id: 'future', label: 'עתידיים' }, { id: 'past', label: 'היסטוריה' },
-                          { id: 'draft', label: 'טיוטות' }, { id: 'approved', label: 'אושר' }, { id: 'pending', label: 'בבדיקה' },
+                          { id: 'draft', label: 'טיוטות' }, { id: 'approved', label: 'אושר' },
+                          { id: 'approved_for_execution', label: 'אושר לביצוע' },
+                          { id: 'pending_dept_review', label: 'אצל המחלקה' }, { id: 'returned_for_changes', label: 'להערות' },
+                          { id: 'pending', label: 'בבדיקת בטיחות' },
                           { id: 'rejected', label: 'נדחה' }, { id: 'cancelled', label: 'בוטל' },
                       ].map(f => {
                           const isActive = activeFilter === f.id;

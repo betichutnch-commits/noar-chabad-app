@@ -10,10 +10,14 @@ import { Save, User, Mail, Lock, ShieldCheck, Camera, Loader2 } from 'lucide-rea
 import { useUser } from '@/hooks/useUser'
 import { profileSchema } from '@/lib/schemas'
 import { saveUserProfile } from '@/lib/profile'
+import { formatUserRoleLabel, isManagerUser } from '@/lib/auth'
+import { NotificationPreferencesPanel } from '@/components/NotificationPreferencesPanel'
+import { PushAdminTestPanel } from '@/components/PushAdminTestPanel'
 import Image from 'next/image'
 
 export default function ManagerProfile() {
   const { user, profile, loading: userLoading, refresh } = useUser('/');
+  const isAdminLike = isManagerUser(user, profile)
 
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -147,7 +151,7 @@ export default function ManagerProfile() {
 
   return (
     <>
-      <ManagerHeader title="פרופיל אישי - מנהל" />
+      <ManagerHeader title="פרופיל אישי" />
       <Modal isOpen={modal.isOpen} onClose={() => setModal({...modal, isOpen: false})} type={modal.type} title={modal.title} message={modal.message} />
       
       <div className="p-8 max-w-5xl mx-auto pb-32 animate-fadeIn">
@@ -169,7 +173,12 @@ export default function ManagerProfile() {
                <div>
                    <h2 className="text-3xl font-black text-text-primary">{formData.officialName} {formData.lastName}</h2>
                    <div className="flex items-center gap-2 text-gray-500 font-bold mt-1">
-                       <ShieldCheck size={18} className="text-brand-cyan"/> מנהל מערכת ראשי
+                       <ShieldCheck size={18} className="text-brand-cyan"/>
+                       {formatUserRoleLabel({
+                         role: user?.user_metadata?.role,
+                         department: user?.user_metadata?.department,
+                         branchName: user?.user_metadata?.branch_name || user?.user_metadata?.branch,
+                       })}
                    </div>
                </div>
           </div>
@@ -225,6 +234,11 @@ export default function ManagerProfile() {
                       </div>
                   </div>
               </div>
+          </div>
+
+          <div className="mt-8">
+            <NotificationPreferencesPanel userId={user?.id} />
+            <PushAdminTestPanel enabled={isAdminLike} />
           </div>
       </div>
     </>

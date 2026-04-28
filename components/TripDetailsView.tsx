@@ -11,6 +11,7 @@ import {
 import { TRIP_TYPES_CONFIG, CATEGORY_STYLES } from '@/lib/constants'
 import { formatHebrewDateRange, formatHebrewDate } from '@/lib/dateUtils'
 import { useSignedUrl } from '@/hooks/useSignedUrl'; // <--- זה חייב להיות למעלה
+import { getCoordinatorRoleTitle, getDepartmentLanguage } from '@/lib/auth';
 import type { AppProfile, TripRecord } from '@/lib/types';
 
 // --- רכיב עזר פנימי להצגת קובץ מאובטח (מוגדר מחוץ לקומפוננטה הראשית) ---
@@ -138,13 +139,38 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
 
     // חישוב מגדרי
     const rawDept = trip.department || profile?.department || '';
-    const isFemale = rawDept.includes('בת מלך') || rawDept.includes('בנות חב"ד') || rawDept.includes('בנות חב״ד');
-    
-    const participantsTitle = isFemale ? 'סה"כ משתתפות' : 'סה"כ משתתפים'; 
-    const traineesLabel = isFemale ? 'חניכות' : 'חניכים';
-    const boxTitle = isFemale ? 'אחראית הפעילות' : 'אחראי הפעילות';
-    const addStaffBtnLabel = isFemale ? 'הוספת אחראית טיול' : 'הוספת אחראי טיול';
-    const secondStaffTitle = isFemale ? 'אחראית נוספת' : 'אחראי נוסף';
+    const departmentLanguage = getDepartmentLanguage(rawDept);
+
+    const participantsTitle =
+      departmentLanguage === 'female'
+        ? 'סה"כ משתתפות'
+        : departmentLanguage === 'male'
+          ? 'סה"כ משתתפים'
+          : 'סה"כ משתתפים/ות';
+    const traineesLabel =
+      departmentLanguage === 'female'
+        ? 'חניכות'
+        : departmentLanguage === 'male'
+          ? 'חניכים'
+          : 'חניכים/ות';
+    const boxTitle =
+      departmentLanguage === 'female'
+        ? 'אחראית הפעילות'
+        : departmentLanguage === 'male'
+          ? 'אחראי הפעילות'
+          : 'אחראי/ת הפעילות';
+    const addStaffBtnLabel =
+      departmentLanguage === 'female'
+        ? 'הוספת אחראית טיול'
+        : departmentLanguage === 'male'
+          ? 'הוספת אחראי טיול'
+          : 'הוספת אחראי/ת טיול';
+    const secondStaffTitle =
+      departmentLanguage === 'female'
+        ? 'אחראית נוספת'
+        : departmentLanguage === 'male'
+          ? 'אחראי נוסף'
+          : 'אחראי/ת נוסף/ת';
     const namePlaceholder = "שם מלא כפי שמופיע בתעודת זהות";
 
     // --- לוגיקה משופרת לתצוגת תפקיד (Role Display) ---
@@ -160,13 +186,7 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
             return `צוות מטה | ${department}`;
         }
 
-        let roleTitle = 'רכז/ת סניף';
-        const deptCheck = department.trim();
-        const maleDepts = ['הפנסאים', 'פנסאים', 'התמים', 'תמים', 'בני חב"ד', 'בני חב״ד'];
-        const femaleDepts = ['בת מלך', 'בנות חב"ד', 'בנות חב״ד'];
-
-        if (maleDepts.some(d => deptCheck.includes(d))) roleTitle = 'רכז סניף';
-        else if (femaleDepts.some(d => deptCheck.includes(d))) roleTitle = 'רכזת סניף';
+        const roleTitle = getCoordinatorRoleTitle(department);
 
         if (!branch && !department) return '';
 
@@ -181,7 +201,18 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
 
     const getStatusBadge = (status: string) => {
         const styles: Record<string, { text: string; bg: string; textCol: string; icon: React.ElementType }> = {
-            approved: { text: 'מאושר', bg: 'bg-green-100', textCol: 'text-green-700', icon: CheckCircle },
+            approved: {
+                text: 'מאושר לפרסום ותכנון',
+                bg: 'bg-green-100',
+                textCol: 'text-green-700',
+                icon: CheckCircle,
+            },
+            approved_for_execution: {
+                text: 'מאושר לביצוע',
+                bg: 'bg-emerald-100',
+                textCol: 'text-emerald-700',
+                icon: CheckCircle,
+            },
             pending: { text: 'ממתין לאישור', bg: 'bg-orange-100', textCol: 'text-orange-700', icon: Clock },
             rejected: { text: 'לא אושר', bg: 'bg-red-100', textCol: 'text-red-700', icon: AlertTriangle },
             draft: { text: 'טיוטה', bg: 'bg-gray-100', textCol: 'text-gray-600', icon: FileText },

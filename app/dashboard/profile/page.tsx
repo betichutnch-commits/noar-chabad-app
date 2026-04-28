@@ -14,7 +14,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useUser } from '@/hooks/useUser'
 import { profileSchema } from '@/lib/schemas'
 import { saveUserProfile } from '@/lib/profile'
-import { sanitizeInternalReturnUrl } from '@/lib/auth'
+import { sanitizeInternalReturnUrl, formatUserRoleLabel, getCoordinatorRoleTitle, getCoordinatorsPluralTitle } from '@/lib/auth'
+import { NotificationPreferencesPanel } from '@/components/NotificationPreferencesPanel'
 import Image from 'next/image'
 
 const formatDisplayDate = (dateStr: string) => {
@@ -62,33 +63,26 @@ function ProfileContent() {
   });
 
   const role = user?.user_metadata?.role;
-  const isHQ = role === 'dept_staff' || role === 'safety_admin' || role === 'admin';
+  const isHQ =
+    role === 'dept_staff' ||
+    role === 'safety_admin' ||
+    role === 'admin' ||
+    role === 'dept_trips_officer';
   const branchName = user?.user_metadata?.branch_name || user?.user_metadata?.branch || '';
   const department = user?.user_metadata?.department || '';
 
-  const getRoleTitle = () => {
-      let title = 'רכז/ת סניף';
-      
-      const deptName = department.trim();
-      const maleKeywords = ['הפנסאים', 'פנסאים', 'התמים', 'תמים', 'בני חב"ד', 'בני חב״ד'];
-      const femaleKeywords = ['בת מלך', 'בנות חב"ד', 'בנות חב״ד'];
+  const getRoleTitle = () => getCoordinatorRoleTitle(department);
 
-      if (maleKeywords.some(d => deptName.includes(d))) {
-          title = 'רכז סניף';
-      } 
-      else if (femaleKeywords.some(d => deptName.includes(d))) {
-          title = 'רכזת סניף';
-      }
-
-      return title;
-  };
-
-  const fullRoleString = isHQ 
-    ? `צוות מטה | ${department}` 
+  const fullRoleString = isHQ
+    ? `${formatUserRoleLabel({ role, department, branchName })}${
+        department && !formatUserRoleLabel({ role, department, branchName }).includes(department)
+          ? ` | ${department}`
+          : ''
+      }`
     : `${department} | ${getRoleTitle()} ${branchName}`;
 
-  const systemRoleDescription = isHQ 
-    ? (role === 'safety_admin' ? 'מנהל בטיחות ומפעלים' : `מטה ${department}`)
+  const systemRoleDescription = isHQ
+    ? formatUserRoleLabel({ role, department, branchName })
     : `${getRoleTitle()} ${branchName}`;
 
   useEffect(() => {
@@ -336,7 +330,7 @@ function ProfileContent() {
                     )}
                     
                     <div className="bg-cyan-50/50 p-6 rounded-2xl border border-cyan-100">
-                        <label className="text-sm font-bold text-gray-600 block mb-2">{isHQ ? 'שמות חברי מטה נוספים' : 'שמות רכזים נוספים בסניף'}</label>
+                        <label className="text-sm font-bold text-gray-600 block mb-2">{isHQ ? 'שמות חברי מטה נוספים' : `שמות ${getCoordinatorsPluralTitle(department)} נוספים בסניף`}</label>
                         <textarea className="w-full p-4 rounded-xl bg-white border border-border-subtle outline-none focus:border-brand-cyan min-h-[80px] resize-none text-sm font-medium" placeholder="הזן שמות מופרדים בפסיקים..." value={formData.additionalStaff} onChange={e => setFormData({...formData, additionalStaff: e.target.value})}></textarea>
                     </div>
                 </div>
@@ -346,6 +340,10 @@ function ProfileContent() {
                     </Button>
                 </div>
             </section>
+        </div>
+
+        <div className="mt-8">
+          <NotificationPreferencesPanel userId={user?.id} />
         </div>
       </div>
     </>

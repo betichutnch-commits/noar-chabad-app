@@ -4,8 +4,18 @@ vi.mock("@/lib/supabaseServer", () => ({
   createSupabaseServerClient: vi.fn(),
 }));
 
+vi.mock("@/lib/notifications", () => ({
+  notifyUsers: vi.fn().mockResolvedValue(undefined),
+  notifyUserIds: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("@/lib/supabaseService", () => ({
+  createSupabaseServiceRoleClient: vi.fn().mockReturnValue(null),
+}));
+
 vi.mock("@/lib/auth", () => ({
   isManagerUser: vi.fn(),
+  isDeptTripsOfficer: vi.fn(),
 }));
 
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
@@ -41,15 +51,31 @@ describe("API route authorization guards", () => {
   });
 
   it("creates trip via /api/trips/save for authenticated owner", async () => {
+    isManagerUserMock.mockReturnValue(false);
+
     const insertSingle = vi.fn().mockResolvedValue({ data: { id: "trip-1" }, error: null });
     const insertSelect = vi.fn(() => ({ single: insertSingle }));
     const tripsFrom = {
       insert: vi.fn(() => ({ select: insertSelect })),
     };
 
+    const profilesSingle = vi
+      .fn()
+      .mockResolvedValue({ data: { role: "coordinator", department: "מחלקה" } });
+    const profilesEq = vi.fn(() => ({ single: profilesSingle }));
+    const profilesFrom = { select: vi.fn(() => ({ eq: profilesEq })) };
+
     createSupabaseServerClientMock.mockResolvedValue({
-      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }) },
-      from: vi.fn((table: string) => (table === "trips" ? tripsFrom : {})),
+      auth: {
+        getUser: vi
+          .fn()
+          .mockResolvedValue({ data: { user: { id: "user-1", user_metadata: {} } } }),
+      },
+      from: vi.fn((table: string) => {
+        if (table === "trips") return tripsFrom;
+        if (table === "profiles") return profilesFrom;
+        return {};
+      }),
     } as never);
 
     const req = new Request("http://localhost/api/trips/save", {

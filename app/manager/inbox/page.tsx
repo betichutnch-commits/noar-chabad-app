@@ -3,16 +3,20 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { ManagerHeader } from '@/components/layout/ManagerHeader';
+import { Modal } from '@/components/ui/Modal';
+import { ImageLightbox } from '@/components/ui/ImageLightbox';
 import { 
   Mail, CheckCircle, Search, AlertTriangle, 
-  User, Loader2, MessageCircle, ImageIcon, Send, Building2, Briefcase
+  User, Loader2, MessageCircle, ImageIcon, Send
 } from 'lucide-react';
 import { useSignedUrl } from '@/hooks/useSignedUrl'; // Import חובה
-import { parseMessageContent, isOpenMessageStatus } from '@/lib/inbox';
+import { parseMessageContent, isOpenMessageStatus, normalizeMessageStatus, parseMessageSubject } from '@/lib/inbox';
+import { getUserRoleShortLabel } from '@/lib/auth';
+import { DEPARTMENTS_CONFIG } from '@/lib/constants';
 import Image from 'next/image';
 
 // --- רכיב עזר לתמונה מאובטחת ---
-const SecureImage = ({ path }: { path: string }) => {
+const SecureImage = ({ path, onClick }: { path: string; onClick: () => void }) => {
     // אם נשמר URL מלא (תמיכה לאחור)
     const imagePath = path.startsWith('http') ? path : path;
     const signedUrl = useSignedUrl(imagePath);
@@ -20,9 +24,9 @@ const SecureImage = ({ path }: { path: string }) => {
     if (!signedUrl) return <div className="h-40 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 text-xs gap-1"><Loader2 size={12} className="animate-spin"/> טוען תמונה...</div>;
 
     return (
-        <a href={signedUrl} target="_blank" rel="noreferrer">
+        <button type="button" onClick={onClick} className="cursor-zoom-in">
             <Image src={signedUrl} alt="Screenshot" width={1200} height={800} className="max-h-40 w-auto rounded-lg border border-gray-200 hover:opacity-90 transition-opacity" unoptimized/>
-        </a>
+        </button>
     );
 };
 
@@ -45,6 +49,7 @@ interface Message {
     role?: string;
     department?: string;
   };
+  displayRole?: string;
 }
 
 export default function InboxPage() {
@@ -52,11 +57,41 @@ export default function InboxPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'new' | 'treated'>('new');
   const [selectedMsg, setSelectedMsg] = useState<Message | null>(null);
+  const [mobileExpandedId, setMobileExpandedId] = useState<string | null>(null);
   const [responseText, setResponseText] = useState("");
   const [sendingReply, setSendingReply] = useState(false);
+  const [modal, setModal] = useState({
+    isOpen: false,
+    type: 'info' as 'success' | 'error' | 'info' | 'confirm',
+    title: '',
+    message: '',
+  });
+  const [imageLightbox, setImageLightbox] = useState({
+    isOpen: false,
+    imagePaths: [] as string[],
+    currentIndex: 0,
+  });
 
   // ... fetchMessages, useEffect, handleSendReply, markAsTreated (כמו בקוד ששלחת, ללא שינוי)
   // אני מעתיק אותם כאן כדי שיהיה קובץ מלא
+
+  const normalizeDepartmentKey = (department?: string) =>
+    String(department || '')
+      .trim()
+      .replace(/״/g, '"')
+      .replace(/\s+/g, ' ');
+
+  const getDepartmentPillClass = (department?: string) => {
+    const key = normalizeDepartmentKey(department);
+    const base = 'text-[11px] font-bold whitespace-nowrap';
+    if (!key) return `${base} text-gray-500`;
+    const config = DEPARTMENTS_CONFIG[key];
+    if (!config) return `${base} text-gray-600`;
+    const textClass = config.color
+      .split(' ')
+      .find((cls) => cls.startsWith('text-'));
+    return textClass ? `${base} ${textClass}` : `${base} text-gray-600`;
+  };
 
   const fetchMessages = useCallback(async () => {
     setLoading(true);
@@ -84,9 +119,7 @@ export default function InboxPage() {
         }
 
         let filteredMsgs = rawMsgs.filter(msg => {
-            let s = (msg.status || 'new').toLowerCase().trim();
-            if (s === 'pending') s = 'new'; 
-
+            const s = normalizeMessageStatus(msg.status || 'new');
             return filter === 'new' ? isOpenMessageStatus(s) : !isOpenMessageStatus(s);
         });
 
@@ -106,26 +139,28 @@ export default function InboxPage() {
 
         const combined = filteredMsgs.map(msg => {
             const userProfile = profiles?.find(p => p.id === msg.user_id);
+            const roleLabel = getUserRoleShortLabel(userProfile?.role, userProfile?.department);
             return {
                 ...msg,
-                profiles: userProfile || { full_name: 'משתמש לא נמצא', phone: '', avatar_url: '', role: 'משתמש', department: '-' }
+                profiles: userProfile || { full_name: 'משתמש לא נמצא', phone: '', avatar_url: '', role: 'user', department: '-' },
+                displayRole: roleLabel,
             };
         });
 
         setMessages(combined as Message[]);
         
-        if (selectedMsg) {
-            const exists = combined.find(m => m.id === selectedMsg.id);
-            if (!exists) setSelectedMsg(null);
-            else setSelectedMsg(exists as Message);
-        }
+        setSelectedMsg((prev) => {
+          if (!prev) return prev;
+          const exists = combined.find((m) => m.id === prev.id) as Message | undefined;
+          return exists || null;
+        });
 
     } catch (error) {
         console.error("Error fetching inbox:", error);
     } finally {
         setLoading(false);
     }
-  }, [filter, selectedMsg]);
+  }, [filter]);
 
   useEffect(() => {
     fetchMessages();
@@ -142,29 +177,15 @@ export default function InboxPage() {
       
       setSendingReply(true);
       try {
-          const { error: msgError } = await supabase
-            .from('contact_messages')
-            .update({
-                admin_response: responseText,
-                replied_at: new Date().toISOString(),
-                status: 'treated'
-            })
-            .eq('id', selectedMsg.id);
-
-          if (msgError) throw msgError;
-
-          const { error: notifError } = await supabase
-            .from('notifications')
-            .insert({
-                user_id: selectedMsg.user_id,
-                title: 'התקבלה תשובה לפנייתך',
-                message: `המנהל השיב לפנייתך בנושא: "${selectedMsg.subject}". לחץ לצפייה.`,
-                type: 'success',
-                is_read: false,
-                link: '/inbox'
-            });
-
-          if (notifError) console.error("Error creating notification:", notifError);
+          const res = await fetch(`/api/contact-messages/${selectedMsg.id}/reply`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reply: responseText }),
+          });
+          const payload = await res.json();
+          if (!res.ok) {
+            throw new Error(payload?.error || 'שגיאה בשליחת התשובה');
+          }
 
           setResponseText("");
           
@@ -177,7 +198,12 @@ export default function InboxPage() {
           
       } catch (err) {
           console.error("Error sending reply:", err);
-          alert("שגיאה בשליחת התשובה");
+          setModal({
+            isOpen: true,
+            type: 'error',
+            title: 'שגיאה בשליחת התשובה',
+            message: 'לא ניתן היה לשמור את התשובה כרגע. נסה/י שוב בעוד רגע.',
+          });
       } finally {
           setSendingReply(false);
       }
@@ -189,48 +215,80 @@ export default function InboxPage() {
       setMessages(prev => prev.filter(m => m.id !== id));
       setSelectedMsg(null);
     } else {
-      alert('שגיאה בעדכון סטטוס הפנייה');
+      setModal({
+        isOpen: true,
+        type: 'error',
+        title: 'שגיאה בעדכון סטטוס',
+        message: 'לא ניתן היה לעדכן את סטטוס הפנייה כרגע.',
+      });
     }
   };
 
   const content = selectedMsg ? parseMessageContent(selectedMsg.message) : null;
+  const selectedParsedSubject = selectedMsg ? parseMessageSubject(selectedMsg.subject || '') : null;
+  const messageImagePaths = messages
+    .map((msg) => parseMessageContent(String(msg.message || '')).imagePath)
+    .filter((path): path is string => Boolean(path));
+
+  const openMessageImage = (imagePath: string) => {
+    const imageIndex = messageImagePaths.indexOf(imagePath);
+    setImageLightbox({
+      isOpen: true,
+      imagePaths: messageImagePaths,
+      currentIndex: imageIndex >= 0 ? imageIndex : 0,
+    });
+  };
 
   return (
     <div className="min-h-screen bg-surface-base pb-12">
       <ManagerHeader title="דואר נכנס ופניות" />
+      <Modal
+        isOpen={modal.isOpen}
+        onClose={() => setModal((prev) => ({ ...prev, isOpen: false }))}
+        type={modal.type}
+        title={modal.title}
+        message={modal.message}
+      />
+      <ImageLightbox
+        isOpen={imageLightbox.isOpen}
+        imagePaths={imageLightbox.imagePaths}
+        currentIndex={imageLightbox.currentIndex}
+        onClose={() => setImageLightbox((prev) => ({ ...prev, isOpen: false }))}
+        onChangeIndex={(index) => setImageLightbox((prev) => ({ ...prev, currentIndex: index }))}
+      />
 
       <main className="max-w-6xl mx-auto p-4 md:p-8 animate-fadeIn">
         
         {/* טאבים */}
         <div className="flex flex-col md:flex-row items-center justify-between mb-8 gap-4">
-            <div className="bg-white p-1 rounded-2xl border border-gray-200 shadow-sm flex items-center w-full md:w-auto">
+            <div className="bg-surface-card p-1 rounded-2xl border border-border-subtle shadow-sm flex items-center w-full md:w-auto">
                 <button 
-                  onClick={() => { setFilter('new'); setSelectedMsg(null); }}
+                  onClick={() => { setFilter('new'); setSelectedMsg(null); setMobileExpandedId(null); setResponseText(''); }}
                   className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${filter === 'new' ? 'bg-brand-pink text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
                 >
                     <Mail size={16}/> ממתינים לטיפול
                 </button>
                 <button 
-                  onClick={() => { setFilter('treated'); setSelectedMsg(null); }}
+                  onClick={() => { setFilter('treated'); setSelectedMsg(null); setMobileExpandedId(null); setResponseText(''); }}
                   className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${filter === 'treated' ? 'bg-brand-cyan text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
                 >
                     <CheckCircle size={16}/> ארכיון וטופלו
                 </button>
             </div>
-            <div className="text-sm text-gray-400 font-medium">
-                מציג <span className="font-bold text-gray-800">{messages.length}</span> פניות
+            <div className="text-sm text-text-muted font-medium">
+                מציג <span className="font-bold text-text-primary">{messages.length}</span> פניות
             </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-250px)]">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
             {/* רשימה */}
-            <div className="lg:col-span-1 bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
-                <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex items-center gap-2 text-gray-400 text-xs font-bold uppercase tracking-wider">
+            <div className="lg:col-span-1 bg-surface-card rounded-3xl border border-border-subtle shadow-sm overflow-hidden flex flex-col min-h-[72vh]">
+                <div className="p-4 border-b border-border-subtle bg-surface-muted flex items-center gap-2 text-text-muted text-xs font-bold uppercase tracking-wider">
                     <Search size={14}/> רשימת פניות
                 </div>
                 
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2">
+                <div className="flex-1 overflow-y-auto custom-scrollbar">
                     {loading ? (
                         <div className="p-8 text-center"><Loader2 className="animate-spin text-brand-cyan mx-auto"/></div>
                     ) : messages.length === 0 ? (
@@ -240,49 +298,141 @@ export default function InboxPage() {
                         </div>
                     ) : (
                         messages.map(msg => {
-                            const isBug = (msg.category || '').toLowerCase() === 'bug';
                             const isSelected = selectedMsg?.id === msg.id;
+                            const parsedSubject = parseMessageSubject(msg.subject || '');
                             
                             return (
-                                <div 
-                                    key={msg.id}
-                                    onClick={() => setSelectedMsg(msg)}
-                                    className={`p-4 rounded-2xl cursor-pointer border transition-all hover:shadow-md group relative flex flex-col gap-2
-                                    ${isSelected ? 'bg-cyan-50 border-brand-cyan ring-1 ring-cyan-300/40' : 'bg-white border-gray-100 hover:border-gray-200'}`}
+                              <React.Fragment key={msg.id}>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedMsg(msg);
+                                      setMobileExpandedId(prev => (prev === msg.id ? null : msg.id));
+                                    }}
+                                    className={`w-full p-4 text-right border-b border-border-subtle transition-colors flex flex-col gap-2
+                                    ${isSelected ? 'bg-cyan-50 border-r-4 border-r-brand-cyan' : 'bg-surface-card hover:bg-surface-muted/60'}`}
+                                    aria-label={`פתיחת פנייה ${parsedSubject.cleanSubject}`}
                                 >
-                                    <div className="flex justify-between items-start">
-                                        <div className="flex items-center gap-2">
-                                            {isBug ? (
-                                                <span className="bg-red-100 text-red-600 p-1.5 rounded-lg shrink-0"><AlertTriangle size={14}/></span>
-                                            ) : (
-                                                <span className="bg-blue-100 text-blue-600 p-1.5 rounded-lg shrink-0"><Mail size={14}/></span>
-                                            )}
-                                            <div>
-                                                <span className="text-sm font-bold text-gray-800 block leading-tight">
-                                                    {msg.profiles?.full_name || 'לא ידוע'}
-                                                </span>
+                                    <div className="flex justify-between items-start gap-2">
+                                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                                            <div className="relative w-8 h-8 rounded-full bg-gray-100 overflow-hidden border border-gray-200 shrink-0">
+                                              {msg.profiles?.avatar_url ? (
+                                                <Image
+                                                  src={msg.profiles.avatar_url}
+                                                  alt={msg.profiles?.full_name || 'תמונת פרופיל'}
+                                                  fill
+                                                  className="object-cover"
+                                                  unoptimized
+                                                />
+                                              ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-[11px] font-bold text-gray-500">
+                                                  {(msg.profiles?.full_name || 'מ')?.[0]}
+                                                </div>
+                                              )}
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <div className="text-sm font-bold text-gray-800 leading-tight truncate whitespace-nowrap overflow-hidden">
+                                                    <span className="inline">{msg.profiles?.full_name || 'לא ידוע'}</span>
+                                                    {msg.profiles?.department && (
+                                                      <>
+                                                        <span className="text-gray-300 mx-1">•</span>
+                                                        <span className={`${getDepartmentPillClass(msg.profiles.department)} inline`}>{msg.profiles.department}</span>
+                                                      </>
+                                                    )}
+                                                    <span className="text-gray-300 mx-1">•</span>
+                                                    <span className="font-medium text-gray-600 text-xs inline">{msg.displayRole || 'משתמש'}</span>
+                                                </div>
                                             </div>
                                         </div>
-                                        <span className="text-[10px] text-gray-400 shrink-0 bg-gray-50 px-1.5 py-0.5 rounded-md">
-                                            {new Date(msg.created_at).toLocaleDateString('he-IL')}
-                                        </span>
+                                        <div className="shrink-0 flex flex-col items-end gap-1">
+                                          <span className="text-[10px] text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded-md">
+                                              {new Date(msg.created_at).toLocaleDateString('he-IL')}
+                                          </span>
+                                          <span className={`inline-flex items-center justify-center w-5 h-5 rounded ${parsedSubject.type === 'bug' ? 'text-red-600 bg-red-50' : 'text-cyan-700 bg-cyan-50'}`}>
+                                            {parsedSubject.type === 'bug' ? <AlertTriangle size={12}/> : <Mail size={12}/>}
+                                          </span>
+                                        </div>
                                     </div>
 
-                                    <div className="flex items-center gap-2 text-[10px] text-gray-500 mr-9">
-                                        <span className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600 font-medium truncate max-w-[80px]">
-                                            {msg.profiles?.role === 'coordinator' ? 'רכז' : (msg.profiles?.role || 'משתמש')}
-                                        </span>
-                                        {msg.profiles?.department && (
-                                            <span className="flex items-center gap-1 text-gray-400 truncate max-w-[100px]">
-                                                <Building2 size={10}/> {msg.profiles.department}
-                                            </span>
-                                        )}
+                                    <div className="mr-9 flex items-center gap-2 min-w-0">
+                                      <h4 className={`text-xs font-bold line-clamp-1 ${isSelected ? 'text-brand-cyan' : 'text-gray-600'}`}>
+                                          {parsedSubject.cleanSubject}
+                                      </h4>
                                     </div>
-
-                                    <h4 className={`text-xs font-bold line-clamp-1 mr-9 ${isSelected ? 'text-brand-cyan' : 'text-gray-600'}`}>
-                                        {msg.subject}
-                                    </h4>
-                                </div>
+                                </button>
+                                {mobileExpandedId === msg.id && (
+                                  <div className="lg:hidden p-4 border-b border-border-subtle bg-white space-y-3">
+                                    {(() => {
+                                      const mobileContent = parseMessageContent(String(msg.message || ''));
+                                      return (
+                                        <>
+                                          <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+                                            <div className="text-xs font-bold text-gray-400 mb-1 flex justify-between gap-4">
+                                              <span className="truncate">
+                                                {msg.profiles?.full_name || 'לא ידוע'}
+                                                {msg.profiles?.department && (
+                                                  <>
+                                                    <span className="mx-1 text-gray-300">•</span>
+                                                    <span className={getDepartmentPillClass(msg.profiles.department)}>{msg.profiles.department}</span>
+                                                  </>
+                                                )}
+                                                <span className="mx-1 text-gray-300">•</span>
+                                                <span className="font-medium text-gray-500">{msg.displayRole || 'משתמש'}</span>
+                                              </span>
+                                              <span>{new Date(msg.created_at).toLocaleString('he-IL')}</span>
+                                            </div>
+                                            <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                                              {mobileContent.text}
+                                            </div>
+                                            {mobileContent.imagePath && (
+                                              <div className="mt-3">
+                                                <div className="text-[10px] font-bold text-gray-400 mb-1 flex items-center gap-1">
+                                                  <ImageIcon size={10}/> צילום מסך:
+                                                </div>
+                                                <SecureImage path={mobileContent.imagePath} onClick={() => openMessageImage(mobileContent.imagePath!)} />
+                                              </div>
+                                            )}
+                                          </div>
+                                          {msg.admin_response && (
+                                            <div className="bg-cyan-50 p-3 rounded-xl border border-cyan-100">
+                                              <div className="text-xs font-bold text-cyan-700 mb-1">תשובת מנהל</div>
+                                              <div className="text-sm text-gray-800 whitespace-pre-wrap">{msg.admin_response}</div>
+                                            </div>
+                                          )}
+                                          {!msg.admin_response && (
+                                            <div className="space-y-2">
+                                              {filter === 'new' && (
+                                                <button
+                                                  onClick={() => markAsTreated(msg.id)}
+                                                  className="w-full bg-green-50 text-green-700 border border-green-200 rounded-xl py-2 text-xs font-bold"
+                                                >
+                                                  סמן כטופל
+                                                </button>
+                                              )}
+                                              <textarea
+                                                value={isSelected ? responseText : ''}
+                                                onChange={(e) => {
+                                                  setSelectedMsg(msg);
+                                                  setResponseText(e.target.value);
+                                                }}
+                                                placeholder="כתוב כאן את התשובה..."
+                                                className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-200 resize-none h-24"
+                                              />
+                                              <button
+                                                onClick={handleSendReply}
+                                                disabled={sendingReply || !isSelected || !responseText.trim()}
+                                                className="w-full bg-brand-cyan text-white rounded-xl py-2.5 text-sm font-bold disabled:opacity-50"
+                                              >
+                                                {sendingReply && isSelected ? 'שולח...' : 'שלח תשובה'}
+                                              </button>
+                                            </div>
+                                          )}
+                                        </>
+                                      );
+                                    })()}
+                                  </div>
+                                )}
+                              </React.Fragment>
                             );
                         })
                     )}
@@ -290,12 +440,12 @@ export default function InboxPage() {
             </div>
 
             {/* תצוגה ראשית */}
-            <div className="lg:col-span-2 bg-white rounded-3xl border border-gray-200 shadow-lg flex flex-col relative overflow-hidden h-full">
+            <div className="hidden lg:flex lg:col-span-2 bg-surface-card rounded-3xl border border-border-subtle shadow-lg flex-col relative overflow-hidden h-full">
                 {selectedMsg && content ? (
                     <>
-                        <div className="p-6 border-b border-gray-100 bg-gray-50/30 flex justify-between items-start shrink-0">
+                <div className="p-6 border-b border-gray-100 bg-gray-50/30 flex justify-between items-start shrink-0">
                             <div className="flex gap-4">
-                                <div className="w-12 h-12 rounded-2xl bg-gray-200 overflow-hidden border border-white shadow-sm shrink-0">
+                                <div className="relative w-12 h-12 rounded-2xl bg-gray-200 overflow-hidden border border-white shadow-sm shrink-0">
                                     {selectedMsg.profiles?.avatar_url ? (
                                         <Image src={selectedMsg.profiles.avatar_url} alt="Avatar" fill className="object-cover" unoptimized/>
                                     ) : (
@@ -303,16 +453,21 @@ export default function InboxPage() {
                                     )}
                                 </div>
                                 <div>
-                                    <h2 className="text-xl font-black text-gray-800 leading-tight mb-1">{selectedMsg.subject}</h2>
+                                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                      <h2 className="text-xl font-black text-gray-800 leading-tight">{selectedParsedSubject?.cleanSubject}</h2>
+                                      <span className={`inline-flex items-center justify-center w-6 h-6 rounded ${selectedParsedSubject?.type === 'bug' ? 'text-red-600 bg-red-50' : 'text-cyan-700 bg-cyan-50'}`}>
+                                        {selectedParsedSubject?.type === 'bug' ? <AlertTriangle size={14}/> : <Mail size={14}/>}
+                                      </span>
+                                    </div>
                                     <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
                                         <span className="flex items-center gap-1 bg-white px-2 py-0.5 rounded-full border border-gray-100 font-bold text-gray-700">
-                                            <User size={12}/> {selectedMsg.profiles?.full_name}
-                                        </span>
-                                        <span className="flex items-center gap-1 bg-white px-2 py-0.5 rounded-full border border-gray-100">
-                                            <Briefcase size={12}/> {selectedMsg.profiles?.role === 'coordinator' ? 'רכז' : (selectedMsg.profiles?.role || 'ללא תפקיד')}
-                                        </span>
-                                        <span className="flex items-center gap-1 bg-white px-2 py-0.5 rounded-full border border-gray-100">
-                                            <Building2 size={12}/> {selectedMsg.profiles?.department || 'כללי'}
+                                            <User size={12}/> {selectedMsg.profiles?.full_name || 'לא ידוע'}
+                                            <span className="text-gray-300 mx-1">•</span>
+                                            <span className={getDepartmentPillClass(selectedMsg.profiles?.department || 'כללי')}>
+                                              {selectedMsg.profiles?.department || 'כללי'}
+                                            </span>
+                                            <span className="text-gray-300 mx-1">•</span>
+                                            <span className="font-medium text-gray-600">{selectedMsg.displayRole || 'ללא תפקיד'}</span>
                                         </span>
                                         {(selectedMsg.category || '').toLowerCase() === 'bug' && <span className="bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold animate-pulse">תקלה טכנית</span>}
                                     </div>
@@ -329,8 +484,8 @@ export default function InboxPage() {
                             )}
                         </div>
 
-                        <div className="flex-1 overflow-y-auto bg-white custom-scrollbar p-6 flex flex-col gap-6">
-                            <div className="bg-gray-50 p-4 rounded-2xl rounded-tr-none border border-gray-100 self-start max-w-[90%]">
+                        <div className="flex-1 overflow-y-auto bg-white custom-scrollbar p-6 flex flex-col gap-4">
+                            <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 w-full">
                                 <div className="text-xs font-bold text-gray-400 mb-1 flex justify-between gap-4">
                                     <span>{selectedMsg.profiles?.full_name}</span>
                                     <span>{new Date(selectedMsg.created_at).toLocaleString('he-IL')}</span>
@@ -343,13 +498,13 @@ export default function InboxPage() {
                                 {content.imagePath && (
                                     <div className="mt-4">
                                         <div className="text-[10px] font-bold text-gray-400 mb-1 flex items-center gap-1"><ImageIcon size={10}/> צילום מסך:</div>
-                                        <SecureImage path={content.imagePath} />
+                                        <SecureImage path={content.imagePath} onClick={() => openMessageImage(content.imagePath!)} />
                                     </div>
                                 )}
                             </div>
 
                             {selectedMsg.admin_response && (
-                                <div className="bg-cyan-50 p-4 rounded-2xl rounded-tl-none border border-cyan-100 self-end max-w-[90%] animate-fadeIn">
+                                <div className="bg-cyan-50 p-4 rounded-2xl border border-cyan-100 w-full animate-fadeIn">
                                     <div className="text-xs font-bold text-cyan-700 mb-1 flex justify-between gap-4">
                                         <span>תשובת מנהל</span>
                                         <span>{selectedMsg.replied_at ? new Date(selectedMsg.replied_at).toLocaleString('he-IL') : ''}</span>
@@ -364,7 +519,9 @@ export default function InboxPage() {
                         <div className="p-4 border-t border-gray-100 bg-white shrink-0">
                             {!selectedMsg.admin_response ? (
                                 <div className="flex flex-col gap-2">
-                                    <label className="text-xs font-bold text-gray-500">שלח תשובה לרכז (תישלח התראה לנייד שלו):</label>
+                                    <label className="text-xs font-bold text-gray-500">
+                                      שלח תשובה ל{getUserRoleShortLabel('coordinator', selectedMsg?.profiles?.department || '').replace(' סניף', '')} (תישלח התראה לנייד שלהם):
+                                    </label>
                                     <div className="flex gap-2">
                                         <textarea 
                                             value={responseText}
@@ -386,7 +543,7 @@ export default function InboxPage() {
                                     <div className="flex justify-start gap-3 mt-1 opacity-60 hover:opacity-100 transition-opacity">
                                         <a href={`mailto:${selectedMsg.profiles?.email || ''}`} className="text-xs flex items-center gap-1 text-gray-500 hover:text-gray-800"><Mail size={12}/> שלח במייל</a>
                                         {selectedMsg.profiles?.phone && (
-                                            <a href={`https://wa.me/${selectedMsg.profiles.phone.replace(/\D/g,'')}`} target="_blank" className="text-xs flex items-center gap-1 text-green-600 hover:text-green-700"><MessageCircle size={12}/> שלח בווצאפ</a>
+                                            <a href={`https://wa.me/${selectedMsg.profiles.phone.replace(/\D/g,'')}`} target="_blank" rel="noreferrer" className="text-xs flex items-center gap-1 text-green-600 hover:text-green-700"><MessageCircle size={12}/> שלח בווצאפ</a>
                                         )}
                                     </div>
                                 </div>

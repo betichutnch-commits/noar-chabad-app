@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { ArrowLeft, UserPlus, ShieldCheck, Users, Briefcase, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, UserPlus, ShieldCheck, Users, Briefcase, Eye, EyeOff, KeyRound } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input'; 
 import { Modal } from '@/components/ui/Modal'; 
@@ -13,16 +13,20 @@ import Image from 'next/image';
 import { loginSchema, registerSchema } from '@/lib/schemas';
 import { DEPARTMENTS_CONFIG } from '@/lib/constants'; 
 import type { User } from '@supabase/supabase-js';
+import { getCoordinatorRoleTitle, getDeptTripsOfficerTitle } from '@/lib/auth';
 
 const SUPER_ADMIN_EMAIL = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL;
 
 export default function Home() {
   const router = useRouter();
-  const [view, setView] = useState<'landing' | 'login' | 'dept_selection' | 'role_selection' | 'register_form'>('landing');
+  const [view, setView] = useState<'landing' | 'login' | 'dept_selection' | 'role_selection' | 'register_form' | 'reset_password'>('landing');
   const [loading, setLoading] = useState(false);
+  const [sendingResetEmail, setSendingResetEmail] = useState(false);
   
   // ניהול הצגת סיסמה
   const [showPassword, setShowPassword] = useState(false);
+  const [showResetConfirmPassword, setShowResetConfirmPassword] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
 
   // ניהול מודל
   const [modal, setModal] = useState({
@@ -38,22 +42,18 @@ export default function Home() {
 
   // דאטה
   const [selectedDept, setSelectedDept] = useState(''); 
-  const [selectedRoleType, setSelectedRoleType] = useState(''); 
+  const [selectedRoleType, setSelectedRoleType] = useState('');
+  const [isDeptTripsOfficerSignup, setIsDeptTripsOfficerSignup] = useState(false);
   const [formData, setFormData] = useState({
     idNumber: '', password: '', fullName: '', phone: '', email: '', birthDate: '', branch: '', role: ''
   });
+  const [forgotIdentifier, setForgotIdentifier] = useState('');
+  const [resetPasswordData, setResetPasswordData] = useState({ password: '', confirmPassword: '' });
 
-  const getRoleLabel = (roleType: 'coordinator' | 'hq') => {
-    const config = DEPARTMENTS_CONFIG[selectedDept] || { gender: 'mixed' };
-    const gender = config.gender;
-
-    if (roleType === 'coordinator') {
-        if (gender === 'female') return 'רכזת סניף';
-        if (gender === 'male') return 'רכז סניף';
-        return 'רכז/ת סניף';
-    } else { // HQ
-        return 'צוות מטה';
-    }
+  const getRoleLabel = (roleType: 'coordinator' | 'hq' | 'dept_trips_officer') => {
+    if (roleType === 'coordinator') return getCoordinatorRoleTitle(selectedDept);
+    if (roleType === 'dept_trips_officer') return getDeptTripsOfficerTitle(selectedDept);
+    return 'צוות מטה';
   };
 
   const checkRoleAndRedirect = useCallback(async (user: User) => {
@@ -68,7 +68,11 @@ export default function Home() {
     router.refresh(); 
     await new Promise(resolve => setTimeout(resolve, 500));
 
-    if (meta.department === 'בטיחות ומפעלים' || meta.role === 'safety_admin') {
+    if (
+      meta.department === 'בטיחות ומפעלים' ||
+      meta.role === 'safety_admin' ||
+      meta.role === 'dept_trips_officer'
+    ) {
         router.push('/manager');
     } else {
         router.push('/dashboard');
@@ -76,7 +80,20 @@ export default function Home() {
   }, [router]);
 
   useEffect(() => {
+    const hasRecoveryInUrl = () => {
+      if (typeof window === 'undefined') return false;
+      const url = new URL(window.location.href);
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      const hashType = hashParams.get('type');
+      return hashType === 'recovery' || url.searchParams.get('view') === 'reset-password';
+    };
+
     const autoLogin = async () => {
+      if (hasRecoveryInUrl()) {
+        setView('reset_password');
+        return;
+      }
+
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         setLoading(true);
@@ -89,16 +106,82 @@ export default function Home() {
         }
       }
     };
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setView('reset_password');
+        showModal('info', 'איפוס סיסמה', 'נא להזין סיסמה חדשה כדי להשלים את האיפוס.');
+      }
+    });
+
     autoLogin();
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
   }, [checkRoleAndRedirect]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  const toAuthEmail = (identifier: string) => {
+    const cleaned = identifier.trim();
+    return cleaned.includes('@') ? cleaned : `${cleaned}@noar.chabad.co.il`;
+  };
+
+  const handleSendResetEmail = async () => {
+    if (!forgotIdentifier.trim()) {
+      showModal('error', 'חסר נתון', 'נא להזין תעודת זהות או אימייל כדי לשלוח קישור איפוס.');
+      return;
+    }
+
+    setSendingResetEmail(true);
+    try {
+      const email = toAuthEmail(forgotIdentifier);
+      const redirectTo = `${window.location.origin}/?view=reset-password`;
+      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+      if (error) throw error;
+      showModal('success', 'הקישור נשלח', 'שלחנו למייל שלך קישור לאיפוס סיסמה. אם המשתמש קיים במערכת, ההודעה תגיע תוך כמה דקות.');
+      setForgotIdentifier('');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'שגיאה לא ידועה';
+      showModal('error', 'שגיאה בשליחת הקישור', message);
+    } finally {
+      setSendingResetEmail(false);
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (resetPasswordData.password.length < 6) {
+      showModal('error', 'סיסמה חלשה', 'הסיסמה חייבת להכיל לפחות 6 תווים.');
+      return;
+    }
+    if (resetPasswordData.password !== resetPasswordData.confirmPassword) {
+      showModal('error', 'אי התאמה', 'הסיסמאות לא תואמות. נא לנסות שוב.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: resetPasswordData.password });
+      if (error) throw error;
+
+      showModal('success', 'הסיסמה עודכנה', 'הסיסמה עודכנה בהצלחה. ניתן להתחבר עם הסיסמה החדשה.');
+      setResetPasswordData({ password: '', confirmPassword: '' });
+      setView('login');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'שגיאה לא ידועה';
+      showModal('error', 'שגיאה בעדכון סיסמה', message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    
+
     // 1. ולידציה עם Zod
     const validation = loginSchema.safeParse({
         idNumber: formData.idNumber,
@@ -132,6 +215,10 @@ export default function Home() {
 
   const handleRegister = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const effectiveRole =
+      selectedRoleType === 'dept_staff' && isDeptTripsOfficerSignup
+        ? 'dept_trips_officer'
+        : selectedRoleType;
 
     // 1. ולידציה עם Zod
     const validation = registerSchema.safeParse({
@@ -153,7 +240,7 @@ export default function Home() {
 
     try {
         const email = `${formData.idNumber}@noar.chabad.co.il`;
-        const { error } = await supabase.auth.signUp({
+        const { data: signUpData, error } = await supabase.auth.signUp({
           email: email,
           password: formData.password,
           options: {
@@ -161,7 +248,7 @@ export default function Home() {
               full_name: formData.fullName,
               identity_number: formData.idNumber,
               department: selectedDept, 
-              role: selectedRoleType,   
+              role: effectiveRole,
               branch_name: selectedRoleType === 'coordinator' ? formData.branch : null,
               phone: formData.phone,
               contact_email: formData.email,
@@ -175,6 +262,15 @@ export default function Home() {
           showModal('error', 'שגיאה בהרשמה', error.message);
           setLoading(false);
         } else {
+          if (signUpData.session?.access_token) {
+            void fetch('/api/auth/notify-registration', {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${signUpData.session.access_token}`,
+              },
+              credentials: 'include',
+            }).catch(() => {});
+          }
           showModal('success', 'ההרשמה נקלטה!', 'הפרטים נשלחו לאישור מנהל.\nתקבל הודעה כשהחשבון יאושר.');
           setTimeout(() => {
               setModal(prev => ({...prev, isOpen: false}));
@@ -295,6 +391,16 @@ export default function Home() {
                   </button>
               </div>
 
+              <div className="flex justify-center -mt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowResetPassword(true)}
+                  className="text-xs font-bold text-brand-cyan hover:underline"
+                >
+                  שכחתי סיסמה
+                </button>
+              </div>
+
               <Button 
   type="submit" 
   isLoading={loading} 
@@ -304,6 +410,108 @@ export default function Home() {
   כניסה
 </Button>
             </form>
+        </div>
+
+        {showResetPassword && (
+          <div className="fixed inset-0 z-[120] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="w-full max-w-sm bg-surface-card rounded-3xl border border-border-subtle shadow-2xl p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <KeyRound size={18} className="text-brand-cyan" />
+                <h3 className="font-black text-text-primary">איפוס סיסמה</h3>
+              </div>
+              <p className="text-xs text-text-secondary mb-4 leading-relaxed">
+                הזן/י תעודת זהות או אימייל. נשלח קישור להגדרת סיסמה חדשה.
+              </p>
+              <Input
+                value={forgotIdentifier}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForgotIdentifier(e.target.value)}
+                placeholder="תעודת זהות או אימייל"
+                autoFocus
+              />
+              <div className="mt-4 flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setShowResetPassword(false)}
+                >
+                  ביטול
+                </Button>
+                <Button
+                  variant="primary"
+                  className="flex-1"
+                  isLoading={sendingResetEmail}
+                  onClick={handleSendResetEmail}
+                >
+                  שליחה
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (view === 'reset_password') {
+    return (
+      <div className="min-h-screen bg-white flex flex-col items-center justify-start pt-24 md:justify-center md:pt-0 p-6 transition-all">
+        <Modal isOpen={modal.isOpen} onClose={() => setModal({...modal, isOpen: false})} type={modal.type} title={modal.title} message={modal.message} />
+
+        <button onClick={() => setView('login')} className="absolute top-6 right-6 text-gray-400 hover:text-brand-pink transition-colors">
+          <ArrowLeft size={24} className="rotate-180" />
+        </button>
+
+        <div className="w-full max-w-sm animate-fadeIn">
+          <div className="text-center mb-8">
+            <h2 className="text-4xl font-black text-brand-cyan">סיסמה חדשה</h2>
+            <p className="text-gray-400 text-sm mt-1">הזינו סיסמה חדשה ואשרו אותה</p>
+          </div>
+
+          <form onSubmit={handleResetPassword} className="space-y-5">
+            <div className="relative">
+              <Input
+                label="סיסמה חדשה"
+                type={showPassword ? 'text' : 'password'}
+                required
+                value={resetPasswordData.password}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setResetPasswordData((prev) => ({ ...prev, password: e.target.value }))
+                }
+                className="pl-10 focus:!border-brand-pink focus:!ring-pink-100"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute left-3 top-[38px] z-10 text-gray-400 hover:text-brand-pink transition-colors"
+              >
+                {showPassword ? <EyeOff size={18}/> : <Eye size={18}/>}
+              </button>
+            </div>
+
+            <div className="relative">
+              <Input
+                label="אימות סיסמה חדשה"
+                type={showResetConfirmPassword ? 'text' : 'password'}
+                required
+                value={resetPasswordData.confirmPassword}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setResetPasswordData((prev) => ({ ...prev, confirmPassword: e.target.value }))
+                }
+                className="pl-10 focus:!border-brand-pink focus:!ring-pink-100"
+              />
+              <button
+                type="button"
+                onClick={() => setShowResetConfirmPassword(!showResetConfirmPassword)}
+                className="absolute left-3 top-[38px] z-10 text-gray-400 hover:text-brand-pink transition-colors"
+              >
+                {showResetConfirmPassword ? <EyeOff size={18}/> : <Eye size={18}/>}
+              </button>
+            </div>
+
+            <Button type="submit" isLoading={loading} variant="secondary" className="w-full mt-4">
+              עדכון סיסמה
+            </Button>
+          </form>
         </div>
       </div>
     );
@@ -353,7 +561,7 @@ export default function Home() {
           </div>
 
           <div className="mt-10 border-t border-gray-200 pt-6">
-             <Button variant="dark" onClick={() => { setSelectedDept('בטיחות ומפעלים'); setSelectedRoleType('safety_admin'); setView('register_form'); }} className="w-full justify-center" icon={<ShieldCheck size={20} className="text-[#8BC34A]" />}>
+             <Button variant="dark" onClick={() => { setSelectedDept('בטיחות ומפעלים'); setSelectedRoleType('safety_admin'); setIsDeptTripsOfficerSignup(false); setView('register_form'); }} className="w-full justify-center" icon={<ShieldCheck size={20} className="text-[#8BC34A]" />}>
                 הרשמה למחלקת בטיחות ומפעלים
              </Button>
           </div>
@@ -376,7 +584,7 @@ export default function Home() {
           <p className="text-center text-gray-400 mb-8">מחלקה נבחרת: <span className="font-bold text-[#00BCD4]">{selectedDept}</span></p>
           
           <div className="space-y-4">
-            <button onClick={() => { setSelectedRoleType('coordinator'); setView('register_form'); }}
+            <button onClick={() => { setSelectedRoleType('coordinator'); setIsDeptTripsOfficerSignup(false); setView('register_form'); }}
               className="w-full bg-white p-6 rounded-2xl shadow-sm border-2 border-transparent hover:border-pink-400 hover:bg-pink-50 text-right group relative overflow-hidden transition-all">
               <div className="flex items-center justify-between relative z-10">
                   <div>
@@ -387,12 +595,12 @@ export default function Home() {
               </div>
             </button>
 
-            <button onClick={() => { setSelectedRoleType('dept_staff'); setView('register_form'); }}
+            <button onClick={() => { setSelectedRoleType('dept_staff'); setIsDeptTripsOfficerSignup(false); setView('register_form'); }}
               className="w-full bg-white p-6 rounded-2xl shadow-sm border-2 border-transparent hover:border-[#00BCD4] hover:bg-cyan-50 text-right group relative overflow-hidden transition-all">
               <div className="flex items-center justify-between relative z-10">
                   <div>
                     <h3 className="font-black text-lg text-gray-800 group-hover:text-[#00BCD4]">{getRoleLabel('hq')}</h3>
-                    <p className="text-sm text-gray-400 mt-1">מטה {selectedDept}</p>
+                    <p className="text-sm text-gray-400 mt-1">מטה {selectedDept} (כולל אפשרות לסמן {getRoleLabel('dept_trips_officer')} בשלב הבא)</p>
                   </div>
                   <Briefcase className="text-gray-200 group-hover:text-[#00BCD4] transition-colors" size={32} />
               </div>
@@ -422,7 +630,15 @@ export default function Home() {
             <div className="flex items-center gap-2 mb-6">
                 <span className={`h-2 w-2 rounded-full ${isSafety ? 'bg-[#8BC34A]' : 'bg-[#00BCD4]'}`}></span>
                 <p className="text-sm text-gray-500 font-bold">
-                    {isSafety ? 'מחלקת בטיחות ומפעלים' : `${selectedDept} - ${getRoleLabel(selectedRoleType === 'coordinator' ? 'coordinator' : 'hq')}`}
+                    {isSafety
+                      ? 'מחלקת בטיחות ומפעלים'
+                      : `${selectedDept} - ${getRoleLabel(
+                          selectedRoleType === 'coordinator'
+                            ? 'coordinator'
+                            : selectedRoleType === 'dept_staff' && isDeptTripsOfficerSignup
+                              ? 'dept_trips_officer'
+                              : 'hq',
+                        )}`}
                 </p>
             </div>
 
@@ -463,6 +679,21 @@ export default function Home() {
                     {showPassword ? <EyeOff size={18}/> : <Eye size={18}/>}
                   </button>
               </div>
+
+              {selectedRoleType === 'dept_staff' && (
+                <label className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50/50 px-4 py-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isDeptTripsOfficerSignup}
+                    onChange={(e) => setIsDeptTripsOfficerSignup(e.target.checked)}
+                    className="mt-1 h-4 w-4 accent-amber-500"
+                  />
+                  <div className="text-sm">
+                    <div className="font-bold text-amber-800">{getRoleLabel('dept_trips_officer')} במחלקה</div>
+                    <div className="text-amber-700">סימון זה ירשום אותך בתפקיד אישור ראשוני ל{getCoordinatorRoleTitle(selectedDept).replace(' סניף', '')}.</div>
+                  </div>
+                </label>
+              )}
 
               <Button type="submit" isLoading={loading} className="w-full mt-6 bg-[#8BC34A] hover:bg-green-600 shadow-green-200 border border-transparent">
                 סיום הרשמה
