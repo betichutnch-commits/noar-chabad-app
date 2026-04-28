@@ -95,7 +95,6 @@ export function PushAdminTestPanel({ enabled }: Props) {
         totalRecipients?: number
         sentCount?: number
         totalSubscriptions?: number
-        removedSubscriptions?: number
         firstError?: { statusCode?: number; message?: string; recipientId?: string } | null
       }
       if (!res.ok) {
@@ -236,4 +235,3 @@ export function PushAdminTestPanel({ enabled }: Props) {
     </div>
   )
 }
-

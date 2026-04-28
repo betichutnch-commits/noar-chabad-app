@@ -124,7 +124,7 @@
         * `lib/notifications/notify.ts` — `notifyUsers` / `notifyUserIds` למסירה מרוכזת.
         * `lib/notifications/recipients.ts` — פתרון נמענים לפי תפקיד/מחלקה.
         * `lib/notifications/inApp.ts` — כתיבה לטבלת `notifications`.
-        * `lib/notifications/push.ts` — שליחת Web Push דרך VAPID (`web-push`) עם fallback ל־`GCM_API_KEY` עבור endpoints ותיקים של FCM.
+        * `lib/notifications/push.ts` — שליחת Web Push דרך VAPID (`web-push`) למנויים שנשמרו ב־`push_subscriptions`.
         * `lib/notifications/email.ts` — שליחת אימיילים דרך `resend`.
 
 * **`pushClient.ts`:**
@@ -134,7 +134,7 @@
         * קריאה ל־API של `push/subscribe` ו־`push/unsubscribe`.
 
 ## 5. Push והתראות
-**מיקום:** `components/`, `hooks/`, `public/`, `app/api/`
+**מיקום:** `components/`, `lib/`, `hooks/`, `public/`, `app/api/`
 
 ### `PushPermissionBanner.tsx`
 * **תיאור:** באנר הרשאה להפעלת Push.
@@ -153,9 +153,11 @@
 * **תיאור:** Service Worker להצגת התראות Push וניווט בלחיצה להתראה.
 
 ### API Push/Prefs
+* **`app/api/push/vapid-public-key/route.ts`:** החזרת VAPID public key ללקוח.
 * **`app/api/push/subscribe/route.ts`:** שמירת subscription של המשתמש.
 * **`app/api/push/unsubscribe/route.ts`:** הסרת subscription.
-* **`app/api/push/vapid-public-key/route.ts`:** החזרת VAPID public key ללקוח.
+* **`app/api/push/subscriptions/route.ts`:** רשימת subscriptions של המשתמש.
+* **`app/api/push/test/route.ts`:** טסט Push לאדמין (שולח דרך `web-push` לנמענים שנבחרו).
 * **`app/api/notification-preferences/route.ts`:** קריאה/עדכון העדפות התראות.
 
 ---

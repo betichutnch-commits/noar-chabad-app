@@ -1,38 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { NotifyPayload } from './types'
-
 type WebPushModule = typeof import('web-push')
 type PushErrorLike = { statusCode?: number; body?: string; message?: string }
-
-let webPushConfigured = false
-
-function configureWebPush(webpush: WebPushModule) {
-  if (webPushConfigured) return
-  const publicKey = String(process.env.VAPID_PUBLIC_KEY || '')
-    .trim()
-    .replace(/^"|"$/g, '')
-  const privateKey = String(process.env.VAPID_PRIVATE_KEY || '')
-    .trim()
-    .replace(/^"|"$/g, '')
-  const rawContact = String(process.env.VAPID_CONTACT_EMAIL || 'admin@localhost').trim()
-  const contact =
-    /^(mailto:|https?:\/\/)/i.test(rawContact) ? rawContact : `mailto:${rawContact}`
-  const gcmApiKey = String(process.env.GCM_API_KEY || process.env.FCM_SERVER_KEY || '')
-    .trim()
-    .replace(/^"|"$/g, '')
-  if (!publicKey || !privateKey) return
-  try {
-    if (gcmApiKey) {
-      // Legacy FCM endpoints may still require this key.
-      webpush.setGCMAPIKey(gcmApiKey)
-    }
-    webpush.setVapidDetails(contact, publicKey, privateKey)
-    webPushConfigured = true
-  } catch (error) {
-    console.warn('[notify] invalid VAPID configuration', error)
-    webPushConfigured = false
-  }
-}
 
 export type PushSendDetails = {
   ok: boolean
@@ -43,7 +12,36 @@ export type PushSendDetails = {
   reason?: 'not_configured' | 'no_subscriptions' | 'query_error' | 'send_failed'
 }
 
-export async function sendWebPushToUserDetailed(
+let webPushConfigured = false
+
+function configureWebPush(webpush: WebPushModule) {
+  if (webPushConfigured) return
+  const publicKey = String(process.env.VAPID_PUBLIC_KEY || process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '')
+    .trim()
+    .replace(/^"|"$/g, '')
+  const privateKey = String(process.env.VAPID_PRIVATE_KEY || '')
+    .trim()
+    .replace(/^"|"$/g, '')
+  const rawSubject = String(process.env.VAPID_SUBJECT || process.env.VAPID_CONTACT_EMAIL || 'admin@localhost').trim()
+  const subject =
+    /^(mailto:|https?:\/\/)/i.test(rawSubject) ? rawSubject : `mailto:${rawSubject}`
+  const gcmApiKey = String(process.env.GCM_API_KEY || process.env.FCM_SERVER_KEY || '')
+    .trim()
+    .replace(/^"|"$/g, '')
+  if (!publicKey || !privateKey) return
+  try {
+    if (gcmApiKey) {
+      webpush.setGCMAPIKey(gcmApiKey)
+    }
+    webpush.setVapidDetails(subject, publicKey, privateKey)
+    webPushConfigured = true
+  } catch (error) {
+    console.warn('[notify] invalid VAPID configuration', error)
+    webPushConfigured = false
+  }
+}
+
+export async function sendPushToUserDetailed(
   admin: SupabaseClient,
   userId: string,
   payload: NotifyPayload,
@@ -155,11 +153,11 @@ export async function sendWebPushToUserDetailed(
   }
 }
 
-export async function sendWebPushToUser(
+export async function sendPushToUser(
   admin: SupabaseClient,
   userId: string,
   payload: NotifyPayload,
 ): Promise<boolean> {
-  const result = await sendWebPushToUserDetailed(admin, userId, payload)
+  const result = await sendPushToUserDetailed(admin, userId, payload)
   return result.ok
 }

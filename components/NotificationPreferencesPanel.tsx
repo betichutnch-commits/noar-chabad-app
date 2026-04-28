@@ -113,30 +113,37 @@ export function NotificationPreferencesPanel({ userId }: Props) {
               <span className="text-sm font-bold">התראות דפדפן (Push)</span>
               <span className="text-[11px] text-text-muted">
                 {permission === 'unsupported'
-                  ? 'לא נתמך'
-                  : permission === 'denied'
-                    ? 'חסום בדפדפן'
-                    : isSubscribed
-                      ? 'פעיל'
-                      : 'לא מופעל'}
+                    ? 'לא נתמך'
+                    : permission === 'denied'
+                      ? 'חסום בדפדפן'
+                      : isSubscribed
+                        ? 'פעיל'
+                        : 'לא מופעל'}
               </span>
             </div>
             <div className="flex flex-wrap gap-2">
-              {permission !== 'denied' && permission !== 'unsupported' && !isSubscribed && (
+              {permission !== 'denied' &&
+                permission !== 'unsupported' &&
+                !isSubscribed && (
+                  <Button
+                    type="button"
+                    className="text-xs"
+                    onClick={async () => {
+                      setPushError('')
+                      const r = await subscribe()
+                      if (!r.ok && r.error) setPushError(r.error)
+                    }}
+                  >
+                    הפעלת Push
+                  </Button>
+                )}
+              {isSubscribed && (
                 <Button
                   type="button"
+                  variant="outline"
                   className="text-xs"
-                  onClick={async () => {
-                    setPushError('')
-                    const r = await subscribe()
-                    if (!r.ok && r.error) setPushError(r.error)
-                  }}
+                  onClick={async () => void unsubscribe()}
                 >
-                  הפעלת Push
-                </Button>
-              )}
-              {isSubscribed && (
-                <Button type="button" variant="outline" className="text-xs" onClick={() => void unsubscribe()}>
                   ביטול מינוי Push
                 </Button>
               )}

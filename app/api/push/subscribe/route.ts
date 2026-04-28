@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
 
-type Body = {
+type SubBody = {
   endpoint?: string
   keys?: { p256dh?: string; auth?: string }
 }
@@ -11,14 +11,12 @@ export async function POST(request: Request) {
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const body = (await request.json()) as Body
-  const endpoint = String(body?.endpoint || '')
-  const p256dh = String(body?.keys?.p256dh || '')
-  const auth = String(body?.keys?.auth || '')
+  const body = (await request.json().catch(() => ({}))) as SubBody
+  const endpoint = String(body?.endpoint || '').trim()
+  const p256dh = String(body?.keys?.p256dh || '').trim()
+  const auth = String(body?.keys?.auth || '').trim()
   if (!endpoint || !p256dh || !auth) {
     return NextResponse.json({ error: 'Invalid subscription payload' }, { status: 400 })
   }
@@ -34,9 +32,7 @@ export async function POST(request: Request) {
     },
     { onConflict: 'endpoint' },
   )
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
   return NextResponse.json({ ok: true })
 }

@@ -3,17 +3,12 @@ import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { isManagerUser } from '@/lib/auth'
 import type { User } from '@supabase/supabase-js'
 import { createSupabaseServiceRoleClient } from '@/lib/supabaseService'
-import { sendWebPushToUserDetailed } from '@/lib/notifications/push'
+import { sendPushToUserDetailed } from '@/lib/notifications/push'
 import { resolveRecipientUserIds } from '@/lib/notifications/recipients'
 import type { NotificationKind } from '@/lib/notifications/types'
 
 type Body = {
-  target?:
-    | 'self'
-    | 'safety_admins'
-    | 'tech_admins'
-    | 'dept_trips_officers'
-    | 'all_managers'
+  target?: 'self' | 'safety_admins' | 'tech_admins' | 'dept_trips_officers' | 'all_managers'
   kind?: NotificationKind
   title?: string
   message?: string
@@ -42,7 +37,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          'VAPID לא מוגדר בוורסל. נדרש VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY (וגם NEXT_PUBLIC_VAPID_PUBLIC_KEY מומלץ).',
+          'VAPID לא מוגדר בשרת. נדרש VAPID_PUBLIC_KEY/NEXT_PUBLIC_VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY.',
       },
       { status: 503 },
     )
@@ -69,10 +64,7 @@ export async function POST(request: Request) {
 
   const admin = createSupabaseServiceRoleClient()
   if (!admin) {
-    return NextResponse.json(
-      { error: 'SUPABASE_SERVICE_ROLE_KEY not configured' },
-      { status: 503 },
-    )
+    return NextResponse.json({ error: 'SUPABASE_SERVICE_ROLE_KEY not configured' }, { status: 503 })
   }
 
   const kind = ALLOWED_KINDS.includes(body.kind as NotificationKind)
@@ -118,7 +110,7 @@ export async function POST(request: Request) {
   let removedSubscriptions = 0
   const debugErrors: Array<{ statusCode: number; message: string; recipientId: string }> = []
   for (const recipientId of recipientIds) {
-    const result = await sendWebPushToUserDetailed(admin, recipientId, {
+    const result = await sendPushToUserDetailed(admin, recipientId, {
       kind,
       title,
       body: message,
@@ -128,12 +120,10 @@ export async function POST(request: Request) {
     if (result.ok) sentCount += 1
     totalSubscriptions += result.totalSubscriptions
     removedSubscriptions += result.removedSubscriptions
-    for (const err of result.errors) {
-      debugErrors.push({ ...err, recipientId })
-    }
+    for (const err of result.errors) debugErrors.push({ ...err, recipientId })
   }
-  const ok = sentCount > 0
 
+  const ok = sentCount > 0
   return NextResponse.json({
     ok,
     message: ok ? 'sent' : 'send_failed_or_no_subscriptions',
@@ -143,9 +133,8 @@ export async function POST(request: Request) {
     totalSubscriptions,
     removedSubscriptions,
     firstError: debugErrors[0] || null,
-    hint:
-      ok
-        ? undefined
-        : 'אם יש subscriptions ועדיין נכשל — בדוק VAPID (public+private תואמים, בלי גרשיים), ו־VAPID_CONTACT_EMAIL תקין (email או mailto:email). אם מופיע Invalid API key, הגדר GCM_API_KEY בוורסל.',
+    hint: ok
+      ? undefined
+      : 'אם יש subscriptions ועדיין נכשל — בדוק VAPID (public+private תואמים, בלי גרשיים) ו־VAPID_SUBJECT תקין (email או mailto:email).',
   })
 }

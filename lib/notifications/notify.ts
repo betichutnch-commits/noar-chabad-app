@@ -1,7 +1,7 @@
 import { createSupabaseServiceRoleClient } from '@/lib/supabaseService'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { insertInAppNotification } from './inApp'
-import { sendWebPushToUser } from './push'
+import { sendPushToUser } from './push'
 import { sendNotificationEmail } from './email'
 import { resolveRecipientUserIds } from './recipients'
 import type { NotifyPayload, RecipientSelector } from './types'
@@ -54,7 +54,7 @@ async function deliverToUser(admin: SupabaseClient, userId: string, payload: Not
 
   let pushOk = false
   if (pushEnabled) {
-    pushOk = await sendWebPushToUser(admin, userId, payload)
+    pushOk = await sendPushToUser(admin, userId, payload)
   }
 
   const shouldEmail = emailEnabled && (!pushEnabled || !pushOk)

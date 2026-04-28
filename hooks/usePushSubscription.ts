@@ -3,32 +3,48 @@
 import { useCallback, useEffect, useState } from 'react'
 import { registerServiceWorker, subscribeToPush, unsubscribeFromPush } from '@/lib/pushClient'
 
+type PermissionState = 'default' | 'granted' | 'denied' | 'unsupported'
+
+function currentPermission(): PermissionState {
+  if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported'
+  const p = Notification.permission
+  if (p === 'granted' || p === 'denied' || p === 'default') return p
+  return 'unsupported'
+}
+
 export function usePushSubscription(userId?: string) {
-  const [permission, setPermission] = useState<NotificationPermission | 'unsupported'>('default')
+  const [permission, setPermission] = useState<PermissionState>('default')
   const [isSubscribed, setIsSubscribed] = useState(false)
   const [loading, setLoading] = useState(true)
 
   const refresh = useCallback(async () => {
-    if (typeof window === 'undefined' || !('Notification' in window)) {
-      setPermission('unsupported')
+    setPermission(currentPermission())
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
       setIsSubscribed(false)
-      setLoading(false)
       return
     }
-    setPermission(Notification.permission)
-    const reg = await navigator.serviceWorker.getRegistration()
-    const sub = await reg?.pushManager.getSubscription()
-    setIsSubscribed(Boolean(sub))
-    setLoading(false)
+    try {
+      const reg = await navigator.serviceWorker.getRegistration('/sw.js')
+      const sub = await reg?.pushManager.getSubscription()
+      setIsSubscribed(Boolean(sub))
+    } catch {
+      setIsSubscribed(false)
+    }
   }, [])
 
-  useEffect(() => {
-    if (!userId) {
+  const ensureSw = useCallback(async () => {
+    if (!userId) return
+    try {
+      await registerServiceWorker()
+      await refresh()
+    } finally {
       queueMicrotask(() => setLoading(false))
-      return
     }
-    queueMicrotask(() => void refresh())
-  }, [userId, refresh])
+  }, [refresh, userId])
+
+  useEffect(() => {
+    void ensureSw()
+  }, [ensureSw])
 
   const subscribe = useCallback(async () => {
     const r = await subscribeToPush()
@@ -37,14 +53,10 @@ export function usePushSubscription(userId?: string) {
   }, [refresh])
 
   const unsubscribe = useCallback(async () => {
-    await unsubscribeFromPush()
+    const r = await unsubscribeFromPush()
     await refresh()
+    return r
   }, [refresh])
 
-  const ensureSw = useCallback(async () => {
-    await registerServiceWorker()
-    await refresh()
-  }, [refresh])
-
-  return { permission, isSubscribed, loading, subscribe, unsubscribe, ensureSw, refresh }
+  return { permission, isSubscribed, loading, ensureSw, refresh, subscribe, unsubscribe }
 }
