@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
-import { isDeptTripsOfficer } from '@/lib/auth'
+import { isDeptReviewOfficer } from '@/lib/auth'
 import type { User } from '@supabase/supabase-js'
 import { notifyUserIds, notifyUsers } from '@/lib/notifications'
 
 type RouteContext = { params: Promise<unknown> }
 
-type DeptReviewAction = 'return' | 'reject' | 'forward'
+type DeptReviewAction = 'return' | 'forward'
 
 interface DeptReviewBody {
   action: DeptReviewAction
@@ -19,11 +19,6 @@ const NOTIFY_BY_ACTION: Record<DeptReviewAction, { title: string; message: (trip
     message: (name) => `אחראי המחלקה החזיר את הטיול "${name}" להערות. כנס/י לפרטים לעדכון הבקשה ושליחה מחדש.`,
     type: 'warning',
   },
-  reject: {
-    title: 'הבקשה נדחתה',
-    message: (name) => `אחראי המחלקה דחה את הטיול "${name}". יש לעיין בהערות לבירור.`,
-    type: 'error',
-  },
   forward: {
     title: 'הבקשה הועברה למחלקת הבטיחות',
     message: (name) => `הטיול "${name}" עבר את שלב האישור הראשוני והועבר למחלקת הבטיחות לאישור סופי.`,
@@ -35,13 +30,13 @@ export async function POST(request: Request, { params }: RouteContext) {
   const { id } = (await params) as { id: string }
   const body = (await request.json()) as DeptReviewBody
 
-  if (!body || !['return', 'reject', 'forward'].includes(body.action)) {
+  if (!body || !['return', 'forward'].includes(body.action)) {
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
   }
 
-  if ((body.action === 'return' || body.action === 'reject') && !body.notes?.trim()) {
+  if (body.action === 'return' && !body.notes?.trim()) {
     return NextResponse.json(
-      { error: 'יש לציין הערות עבור החזרה או דחייה.' },
+      { error: 'יש לציין הערות עבור החזרה לרכז.' },
       { status: 400 },
     )
   }
@@ -59,7 +54,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     .single()
 
   const userLike = { id: user.id, user_metadata: user.user_metadata ?? {} } as User
-  if (!isDeptTripsOfficer(userLike, profile)) {
+  if (!isDeptReviewOfficer(userLike, profile)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -97,9 +92,6 @@ export async function POST(request: Request, { params }: RouteContext) {
     case 'return':
       updatePayload.status = 'returned_for_changes'
       break
-    case 'reject':
-      updatePayload.status = 'rejected'
-      break
     case 'forward':
       updatePayload.status = 'pending'
       updatePayload.dept_forwarded_at = now
@@ -126,7 +118,7 @@ export async function POST(request: Request, { params }: RouteContext) {
         kind: 'trip.dept_forwarded_safety',
         title: 'טיול הועבר לאישור בטיחות',
         body: `הטיול "${tripName}" הועבר ממחלקתך למחלקת הבטיחות לאישור סופי.`,
-        url: '/manager/approvals',
+        url: `/manager/approvals/${trip.id}`,
         inAppType: 'info',
       },
     )

@@ -1,0 +1,135 @@
+{
+  "title": "עדכון מאגר הרגולציה",
+  "intro": "הנחיות לעדכון נתוני חוזר 585 במערכת. השינויים נשמרים בקבצי JSON בפרויקט (לא בממשק) — נדרש deploy אחרי עריכה.",
+  "disclaimer": "לא ייעוץ משפטי. לאחר כל עדכון יש לאמת מול המקור הרשמי ומוקד טבע.",
+  "officialUrl": "https://apps.education.gov.il/Mankal/horaa.aspx?siduri=585",
+  "sources": [
+    {
+      "id": "chozer-585",
+      "label": "חוזר מנכ״ל 585 (מקור רשמי)",
+      "path": "docs/regulation/source/chozer-585.pdf",
+      "notes": "הוראה 0467, תקף 02.02.2026"
+    },
+    {
+      "id": "chozer-extracted",
+      "label": "טקסט שחולץ מהחוזר",
+      "path": "docs/regulation/source/chozer-585-extracted.txt",
+      "notes": "נוצר אוטומטית — לא לערוך ידנית; להריץ מחדש אחרי החלפת PDF"
+    },
+    {
+      "id": "inflatables-pdf",
+      "label": "כרטיס מידע — מתנפחים (תנועות נוער)",
+      "path": "docs/regulation/source/inflatables-guidance-youth.pdf",
+      "notes": "מומלץ לסעיף 17 — קריא יותר מהחילוץ האוטומטי"
+    }
+  ],
+  "workflows": [
+    {
+      "id": "reextract-chapters-bc",
+      "title": "חילוץ מחדש — טבלאות פרקים ב׳ וג׳ מהחוזר",
+      "when": "עדכון חוזר 585 או תיקון המוני של טבלאות היערכות",
+      "prerequisite": "Node.js מותקן, גישה ל-repo",
+      "commands": [
+        "npm install pdf-parse@1.1.1 --no-save",
+        "node scripts/extract-chozer-585.mjs",
+        "node scripts/build-chapter-bc-preparation-tables.mjs"
+      ],
+      "outputs": [
+        "docs/regulation/source/chozer-585-extracted.txt",
+        "lib/regulation/chapter-b/preparation-tables.json",
+        "lib/regulation/chapter-c/preparation-tables.json"
+      ],
+      "warnings": [
+        "הפעולה מחליפה את כל טבלאות ב׳/ג׳ — עריכות ידניות קודמות יאבדו אלא אם גובו מ-git",
+        "סעיף 17 (מתנפחים) — עדיף לעדכן דרך כרטיס המידע (ראה workflow מתנפחים)",
+        "אחרי חילוץ — מומלץ ליטוש ידני של 3–5 פעילויות נפוצות"
+      ]
+    },
+    {
+      "id": "update-inflatables",
+      "title": "עדכון מתנפחים (סעיף 17)",
+      "when": "שינוי בכרטיס המידע או בחוזר לגבי מתקנים מתנפחים",
+      "prerequisite": "עריכה בקובץ המקור, לא ב-preparation-tables ישירות",
+      "steps": [
+        "ערכו את lib/regulation/chapter-b/inflatables-b17-1.json (נושאים, תיאורים, documentKey)",
+        "הריצו merge לשילוב ב-preparation-tables ועדכון licensed-schedule-map"
+      ],
+      "commands": ["node scripts/merge-inflatables-b17-1.mjs"],
+      "outputs": [
+        "lib/regulation/chapter-b/preparation-tables.json (טבלה b.17.1)",
+        "lib/regulation/licensed-schedule-map.json (מקטע מתנפחים → b.17.1)"
+      ],
+      "warnings": ["אל תערכו רק את b.17.1 בתוך preparation-tables — יידרס ב-merge"]
+    },
+    {
+      "id": "edit-chapter-a",
+      "title": "עריכת פרק א׳ (כללי לכל טיול)",
+      "when": "צ׳קליסט, תיאום מוקד טבע, רישוי, גיל, רפואה, ביטוח",
+      "steps": [
+        "ערכו ישירות את הקבצים תחת lib/regulation/chapter-a/",
+        "לדרישות גלובליות: lib/regulation/requirements/global.json ו-by-activity.json"
+      ],
+      "outputs": ["שינוי מיידי בפאנל ציות אחרי deploy — ללא סקריפט"]
+    },
+    {
+      "id": "manual-polish-table",
+      "title": "ליטוש ידני של טבלת היערכות בודדת",
+      "when": "טקסט משובש אחרי חילוץ PDF או תיקון ניסוח",
+      "steps": [
+        "פתחו lib/regulation/chapter-b/preparation-tables.json או chapter-c/preparation-tables.json",
+        "מצאו לפי circularSectionId (למשל b.3.3, g.5.1)",
+        "תקנו items[].topic ו-items[].description; השוו ל-PDF לפי sectionRef",
+        "הוסיפו documentKey רק אם יש מסמך במערכת (risk-management, moked-teva-approval וכו׳)"
+      ],
+      "priorityTables": [
+        { "id": "g.5.1", "title": "רחצה בפארק מים" },
+        { "id": "b.3.3", "title": "מתחם חבלים אתגרי" },
+        { "id": "b.11.1", "title": "סיורי ג׳יפים" },
+        { "id": "b.17.1", "title": "מתנפחים (קובץ inflatables-b17-1.json)" }
+      ]
+    },
+    {
+      "id": "verify",
+      "title": "אימות אחרי עדכון",
+      "when": "לפני deploy לפרודקשן",
+      "commands": [
+        "npm test -- tests/regulation.test.ts tests/regulation-compliance.test.ts tests/regulation-preparation-tables.test.ts",
+        "npx tsc --noEmit",
+        "node scripts/audit-regulation-coverage.mjs"
+      ],
+      "steps": [
+        "בדיקת טיול לדוגמה בלו״ז: פארק מים / חבלים / מתנפחים → פאנל הנחיות",
+        "אימות משפטי/תוכני מול PDF — אחריות רכז/יועץ (לא המערכת)"
+      ]
+    }
+  ],
+  "fileMap": [
+    { "path": "lib/regulation/chapter-a/preparation-checklist.json", "label": "צ׳קליסט היערכות" },
+    { "path": "lib/regulation/chapter-a/coordination-rules.json", "label": "תיאום מוקד טבע" },
+    { "path": "lib/regulation/chapter-a/business-license-matrix.json", "label": "טבלת רישוי" },
+    { "path": "lib/regulation/chapter-a/age-thresholds.json", "label": "גילי סף" },
+    { "path": "lib/regulation/chapter-a/medical-escort-matrix.json", "label": "ליווי רפואי" },
+    { "path": "lib/regulation/chapter-a/insurance-and-incidents.json", "label": "ביטוח ותאונות" },
+    { "path": "lib/regulation/chapter-b/preparation-tables.json", "label": "טבלאות פרק ב׳" },
+    { "path": "lib/regulation/chapter-b/inflatables-b17-1.json", "label": "מתנפחים — מקור לעריכה" },
+    { "path": "lib/regulation/chapter-c/preparation-tables.json", "label": "טבלאות פרק ג׳" },
+    { "path": "lib/regulation/licensed-schedule-map.json", "label": "מיפוי 18 פעילויות בלו״ז" },
+    { "path": "lib/regulation/activities.json", "label": "פעילויות רגולטוריות" },
+    { "path": "lib/regulation/requirements/global.json", "label": "דרישות גלובליות" },
+    { "path": "lib/regulation/requirements/by-activity.json", "label": "דרישות לפי פעילות" },
+    { "path": "lib/regulation/circulars/585-outdoor-activities-meta.json", "label": "מטא-דאטה חוזר (סטטוס חילוץ)" },
+    { "path": "lib/regulation/sensitive-locations.json", "label": "רשימת מיקומים רגישים (זיהוי אוטומטי)" }
+  ],
+  "scripts": [
+    { "path": "scripts/extract-chozer-585.mjs", "label": "חילוץ טקסט מ-PDF" },
+    { "path": "scripts/build-chapter-bc-preparation-tables.mjs", "label": "בניית טבלאות ב׳/ג׳" },
+    { "path": "scripts/merge-inflatables-b17-1.mjs", "label": "שילוב מתנפחים b.17.1" },
+    { "path": "scripts/audit-regulation-coverage.mjs", "label": "ביקורת כיסוי (טרמינל)" }
+  ],
+  "productNotes": [
+    "אזור רגיש — לפי מיקום בשורת לו״ז (timeline.sensitiveLocation / trip_plan_rows.location_sensitive); רשימת זיהוי ב-lib/regulation/sensitive-locations.json",
+    "details.sensitiveArea — תאימות לאחור לטיולים ישנים בלבד",
+    "עריכת טבלאות בממשק — לא נתמכת; צפייה בלבד בעמוד זה",
+    "חוזר 450 — לא הועלה: אחרי העלאה לבדוק מחדש אטרקציות, לינה וטיולים רב-יומיים מול מוקד טבע (לא לשנות coord_attraction / sleeping_building עד אז)"
+  ]
+}

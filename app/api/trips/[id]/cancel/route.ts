@@ -54,7 +54,7 @@ export async function POST(request: Request, { params }: RouteContext) {
       kind: 'trip.cancelled',
       title: 'ביטול טיול על ידי רכז',
       body: `הטיול "${tripName}" בוטל על ידי המגיש. סיבה: ${body.reason.trim().slice(0, 200)}`,
-      url: '/manager/approvals',
+      url: `/manager/approvals/${trip.id}`,
       inAppType: 'warning',
     },
   )
@@ -69,7 +69,7 @@ export async function POST(request: Request, { params }: RouteContext) {
       kind: 'trip.cancelled',
       title: 'ביטול טיול',
       body: `הטיול "${tripName}" בוטל על ידי הרכז.`,
-      url: '/manager/dept-review',
+      url: '/hq/dept-review',
       inAppType: 'warning',
     },
   )

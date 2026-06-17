@@ -151,7 +151,6 @@ const TRANSITIONS: Record<TripActor, Array<{ from: TripStatus; to: TripStatus }>
   ],
   dept_trips_officer: [
     { from: "pending_dept_review", to: "returned_for_changes" },
-    { from: "pending_dept_review", to: "rejected" },
     { from: "pending_dept_review", to: "pending" },
   ],
   safety_admin: [

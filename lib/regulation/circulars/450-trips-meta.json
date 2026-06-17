@@ -1,0 +1,11 @@
+{
+  "siduri": 450,
+  "title": "חוזר מנכ\"ל | טיולים",
+  "subtitle": "הנחיות לקיום טיולים — משלים את חוזר 585 (פעילות חוץ ואטרקציות)",
+  "officialUrl": "https://apps.education.gov.il/Mankal/horaa.aspx?siduri=450",
+  "targetAudience": ["תנועות נוער", "ארגוני נוער", "מסגרות חינוך בלתי פורמלי"],
+  "extractionStatus": "partial",
+  "extractionNotes": "פרויקט נפרד — לאחר ייצוב הטמעת חוזר 585. דגש: אחראי טיול, מסמכי טיול, לינה רב-יומית.",
+  "relatedSiduri": [585],
+  "deferredUntil": "after-585-stable"
+}

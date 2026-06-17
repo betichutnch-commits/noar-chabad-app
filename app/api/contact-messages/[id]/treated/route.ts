@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
-import { isManagerUser } from '@/lib/auth'
+import { isManagerUser, isTechAdminUser } from '@/lib/auth'
 import type { User } from '@supabase/supabase-js'
 
 type RouteContext = { params: Promise<unknown> }
@@ -24,6 +24,21 @@ export async function POST(_request: Request, { params }: RouteContext) {
 
   const userLike = { id: user.id, user_metadata: user.user_metadata ?? {} } as User
   if (!isManagerUser(userLike, profile)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  const { data: messageRow, error: messageLoadError } = await supabase
+    .from('contact_messages')
+    .select('id, category')
+    .eq('id', id)
+    .single()
+
+  if (messageLoadError || !messageRow) {
+    return NextResponse.json({ error: 'Message not found' }, { status: 404 })
+  }
+
+  const isBugCategory = String(messageRow.category || 'general').toLowerCase() === 'bug'
+  if (isBugCategory && !isTechAdminUser(userLike, profile)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

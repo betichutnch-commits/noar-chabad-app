@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
-import { isManagerUser } from '@/lib/auth'
+import { isTechAdminUser } from '@/lib/auth'
 import type { User } from '@supabase/supabase-js'
 import { createSupabaseServiceRoleClient } from '@/lib/supabaseService'
 import { sendPushToUserDetailed } from '@/lib/notifications/push'
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
     .single()
 
   const userLike = { id: user.id, user_metadata: user.user_metadata ?? {} } as User
-  if (!isManagerUser(userLike, profile)) {
+  if (!isTechAdminUser(userLike, profile)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

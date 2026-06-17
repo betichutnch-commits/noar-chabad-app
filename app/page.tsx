@@ -13,9 +13,8 @@ import Image from 'next/image';
 import { loginSchema, registerSchema } from '@/lib/schemas';
 import { DEPARTMENTS_CONFIG } from '@/lib/constants'; 
 import type { User } from '@supabase/supabase-js';
-import { getCoordinatorRoleTitle, getDeptTripsOfficerTitle } from '@/lib/auth';
-
-const SUPER_ADMIN_EMAIL = process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL;
+import { getCoordinatorRoleTitle, getDeptTripsOfficerTitle, isDeptReviewOfficer, isManagerUser } from '@/lib/auth';
+import { isUserApprovedForAppAccess } from '@/lib/accountApproval';
 
 export default function Home() {
   const router = useRouter();
@@ -40,12 +39,25 @@ export default function Home() {
   const showModal = (type: 'success' | 'error' | 'info' | 'confirm', title: string, msg: string) => 
       setModal({ isOpen: true, type, title, message: msg, onConfirm: undefined });
 
+  const closeModal = () => setModal((m) => ({ ...m, isOpen: false }));
+
+  const appModal = (
+    <Modal
+      isOpen={modal.isOpen}
+      onClose={closeModal}
+      type={modal.type}
+      title={modal.title}
+      message={modal.message}
+      onConfirm={modal.onConfirm}
+    />
+  );
+
   // דאטה
   const [selectedDept, setSelectedDept] = useState(''); 
   const [selectedRoleType, setSelectedRoleType] = useState('');
   const [isDeptTripsOfficerSignup, setIsDeptTripsOfficerSignup] = useState(false);
   const [formData, setFormData] = useState({
-    idNumber: '', password: '', fullName: '', phone: '', email: '', birthDate: '', branch: '', role: ''
+    idNumber: '', password: '', firstName: '', lastName: '', phone: '', email: '', birthDate: '', branch: '', role: ''
   });
   const [forgotIdentifier, setForgotIdentifier] = useState('');
   const [resetPasswordData, setResetPasswordData] = useState({ password: '', confirmPassword: '' });
@@ -60,7 +72,7 @@ export default function Home() {
     const meta = (user.user_metadata || {}) as Record<string, string>;
     const status = meta.status || 'pending';
 
-    if (user.email !== SUPER_ADMIN_EMAIL && status !== 'approved') {
+    if (!isUserApprovedForAppAccess(user)) {
         await supabase.auth.signOut();
         throw new Error(status === 'pending' ? 'ההרשמה נקלטה אך טרם אושרה.' : 'הגישה למערכת נחסמה.');
     }
@@ -68,11 +80,9 @@ export default function Home() {
     router.refresh(); 
     await new Promise(resolve => setTimeout(resolve, 500));
 
-    if (
-      meta.department === 'בטיחות ומפעלים' ||
-      meta.role === 'safety_admin' ||
-      meta.role === 'dept_trips_officer'
-    ) {
+    if (isDeptReviewOfficer(user)) {
+        router.push('/hq/dept-review');
+    } else if (isManagerUser(user)) {
         router.push('/manager');
     } else {
         router.push('/dashboard');
@@ -120,6 +130,17 @@ export default function Home() {
       authListener.subscription.unsubscribe();
     };
   }, [checkRoleAndRedirect]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('pending') === '1') {
+      showModal('info', 'ממתינים לאישור', 'ההרשמה נקלטה אך טרם אושרה. לאחר אישור ממחלקת הבטיחות תוכל/י להתחבר.');
+      url.searchParams.delete('pending');
+      const qs = url.searchParams.toString();
+      window.history.replaceState({}, '', `${url.pathname}${qs ? `?${qs}` : ''}${url.hash}`);
+    }
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -215,15 +236,16 @@ export default function Home() {
 
   const handleRegister = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const effectiveRole =
-      selectedRoleType === 'dept_staff' && isDeptTripsOfficerSignup
-        ? 'dept_trips_officer'
-        : selectedRoleType;
+    const effectiveRole = selectedRoleType;
+    const canDeptReview = selectedRoleType === 'dept_staff' ? isDeptTripsOfficerSignup : false;
 
     // 1. ולידציה עם Zod
+    const fullName = `${formData.firstName} ${formData.lastName}`.trim();
+
     const validation = registerSchema.safeParse({
         branch: selectedRoleType === 'coordinator' ? formData.branch : undefined,
-        fullName: formData.fullName,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
         phone: formData.phone,
         idNumber: formData.idNumber,
         email: formData.email,
@@ -245,10 +267,14 @@ export default function Home() {
           password: formData.password,
           options: {
             data: {
-              full_name: formData.fullName,
+              full_name: fullName,
+              first_name: formData.firstName,
+              official_name: formData.firstName,
+              last_name: formData.lastName,
               identity_number: formData.idNumber,
               department: selectedDept, 
               role: effectiveRole,
+              can_dept_review: canDeptReview,
               branch_name: selectedRoleType === 'coordinator' ? formData.branch : null,
               phone: formData.phone,
               contact_email: formData.email,
@@ -263,20 +289,22 @@ export default function Home() {
           setLoading(false);
         } else {
           if (signUpData.session?.access_token) {
-            void fetch('/api/auth/notify-registration', {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${signUpData.session.access_token}`,
-              },
-              credentials: 'include',
-            }).catch(() => {});
+            try {
+              await fetch('/api/auth/notify-registration', {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${signUpData.session.access_token}`,
+                },
+                credentials: 'include',
+              });
+            } catch {
+              /* התראה לא קריטית לשמירת ההרשמה */
+            }
           }
+          await supabase.auth.signOut();
+          setLoading(false);
+          setView('login');
           showModal('success', 'ההרשמה נקלטה!', 'הפרטים נשלחו לאישור מנהל.\nתקבל הודעה כשהחשבון יאושר.');
-          setTimeout(() => {
-              setModal(prev => ({...prev, isOpen: false}));
-              setView('login');
-              setLoading(false);
-          }, 3000);
         }
     } catch (err) {
         console.error(err);
@@ -287,6 +315,8 @@ export default function Home() {
   // --- View: Landing (דף כניסה) ---
   if (view === 'landing') {
     return (
+      <>
+      {appModal}
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#F8F9FA] p-4 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-[#00BCD4] via-[#4CAF50] to-[#E91E63]"></div>
         
@@ -342,18 +372,18 @@ export default function Home() {
           <div className="mt-16 text-xs text-gray-300 font-medium">© ארגון נוער חב״ד</div>
         </main>
       </div>
+      </>
     );
   }
 
-  // --- View: Login ---
   // --- View: Login ---
   if (view === 'login') {
     return (
       // שינוי: במובייל מתחיל מלמעלה (justify-start pt-24), במחשב ממורכז (md:justify-center)
       <div className="min-h-screen bg-white flex flex-col items-center justify-start pt-24 md:justify-center md:pt-0 p-6 transition-all">
-        <Modal isOpen={modal.isOpen} onClose={() => setModal({...modal, isOpen: false})} type={modal.type} title={modal.title} message={modal.message} />
+        {appModal}
           
-        <button onClick={() => setView('landing')} className="absolute top-6 right-6 text-gray-400 hover:text-[#E91E63] transition-colors">
+        <button onClick={() => { setShowResetPassword(false); setView('landing'); }} className="absolute top-6 right-6 text-gray-400 hover:text-[#E91E63] transition-colors">
             <ArrowLeft size={24} className="rotate-180" />
         </button>
 
@@ -455,7 +485,7 @@ export default function Home() {
   if (view === 'reset_password') {
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-start pt-24 md:justify-center md:pt-0 p-6 transition-all">
-        <Modal isOpen={modal.isOpen} onClose={() => setModal({...modal, isOpen: false})} type={modal.type} title={modal.title} message={modal.message} />
+        {appModal}
 
         <button onClick={() => setView('login')} className="absolute top-6 right-6 text-gray-400 hover:text-brand-pink transition-colors">
           <ArrowLeft size={24} className="rotate-180" />
@@ -520,6 +550,8 @@ export default function Home() {
   // --- View: Dept Selection ---
   if (view === 'dept_selection') {
     return (
+      <>
+      {appModal}
       <div className="min-h-screen bg-[#F8F9FA] p-6 flex flex-col items-center">
         <header className="w-full max-w-md flex justify-between items-center mb-8 mt-4">
             <button onClick={() => setView('landing')} className="text-gray-400 hover:text-[#00BCD4]"><ArrowLeft className="rotate-180"/></button>
@@ -567,12 +599,15 @@ export default function Home() {
           </div>
         </main>
       </div>
+      </>
     );
   }
 
   // --- View: Role Selection ---
   if (view === 'role_selection') {
     return (
+      <>
+      {appModal}
       <div className="min-h-screen bg-[#F8F9FA] p-6 flex flex-col items-center">
         <header className="w-full max-w-md flex justify-between items-center mb-8 mt-4">
             <button onClick={() => setView('dept_selection')} className="text-gray-400 hover:text-[#00BCD4]"><ArrowLeft className="rotate-180"/></button>
@@ -608,6 +643,7 @@ export default function Home() {
           </div>
         </main>
       </div>
+      </>
     );
   }
 
@@ -616,11 +652,11 @@ export default function Home() {
     const isSafety = selectedRoleType === 'safety_admin';
 
     return (
+      <>
+      {appModal}
       <div className="min-h-screen bg-[#F8F9FA] p-6 flex flex-col items-center">
-        <Modal isOpen={modal.isOpen} onClose={() => setModal({...modal, isOpen: false})} type={modal.type} title={modal.title} message={modal.message} />
-        
         <header className="w-full max-w-md flex justify-between items-center mb-6 mt-4">
-            <button onClick={() => isSafety ? setView('dept_selection') : setView('role_selection')} className="text-gray-400 hover:text-[#00BCD4]"><ArrowLeft className="rotate-180"/></button>
+            <button onClick={() => { closeModal(); setView(isSafety ? 'dept_selection' : 'role_selection'); }} className="text-gray-400 hover:text-[#00BCD4]"><ArrowLeft className="rotate-180"/></button>
             <div className="text-xs font-bold text-gray-300">שלב 3 מתוך 3</div>
         </header>
 
@@ -648,10 +684,12 @@ export default function Home() {
                 <Input label="שם הסניף" name="branch" required onChange={handleInputChange} className="focus:!border-[#E91E63] focus:!ring-[#E91E63]/20" />
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Input label="שם מלא" name="fullName" required onChange={handleInputChange} className="focus:!border-[#E91E63] focus:!ring-[#E91E63]/20" />
-                <Input label="טלפון נייד" name="phone" type="tel" required onChange={handleInputChange} className="focus:!border-[#E91E63] focus:!ring-[#E91E63]/20" />
+              <div className="grid grid-cols-2 gap-4">
+                <Input label="שם פרטי" name="firstName" required onChange={handleInputChange} className="focus:!border-[#E91E63] focus:!ring-[#E91E63]/20" />
+                <Input label="שם משפחה" name="lastName" required onChange={handleInputChange} className="focus:!border-[#E91E63] focus:!ring-[#E91E63]/20" />
               </div>
+
+              <Input label="טלפון נייד" name="phone" type="tel" required onChange={handleInputChange} className="focus:!border-[#E91E63] focus:!ring-[#E91E63]/20" />
 
               <Input label="תעודת זהות" name="idNumber" required maxLength={9} onChange={handleInputChange} className="focus:!border-[#E91E63] focus:!ring-[#E91E63]/20" />
 
@@ -689,8 +727,8 @@ export default function Home() {
                     className="mt-1 h-4 w-4 accent-amber-500"
                   />
                   <div className="text-sm">
-                    <div className="font-bold text-amber-800">{getRoleLabel('dept_trips_officer')} במחלקה</div>
-                    <div className="text-amber-700">סימון זה ירשום אותך בתפקיד אישור ראשוני ל{getCoordinatorRoleTitle(selectedDept).replace(' סניף', '')}.</div>
+                    <div className="font-bold text-amber-800">הרשאת אישור ראשוני מחלקתי</div>
+                    <div className="text-amber-700">סימון זה יפעיל עבורך הרשאת אישור ראשוני ל{getCoordinatorRoleTitle(selectedDept).replace(' סניף', '')} (בנוסף לתפקיד צוות מטה).</div>
                   </div>
                 </label>
               )}
@@ -701,6 +739,7 @@ export default function Home() {
             </form>
         </main>
       </div>
+      </>
     );
   }
 

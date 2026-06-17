@@ -6,7 +6,7 @@ import { ManagerHeader } from "@/components/layout/ManagerHeader";
 import { Input } from "@/components/ui/Input";
 import { Loader2, Search, ClipboardList } from "lucide-react";
 import { useUser } from "@/hooks/useUser";
-import { getCoordinatorsPluralTitle, getDeptTripsOfficerTitle, isDeptTripsOfficer, isManagerUser } from "@/lib/auth";
+import { getCoordinatorsPluralTitle, getDeptTripsOfficerTitle, isDeptReviewOfficer } from "@/lib/auth";
 import type { TripRecord } from "@/lib/types";
 import { TripCard } from "@/components/TripCard";
 import {
@@ -56,9 +56,8 @@ export default function DeptReviewListPage() {
     if (userLoading) return;
     if (!user) return;
 
-    const isOfficer = isDeptTripsOfficer(user, profile);
-    const isManager = isManagerUser(user, profile);
-    if (!isOfficer && !isManager) {
+    const isOfficer = isDeptReviewOfficer(user, profile);
+    if (!isOfficer) {
       window.location.href = "/dashboard";
       return;
     }

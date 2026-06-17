@@ -1,0 +1,103 @@
+[
+  {
+    "id": "water_medic_escort",
+    "kind": "staff_role",
+    "title": "ליווי רפואי/חובש בפעילות מים",
+    "description": "פעילויות מים — לוודא נוכחות גורם רפואי מוסמך לפי דרישות החוזר והפעילות.",
+    "severity": "mandatory",
+    "activityKeys": ["attraction_water"],
+    "whenTags": ["water"],
+    "systemHints": { "staffRoleKey": "medic" },
+    "sources": [
+      { "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 5 + פרק ג'", "confidence": "direct" },
+      { "kind": "circular", "circularSiduri": 255, "confidence": "secondary" }
+    ]
+  },
+  {
+    "id": "height_certified_instructor",
+    "kind": "staff_role",
+    "title": "מדריך מוסמך לגובה/חבלים",
+    "description": "פארק חבלים / טיפוס — מדריך בעל הסמכה תקפה; יחס מדריך-חניכים לפי סוג הפעילות.",
+    "severity": "mandatory",
+    "activityKeys": ["attraction_height"],
+    "whenTags": ["height"],
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ב' מתחם חבלים", "confidence": "direct" }]
+  },
+  {
+    "id": "licensed_attraction_operator",
+    "kind": "license",
+    "title": "מפעיל/אתר מורשה",
+    "description": "אטרקציה עם רישוי — לוודא שהמתקן מופעל על ידי גוף מורשה, ביטוח ורישיון עסק.",
+    "severity": "mandatory",
+    "activityKeys": ["attraction_licensed", "attraction_water", "attraction_height", "hiking_jeeps"],
+    "whenTags": ["license_required"],
+    "systemHints": { "documentKey": "business-license-insurance" },
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 3", "confidence": "direct" }]
+  },
+  {
+    "id": "overnight_trip_leader_qualified",
+    "kind": "staff_role",
+    "title": "אחראי טיול מוסמך בלינה",
+    "description": "בלינה: אחראי הטיול חייב לעמוד בדרישות רכז טיולים/הכשרת אחראי טיול. בארגון: אחראי טיול + רכז/ת מתואמים.",
+    "severity": "mandatory",
+    "activityKeys": ["sleeping_building", "sleeping_field"],
+    "whenTags": ["sleeping"],
+    "systemHints": { "staffRoleKey": "trip_leader" },
+    "sources": [
+      { "kind": "circular", "circularSiduri": 585, "section": "פרק א' + חוזר 450", "confidence": "direct" },
+      { "kind": "external_guidance", "url": "https://www.mokedteva.co.il/InfoCenter/FAQ", "confidence": "secondary" }
+    ]
+  },
+  {
+    "id": "bus_escort",
+    "kind": "staff_role",
+    "title": "מלווה הסעה",
+    "description": "בנסיעה מאורגנת — מלווה הסעה בכל אוטובוס לפי נוהל ההסעות.",
+    "severity": "mandatory",
+    "activityKeys": ["transport_organized"],
+    "whenTags": ["transport"],
+    "systemHints": { "staffRoleKey": "bus_escort", "documentKey": "bus-participant-assignments" },
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "נוהל הסעות", "confidence": "direct" }]
+  },
+  {
+    "id": "night_activity_lighting",
+    "kind": "constraint",
+    "title": "תאורה ובטיחות בפעילות לילה",
+    "description": "פעילות לילה — תכנון מסלול, תאורה, לבוש בולט, תיאום מוקד טבע.",
+    "severity": "mandatory",
+    "activityKeys": ["transport_walk_night", "hiking_night"],
+    "whenTags": ["night"],
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" }]
+  },
+  {
+    "id": "field_sleeping_site_rules",
+    "kind": "constraint",
+    "title": "כללי מחנה ולינת שטח",
+    "description": "לינת שטח — מרחק בין קבוצות, סידור מחנה, אשפה, מרחק בטיחות (לפי הנחיות בתוקף).",
+    "severity": "mandatory",
+    "activityKeys": ["sleeping_field"],
+    "whenTags": ["sleeping", "outdoor"],
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" }]
+  },
+  {
+    "id": "student_briefing",
+    "kind": "procedure",
+    "title": "תדרוך חניכים לפני פעילות",
+    "description": "תדרוך בטיחות לחניכים — כללים, ציוד, התנהגות באתר/בשטח.",
+    "severity": "mandatory",
+    "activityKeys": ["attraction_licensed", "hiking_day", "hiking_night", "attraction_water", "attraction_height"],
+    "systemHints": { "documentKey": "student-briefing" },
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" }]
+  },
+  {
+    "id": "jeep_licensed_operator",
+    "kind": "license",
+    "title": "מפעיל מורשה לטיול ג'יפים",
+    "description": "טיול ג'יפים/שטח — רישוי עסק ומפעיל מוסמך.",
+    "severity": "mandatory",
+    "activityKeys": ["hiking_jeeps"],
+    "whenTags": ["license_required"],
+    "systemHints": { "documentKey": "business-license-insurance" },
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ב' סעיף 6", "confidence": "direct" }]
+  }
+]

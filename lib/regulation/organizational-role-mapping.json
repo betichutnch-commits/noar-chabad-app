@@ -1,0 +1,54 @@
+{
+  "description": "מיפוי מונחים בחוזר מנכ\"ל (מערכת חינוך פורמלית) לתפקידים בארגון נוער חב\"ד",
+  "mappings": [
+    {
+      "circularTerm": "מנהל המסגרת החינוכית",
+      "circularTermAliases": ["מנהל/ת המסגרת", "מנהל המסגרת", "מנהלת המסגרת"],
+      "organizationRole": "מזכירות הארגון",
+      "systemKey": "secretary_general",
+      "notes": "בחוזר: אחריות על אישור הפעילות, תכנון כללי ושליחת הנחיות להורים. אצלנו: מזכירות — לא מנהל מחלקה במשרד."
+    },
+    {
+      "circularTerm": "מורה",
+      "circularTermAliases": ["מורה לשל\"ח", "מורה מלווה", "איש צוות פדגוגי"],
+      "organizationRole": "רכז/ת סניף",
+      "systemKey": "branch_coordinator",
+      "notes": "בחוזר: מלווה פדגוגי של הקבוצה. אצלנו: רכז/ת הטיול והסניף — לא 'מורה' במובן בית-ספרי."
+    },
+    {
+      "circularTerm": "מדריך",
+      "circularTermAliases": ["מדריך טיולים", "מדריך/ה", "צוות מדריכים"],
+      "organizationRole": "צוות טיול / מדריך מוסמך",
+      "systemKey": "trip_guide",
+      "notes": "מדריך מקצועי לפי דרישות החוזר (הסמכות, יחסים). נפרד מרכז/ת."
+    },
+    {
+      "circularTerm": "אחראי טיול",
+      "circularTermAliases": ["אחראי הטיול", "אחראי טיול בשטח"],
+      "organizationRole": "אחראי טיול",
+      "systemKey": "trip_leader",
+      "notes": "תואם ל-trip_leader / אחראי טיול במערכת. בחינוך בלתי פורמלי: בוגר מעל 18."
+    },
+    {
+      "circularTerm": "אחראי תאום",
+      "circularTermAliases": ["אחראי התאום"],
+      "organizationRole": "רכז/ת או אחראי טיול (מגיש הבקשה למוקד טבע)",
+      "systemKey": "trip_coordination_submitter",
+      "notes": "מי שממלא ומגיש אישור למוקד טבע / לשכה לתיאום טיולים. לעיתים זהה לאחראי הטיול."
+    },
+    {
+      "circularTerm": "רכז טיולים",
+      "circularTermAliases": ["רכז הטיולים", "רכזת טיולים"],
+      "organizationRole": "רכז/ת טיולים (במערכת: רכז סניף + תכנון)",
+      "systemKey": "trips_coordinator",
+      "notes": "בלינה בחינוך פורמלי: אחראי טיול חייב להיות רכז טיולים או מורה של\"ח מוסמך. אצלנו לרוב רכז/ת + אחראי טיול."
+    },
+    {
+      "circularTerm": "הורה",
+      "circularTermAliases": ["הורים", "אישור הורים"],
+      "organizationRole": "הורה / אפוטרופוס",
+      "systemKey": "parent",
+      "notes": "אישורי השתתפות, הצהרות בריאות — כפי שנדרש בחוזר."
+    }
+  ]
+}

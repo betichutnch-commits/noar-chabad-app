@@ -41,6 +41,8 @@ export interface TripCardProps {
   showCoordinatorMeta?: boolean;
   showDepartmentTag?: boolean;
   alert?: TripCardAlert;
+  managerAssignmentLabel?: string;
+  managerInlineActions?: React.ReactNode;
 }
 
 /** מחלקת רקע לסרט סוג הטיול (גם לנקודת צבע בטבלה קומפקטית) */
@@ -99,6 +101,22 @@ const getMobileDateString = (startStr: string, endStr: string) => {
   return `${sDay}/${sMonth}/${sYear.toString().slice(-2)} - ${eDay}/${eMonth}/${eYear.toString().slice(-2)}`;
 };
 
+const getCountdownToTripLabel = (startStr: string) => {
+  if (!startStr) return null;
+  const tripDate = new Date(startStr);
+  if (Number.isNaN(tripDate.getTime())) return null;
+
+  const today = new Date();
+  const tripStartDay = new Date(tripDate.getFullYear(), tripDate.getMonth(), tripDate.getDate());
+  const todayDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const diffDays = Math.round((tripStartDay.getTime() - todayDay.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (diffDays > 1) return `עוד ${diffDays} ימים`;
+  if (diffDays === 1) return "מחר";
+  if (diffDays === 0) return "היום";
+  return `עברו ${Math.abs(diffDays)} ימים`;
+};
+
 const alertToneClasses = (tone: TripCardAlert["tone"]) =>
   tone === "red"
     ? "bg-red-50 text-red-800 border border-red-200"
@@ -113,6 +131,8 @@ export const TripCard = ({
   showCoordinatorMeta: showCoordinatorMetaProp,
   showDepartmentTag: showDepartmentTagProp,
   alert,
+  managerAssignmentLabel,
+  managerInlineActions,
 }: TripCardProps) => {
   const router = useRouter();
   const d = (trip.details || {}) as Record<string, unknown>;
@@ -132,12 +152,15 @@ export const TripCard = ({
   const detailTarget =
     isManagerView && manageHref
       ? manageHref
-      : `/dashboard/trip/${trip.id}`;
+      : trip.status === "approved" || trip.status === "approved_for_execution"
+        ? `/dashboard?planning=${trip.id}`
+        : `/dashboard/trip/${trip.id}`;
 
   const endDate = typeof d.endDate === "string" ? d.endDate : trip.start_date || "";
   const smartDate = getSmartDateDisplay(trip.start_date || "", endDate);
   const mobileDateString = getMobileDateString(trip.start_date || "", endDate);
   const dateRangeHeb = formatHebrewDateRange(trip.start_date || "", endDate);
+  const countdownLabel = getCountdownToTripLabel(trip.start_date || "");
 
   const deptLang = getDepartmentLanguage(trip.department);
   const participantsLabel =
@@ -191,7 +214,7 @@ export const TripCard = ({
   return (
     <div
       onClick={handleCardClick}
-      className={`bg-surface-card border border-border-subtle rounded-2xl md:rounded-l-2xl md:rounded-r-none shadow-sm hover:shadow-md transition-all relative overflow-hidden flex flex-col md:flex-row min-h-[140px] cursor-pointer
+      className={`bg-surface-card border border-border-subtle rounded-2xl md:rounded-l-2xl md:rounded-r-none shadow-sm hover:shadow-md transition-all relative ${isManagerView ? "overflow-visible" : "overflow-hidden"} flex flex-col md:flex-row min-h-[140px] cursor-pointer
             ${isDraft ? "border-dashed bg-gray-50/50" : ""}
             ${isPast || isCancelled ? "opacity-75 grayscale-[0.1]" : ""}
         `}
@@ -218,6 +241,11 @@ export const TripCard = ({
           <div className="text-left flex flex-col items-end gap-0.5 shrink-0">
             <span className="text-sm font-black text-gray-800 leading-none">{mobileDateString}</span>
             <span className="text-[10px] text-gray-400 font-bold">{dateRangeHeb}</span>
+            {countdownLabel ? (
+              <span className="text-[10px] text-brand-cyan font-black bg-cyan-50 border border-cyan-100 rounded-full px-2 py-0.5 mt-1">
+                {countdownLabel}
+              </span>
+            ) : null}
           </div>
         </div>
       </div>
@@ -248,15 +276,48 @@ export const TripCard = ({
           <div className="text-sm font-bold text-gray-500 dir-ltr mt-1">{smartDate.bottom}</div>
           <div className="w-8 h-[2px] bg-gray-100 mx-auto my-2 rounded-full"></div>
           <div className="text-[10px] text-gray-400 font-bold leading-tight px-1">{dateRangeHeb}</div>
+          {countdownLabel ? (
+            <div className="mt-2 text-[10px] font-black text-brand-cyan bg-cyan-50 border border-cyan-100 rounded-full px-2 py-0.5 inline-block">
+              {countdownLabel}
+            </div>
+          ) : null}
         </div>
       </div>
 
       {/* === גוף הכרטיס === */}
       <div className="flex-1 p-4 pb-2 md:p-4 flex flex-col justify-center min-w-0 overflow-hidden relative md:pt-10">
-        <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-3 mb-2 md:mb-4 mt-1 md:mt-0">
-          <h3 className="text-lg md:text-xl font-black text-gray-800 truncate leading-none" title={trip.name}>
-            {trip.name || "ללא שם"}
-          </h3>
+        <div className="flex flex-col gap-2 mb-2 md:mb-4 mt-1 md:mt-0">
+          <div className="w-full grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+            <h3
+              className="min-w-0 text-lg md:text-xl font-black text-gray-800 truncate leading-none"
+              data-tooltip={trip.name}
+            >
+              {trip.name || "ללא שם"}
+            </h3>
+            {isManagerView && (managerAssignmentLabel || managerInlineActions) ? (
+              <div
+                className="hidden md:flex items-center justify-self-end justify-end gap-2 shrink-0"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {managerAssignmentLabel ? (
+                  <span className="px-2 py-1 rounded-md bg-gray-50 border border-gray-200 text-[10px] font-bold text-gray-700 truncate max-w-[160px]">
+                    {managerAssignmentLabel}
+                  </span>
+                ) : null}
+                {managerInlineActions ? <div>{managerInlineActions}</div> : null}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    router.push(detailTarget);
+                  }}
+                  className="py-2 px-3 bg-white border border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1"
+                >
+                  <ArrowRight size={14} /> לפרטים
+                </button>
+              </div>
+            ) : null}
+          </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <span className="bg-gray-50 text-gray-600 px-2 py-0.5 rounded text-[10px] font-bold border border-gray-200 whitespace-nowrap">
@@ -323,14 +384,14 @@ export const TripCard = ({
                       <div className="pr-0.5">
                         <div
                           className="text-[10px] md:text-[11px] font-bold text-gray-800 leading-tight truncate"
-                          title={titleText}
+                          data-tooltip={titleText}
                         >
                           {titleText || "-"}
                         </div>
                         {subText ? (
                           <div
                             className="text-[9px] text-gray-500 truncate flex items-center gap-0.5 mt-0.5"
-                            title={subText}
+                            data-tooltip={subText}
                           >
                             <MapPin size={8} className="shrink-0" />
                             {subText}
@@ -352,17 +413,31 @@ export const TripCard = ({
       </div>
 
       {/* === כפתורים === */}
-      <div className="flex flex-row md:flex-col justify-end p-3 gap-2 w-full md:w-32 shrink-0 bg-surface-card border-t md:border-t-0 border-gray-100">
+      <div
+        className={`flex flex-row md:flex-col justify-end p-3 gap-2 w-full md:w-32 shrink-0 bg-surface-card border-t md:border-t-0 border-gray-100 ${
+          isManagerView ? "md:hidden" : ""
+        }`}
+      >
         {isManagerView ? (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              router.push(detailTarget);
-            }}
-            className="w-full py-2 bg-white border border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1"
-          >
-            <ArrowRight size={14} /> לפרטים
-          </button>
+          <>
+            {(managerAssignmentLabel || managerInlineActions) ? (
+              <div
+                className="md:hidden flex-1 flex items-center"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {managerInlineActions ? <div className="w-full">{managerInlineActions}</div> : null}
+              </div>
+            ) : null}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                router.push(detailTarget);
+              }}
+              className="flex-1 py-2 bg-white border border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1"
+            >
+              <ArrowRight size={14} /> לפרטים
+            </button>
+          </>
         ) : isDraft ? (
           <>
             <button
@@ -391,7 +466,11 @@ export const TripCard = ({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                router.push(`/dashboard/trip/${trip.id}`);
+                router.push(
+                  trip.status === "approved" || trip.status === "approved_for_execution"
+                    ? `/dashboard?planning=${trip.id}`
+                    : `/dashboard/trip/${trip.id}`,
+                );
               }}
               className="w-full py-2 bg-white border border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1"
             >

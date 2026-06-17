@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { Header } from '@/components/layout/Header'
 import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
+import { Tooltip } from '@/components/ui/Tooltip'
 import { 
   MapPin, AlertTriangle, Save, CheckCircle, FileUp, 
   Flag, ChevronDown, ChevronUp, Lock, Unlock, Check, Trash2, Loader2, Link as LinkIcon,
@@ -21,6 +22,20 @@ import { getHebrewDateString } from '@/lib/dateUtils'
 // ייבוא Hook ו-Zod
 import { useUser } from '@/hooks/useUser'
 import { tripGeneralSchema, tripLineSchema, staffSchema } from '@/lib/schemas'
+import {
+  detectSensitiveLocation,
+  evaluateRowRegulationBrief,
+  shouldShowRowRegulationBrief,
+  type RowRegulationBrief,
+} from '@/lib/regulation'
+import { SensitiveLocationDialog } from '@/components/plan/SensitiveLocationDialog'
+import { RowRegulationBriefDialog } from '@/components/plan/RowRegulationBriefDialog'
+import { RowRegulationBriefBadges } from '@/components/plan/RowRegulationBriefBadges'
+import {
+  clearNewTripFormSnapshot,
+  loadNewTripFormSnapshot,
+  saveNewTripFormSnapshot,
+} from '@/lib/newTripFormSession'
 
 type SecondaryStaffData = {
   name: string;
@@ -44,6 +59,10 @@ type TimelineLine = {
   finalLocation: string;
   otherDetail: string;
   details: string;
+  sensitiveLocation?: boolean;
+  sensitiveLocationLabel?: string;
+  regulationBrief?: RowRegulationBrief;
+  regulationBriefAcknowledged?: boolean;
   requiresLicense: boolean;
   licenseFile: UploadedFileRef;
   insuranceFile: UploadedFileRef;
@@ -111,7 +130,7 @@ function NewTripContent() {
       staffAges: [] as string[], 
       staffOther: '', 
       generalComments: '',
-      
+
       coordName: '',
       coordId: '',
       coordPhone: '',
@@ -129,10 +148,26 @@ function NewTripContent() {
   const [timeline, setTimeline] = useState<TimelineLine[]>([]);
   const [currentLine, setCurrentLine] = useState({ 
     date: '', locationType: 'custom', locationValue: '', category: '', subCategory: '', 
-    otherDetail: '', details: '', 
+    otherDetail: '', details: '',
+    sensitiveLocation: false,
+    sensitiveLocationLabel: '' as string,
     licenseFile: null as {url: string, name: string} | null,
     insuranceFile: null as {url: string, name: string} | null
   });
+  const [sensitiveDialog, setSensitiveDialog] = useState<{
+    matchedLabel?: string;
+    onConfirm: () => void;
+  } | null>(null);
+  const [regulationBriefDialog, setRegulationBriefDialog] = useState<{
+    brief: RowRegulationBrief;
+    sensitiveFlags: { sensitiveLocation: boolean; sensitiveLocationLabel: string };
+    onConfirm: () => void;
+  } | null>(null);
+
+  const getParticipantCount = useCallback(() => {
+    const n = Number(generalInfo.totalTravelers || generalInfo.chanichimCount || 0);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }, [generalInfo.totalTravelers, generalInfo.chanichimCount]);
 
   const [startHebrewDate, setStartHebrewDate] = useState('');
   const [endHebrewDate, setEndHebrewDate] = useState('');
@@ -185,43 +220,6 @@ function NewTripContent() {
         }
     }
   }, [user, userLoading, editId, buildCoordinatorDefaults]);
-
-  useEffect(() => {
-      const fetchTrip = async () => {
-          if (!editId) return;
-          setLoading(true);
-          const { data, error } = await supabase.from('trips').select('*').eq('id', editId).single();
-          if (data && !error) {
-              const d = data.details || {};
-              setGeneralInfo({
-                  name: data.name,
-                  tripType: d.tripType,
-                  tripTypeOther: d.tripTypeOther,
-                  startDate: data.start_date,
-                  startTime: d.startTime,
-                  endDate: d.endDate,
-                  endTime: d.endTime,
-                  gradeFrom: d.gradeFrom,
-                  gradeTo: d.gradeTo,
-                  chanichimCount: d.chanichimCount,
-                  totalTravelers: d.totalTravelers,
-                  staffAges: d.staffAges || [],
-                  staffOther: d.staffOther,
-                  generalComments: d.generalComments,
-                  coordName: d.coordName || '',
-                  coordId: d.coordId || '',
-                  coordPhone: d.coordPhone || '',
-                  coordEmail: d.coordEmail || '',
-                  coordDob: d.coordDob || '',
-                  secondaryStaffObj: d.secondaryStaffObj || null
-              });
-              setTimeline(d.timeline || []);
-              setStep(1); 
-          }
-          setLoading(false);
-      };
-      fetchTrip();
-  }, [editId]);
 
   useEffect(() => { 
     setStartHebrewDate(getHebrewDateString(generalInfo.startDate));
@@ -295,52 +293,292 @@ function NewTripContent() {
       setGeneralInfo(prev => ({ ...prev, secondaryStaffObj: null }));
   };
 
-  const handleAddLine = () => {
+  const promptSensitiveIfNeeded = (
+    locationValue: string,
+    otherDetail: string,
+    locationType: string,
+    alreadyMarked: boolean,
+    onAcknowledged: (label: string) => void,
+  ): boolean => {
+    const loc = locationType === 'branch' ? 'בסניף הקבוע' : locationValue;
+    const detection = detectSensitiveLocation(loc, otherDetail);
+    if (!detection.sensitive || alreadyMarked) return false;
+    setSensitiveDialog({
+      matchedLabel: detection.matchedLabel,
+      onConfirm: () => {
+        onAcknowledged(detection.matchedLabel || 'אזור רגיש');
+        setSensitiveDialog(null);
+      },
+    });
+    return true;
+  };
+
+  const finalizeAddLine = (
+    sensitiveFlags: { sensitiveLocation: boolean; sensitiveLocationLabel: string },
+    regulationBrief?: RowRegulationBrief,
+  ) => {
     const lineToValidate = {
-        date: currentLine.date,
-        category: currentLine.category,
-        subCategory: currentLine.subCategory,
-        locationValue: currentLine.locationType === 'branch' ? 'בסניף הקבוע' : currentLine.locationValue,
-        otherDetail: currentLine.otherDetail
+      date: currentLine.date,
+      category: currentLine.category,
+      subCategory: currentLine.subCategory,
+      locationValue: currentLine.locationType === 'branch' ? 'בסניף הקבוע' : currentLine.locationValue,
+      otherDetail: currentLine.otherDetail,
     };
 
     const validation = tripLineSchema.safeParse(lineToValidate);
     if (!validation.success) {
-        return showModal('error', 'חסרים פרטים בלו"ז', validation.error.issues[0].message);
+      return showModal('error', 'חסרים פרטים בלו"ז', validation.error.issues[0].message);
     }
 
     let nextDate = currentLine.date;
     let didDateChange = false;
 
     if (currentLine.category === 'sleeping') {
-        const calculatedNextDate = getNextDate(currentLine.date);
-        if (new Date(calculatedNextDate) > new Date(generalInfo.endDate)) {
-            return showModal('error', 'תאריך שגוי', `לא ניתן להוסיף לינה בתאריך זה.\nהטיול מוגדר להסתיים ב-${generalInfo.endDate.split('-').reverse().join('/')}.\nיש לעדכן את תאריכי הטיול בפרטים הכלליים למעלה.`);
-        }
-        nextDate = calculatedNextDate;
-        didDateChange = true;
+      const calculatedNextDate = getNextDate(currentLine.date);
+      if (new Date(calculatedNextDate) > new Date(generalInfo.endDate)) {
+        return showModal(
+          'error',
+          'תאריך שגוי',
+          `לא ניתן להוסיף לינה בתאריך זה.\nהטיול מוגדר להסתיים ב-${generalInfo.endDate.split('-').reverse().join('/')}.\nיש לעדכן את תאריכי הטיול בפרטים הכלליים למעלה.`,
+        );
+      }
+      nextDate = calculatedNextDate;
+      didDateChange = true;
     }
 
     const needsLicense = isLicenseRequired(currentLine.category, currentLine.subCategory);
-    
-    const newLine = {
+
+    const newLine: TimelineLine = {
       id: Math.random().toString(36).substr(2, 9),
       ...currentLine,
       finalLocation: currentLine.locationType === 'branch' ? 'בסניף הקבוע' : currentLine.locationValue,
       finalSubCategory: currentLine.subCategory === 'אחר' ? currentLine.otherDetail : currentLine.subCategory,
+      sensitiveLocation: sensitiveFlags.sensitiveLocation,
+      sensitiveLocationLabel: sensitiveFlags.sensitiveLocationLabel || undefined,
+      regulationBrief,
+      regulationBriefAcknowledged: Boolean(regulationBrief),
       requiresLicense: needsLicense,
       licenseFile: currentLine.licenseFile,
-      insuranceFile: currentLine.insuranceFile
+      insuranceFile: currentLine.insuranceFile,
     };
-    
+
     setTimeline([...timeline, newLine]);
     setExpandedItem(null);
     if (didDateChange) showModal('info', 'שימו לב', 'הוספת לינה: התאריך בשורה הבאה עודכן אוטומטית ליום המחרת.');
-    
-    setCurrentLine({ 
-        date: nextDate, locationType: 'custom', locationValue: '', category: '', subCategory: '', 
-        otherDetail: '', details: '', licenseFile: null, insuranceFile: null
+
+    setCurrentLine({
+      date: nextDate,
+      locationType: 'custom',
+      locationValue: '',
+      category: '',
+      subCategory: '',
+      otherDetail: '',
+      details: '',
+      sensitiveLocation: false,
+      sensitiveLocationLabel: '',
+      licenseFile: null,
+      insuranceFile: null,
     });
+  };
+
+  const proceedAfterSensitive = (
+    sensitiveFlags: { sensitiveLocation: boolean; sensitiveLocationLabel: string },
+  ) => {
+    const sub = currentLine.subCategory === 'אחר' ? currentLine.otherDetail : currentLine.subCategory;
+    const showBrief = shouldShowRowRegulationBrief(
+      generalInfo.tripType,
+      currentLine.category,
+      sub,
+      currentLine.locationType,
+    );
+    if (!showBrief) {
+      finalizeAddLine(sensitiveFlags);
+      return;
+    }
+    const brief = evaluateRowRegulationBrief({
+      planCategoryKey: currentLine.category,
+      planSubCategoryLabel: sub,
+      participantCount: getParticipantCount(),
+      gradeFrom: generalInfo.gradeFrom,
+      gradeTo: generalInfo.gradeTo,
+      sensitiveLocation: sensitiveFlags.sensitiveLocation,
+    });
+    setRegulationBriefDialog({
+      brief,
+      sensitiveFlags,
+      onConfirm: () => {
+        setRegulationBriefDialog(null);
+        finalizeAddLine(sensitiveFlags, brief);
+      },
+    });
+  };
+
+  const persistFormSnapshot = useCallback(
+    (pendingRegulation?: { sensitiveFlags: { sensitiveLocation: boolean; sensitiveLocationLabel: string }; brief: RowRegulationBrief } | null) => {
+      saveNewTripFormSnapshot({
+        step,
+        generalInfo,
+        timeline,
+        currentLine,
+        isRowsLocked,
+        expandedItem,
+        editId: editId || null,
+        pendingRegulation: pendingRegulation ?? (regulationBriefDialog
+          ? { sensitiveFlags: regulationBriefDialog.sensitiveFlags, brief: regulationBriefDialog.brief }
+          : null),
+      });
+    },
+    [step, generalInfo, timeline, currentLine, isRowsLocked, expandedItem, editId, regulationBriefDialog],
+  );
+
+  const handleRegulationLinkNavigate = async (href: string, external: boolean) => {
+    let draftId = editId;
+    if (generalInfo.tripType) {
+      try {
+        const savedId = await executeSubmission('draft');
+        if (savedId) draftId = savedId;
+      } catch {
+        /* snapshot still preserves wizard state */
+      }
+    }
+
+    persistFormSnapshot(
+      regulationBriefDialog
+        ? { sensitiveFlags: regulationBriefDialog.sensitiveFlags, brief: regulationBriefDialog.brief }
+        : null,
+    );
+
+    const returnPath = `/dashboard/new-trip${draftId ? `?id=${draftId}` : ''}`;
+
+    if (external) {
+      window.open(href, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    const separator = href.includes('?') ? '&' : '?';
+    router.push(`${href}${separator}returnUrl=${encodeURIComponent(returnPath)}`);
+  };
+
+  const restoreFormSnapshot = useCallback(() => {
+    const snap = loadNewTripFormSnapshot();
+    if (!snap) return false;
+    if (snap.editId && editId && snap.editId !== editId) return false;
+    if (Date.now() - snap.savedAt > 1000 * 60 * 60 * 4) {
+      clearNewTripFormSnapshot();
+      return false;
+    }
+
+    setStep(snap.step);
+    setGeneralInfo(snap.generalInfo as typeof generalInfo);
+    setTimeline(snap.timeline as TimelineLine[]);
+    setCurrentLine(snap.currentLine as typeof currentLine);
+    setIsRowsLocked(snap.isRowsLocked);
+    setExpandedItem(snap.expandedItem);
+
+    if (snap.pendingRegulation) {
+      const { sensitiveFlags, brief } = snap.pendingRegulation;
+      setRegulationBriefDialog({
+        brief,
+        sensitiveFlags,
+        onConfirm: () => {
+          setRegulationBriefDialog(null);
+          finalizeAddLine(sensitiveFlags, brief);
+        },
+      });
+    }
+
+    clearNewTripFormSnapshot();
+    return true;
+    // finalizeAddLine intentionally omitted — read from closure at restore time
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId]);
+
+  useEffect(() => {
+    const loadTrip = async () => {
+      if (!editId) {
+        if (!userLoading && user) restoreFormSnapshot();
+        return;
+      }
+      if (restoreFormSnapshot()) return;
+
+      setLoading(true);
+      const { data, error } = await supabase.from('trips').select('*').eq('id', editId).single();
+      if (data && !error) {
+        const d = data.details || {};
+        setGeneralInfo({
+          name: data.name,
+          tripType: d.tripType,
+          tripTypeOther: d.tripTypeOther,
+          startDate: data.start_date,
+          startTime: d.startTime,
+          endDate: d.endDate,
+          endTime: d.endTime,
+          gradeFrom: d.gradeFrom,
+          gradeTo: d.gradeTo,
+          chanichimCount: d.chanichimCount,
+          totalTravelers: d.totalTravelers,
+          staffAges: d.staffAges || [],
+          staffOther: d.staffOther,
+          generalComments: d.generalComments,
+          coordName: d.coordName || '',
+          coordId: d.coordId || '',
+          coordPhone: d.coordPhone || '',
+          coordEmail: d.coordEmail || '',
+          coordDob: d.coordDob || '',
+          secondaryStaffObj: d.secondaryStaffObj || null,
+        });
+        setTimeline(d.timeline || []);
+        setStep(1);
+      }
+      setLoading(false);
+    };
+    void loadTrip();
+  }, [editId, user, userLoading, restoreFormSnapshot]);
+
+  const handleAddLine = () => {
+    const loc = currentLine.locationType === 'branch' ? 'בסניף הקבוע' : currentLine.locationValue;
+    const detection = detectSensitiveLocation(loc, currentLine.otherDetail);
+    const sensitiveFlags = {
+      sensitiveLocation: currentLine.sensitiveLocation || detection.sensitive,
+      sensitiveLocationLabel: currentLine.sensitiveLocationLabel || detection.matchedLabel || '',
+    };
+    if (detection.sensitive && !currentLine.sensitiveLocation) {
+      const blocked = promptSensitiveIfNeeded(
+        currentLine.locationValue,
+        currentLine.otherDetail,
+        currentLine.locationType,
+        false,
+        (label) => proceedAfterSensitive({ sensitiveLocation: true, sensitiveLocationLabel: label }),
+      );
+      if (blocked) return;
+    }
+    proceedAfterSensitive(sensitiveFlags);
+  };
+
+  const handleDraftLocationBlur = () => {
+    setTimeout(() => setShowLocationSuggestions(false), 200);
+    promptSensitiveIfNeeded(
+      currentLine.locationValue,
+      currentLine.otherDetail,
+      currentLine.locationType,
+      currentLine.sensitiveLocation,
+      (label) => setCurrentLine((prev) => ({ ...prev, sensitiveLocation: true, sensitiveLocationLabel: label })),
+    );
+  };
+
+  const handleDraftLocationSelect = (locationValue: string, locationType: string) => {
+    const detection = detectSensitiveLocation(locationValue, currentLine.otherDetail);
+    setCurrentLine((prev) => ({
+      ...prev,
+      locationValue,
+      locationType,
+      ...(detection.sensitive ? {} : { sensitiveLocation: false, sensitiveLocationLabel: '' }),
+    }));
+    if (detection.sensitive) {
+      promptSensitiveIfNeeded(locationValue, currentLine.otherDetail, locationType, false, (label) =>
+        setCurrentLine((prev) => ({ ...prev, sensitiveLocation: true, sensitiveLocationLabel: label })),
+      );
+    }
   };
 
   const handleRemoveLine = (id: string, e: React.MouseEvent) => { e.stopPropagation(); setTimeline(timeline.filter(item => item.id !== id)); };
@@ -480,9 +718,10 @@ function NewTripContent() {
 
   const currentLineNeedsLicense = isLicenseRequired(currentLine.category, currentLine.subCategory);
   const currentLogic = TRIP_LOGIC[generalInfo.tripType] || TRIP_LOGIC['אחר'];
+  const isOutdoorTrip = generalInfo.tripType === 'טיול מחוץ לסניף';
 
   const getStaffTitle = (type: 'title' | 'additional') => {
-      const isTrip = generalInfo.tripType === 'טיול מחוץ לסניף';
+      const isTrip = isOutdoorTrip;
       const isFemale = userGender === 'female';
 
       if (type === 'title') {
@@ -750,6 +989,14 @@ function NewTripContent() {
                                         <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5"><MapPin size={12} className="text-[#E91E63]"/> {item.finalLocation}</div>
                                     </div>
                                     
+                                    <RowRegulationBriefBadges brief={item.regulationBrief} />
+                                    {item.sensitiveLocation && !item.regulationBrief?.sensitiveLocation ? (
+                                      <div className="text-xs px-3 py-1 rounded-full border items-center gap-1.5 font-bold flex w-fit bg-orange-50 text-orange-800 border-orange-200">
+                                        <AlertTriangle size={12} />
+                                        <span>אזור רגיש</span>
+                                      </div>
+                                    ) : null}
+                                    
                                     {item.requiresLicense && (
                                      <div className={`text-xs px-3 py-1 rounded-full border items-center gap-1.5 font-bold flex w-fit
                                         ${(item.licenseFile && item.insuranceFile) ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
@@ -823,8 +1070,18 @@ function NewTripContent() {
                                         value={currentLine.locationValue}
                                         readOnly={currentLine.locationType === 'branch'}
                                         onFocus={() => { if (currentLine.locationType !== 'branch') setShowLocationSuggestions(true); }}
-                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setCurrentLine({...currentLine, locationValue: e.target.value, locationType: 'custom'}); setShowLocationSuggestions(true); }}
-                                        onBlur={() => setTimeout(() => setShowLocationSuggestions(false), 200)}
+                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                          const locationValue = e.target.value;
+                                          const detection = detectSensitiveLocation(locationValue, currentLine.otherDetail);
+                                          setCurrentLine({
+                                            ...currentLine,
+                                            locationValue,
+                                            locationType: 'custom',
+                                            ...(detection.sensitive ? {} : { sensitiveLocation: false, sensitiveLocationLabel: '' }),
+                                          });
+                                          setShowLocationSuggestions(true);
+                                        }}
+                                        onBlur={handleDraftLocationBlur}
                                         className="focus:!border-[#E91E63] focus:!ring-0"
                                     />
                                     {currentLine.locationType === 'branch' && (
@@ -832,8 +1089,8 @@ function NewTripContent() {
                                     )}
                                     {showLocationSuggestions && currentLine.locationType !== 'branch' && (
                                         <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto">
-                                            <div className="p-2 text-xs font-bold text-brand-pink hover:bg-pink-50 cursor-pointer border-b border-gray-100 flex items-center gap-2" onClick={() => setCurrentLine({...currentLine, locationValue: 'בסניף הקבוע', locationType: 'branch'})}><Home size={14} />הסניף הקבוע</div>
-                                            {currentLine.locationValue.length >= 1 && ISRAEL_CITIES.filter(city => city.includes(currentLine.locationValue) && city !== currentLine.locationValue).map(city => (<div key={city} className="p-2 text-xs text-gray-700 hover:bg-gray-50 cursor-pointer border-b border-gray-50" onClick={() => setCurrentLine({...currentLine, locationValue: city, locationType: 'city'})}>{city}</div>))}
+                                            <div className="p-2 text-xs font-bold text-brand-pink hover:bg-pink-50 cursor-pointer border-b border-gray-100 flex items-center gap-2" onClick={() => handleDraftLocationSelect('בסניף הקבוע', 'branch')}><Home size={14} />הסניף הקבוע</div>
+                                            {currentLine.locationValue.length >= 1 && ISRAEL_CITIES.filter(city => city.includes(currentLine.locationValue) && city !== currentLine.locationValue).map(city => (<div key={city} className="p-2 text-xs text-gray-700 hover:bg-gray-50 cursor-pointer border-b border-gray-50" onClick={() => handleDraftLocationSelect(city, 'city')}>{city}</div>))}
                                         </div>
                                     )}
                                 </div>
@@ -869,7 +1126,15 @@ function NewTripContent() {
                                 <div className="md:col-span-4 flex gap-2 items-end w-full">
                                     {currentLine.subCategory === 'לינת מבנה' ? (
                                         <div className="flex-grow flex flex-col md:flex-row gap-2">
-                                            <div className="flex-1"><Input label="שם המקום/כתובת (חובה)" placeholder="שם המקום/כתובת" value={currentLine.otherDetail} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCurrentLine({...currentLine, otherDetail: e.target.value})} className="focus:!border-[#E91E63] focus:!ring-0" /></div>
+                                            <div className="flex-1"><Input label="שם המקום/כתובת (חובה)" placeholder="שם המקום/כתובת" value={currentLine.otherDetail} onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                              const otherDetail = e.target.value;
+                                              const detection = detectSensitiveLocation(currentLine.locationValue, otherDetail);
+                                              setCurrentLine({
+                                                ...currentLine,
+                                                otherDetail,
+                                                ...(detection.sensitive ? {} : { sensitiveLocation: false, sensitiveLocationLabel: '' }),
+                                              });
+                                            }} onBlur={() => promptSensitiveIfNeeded(currentLine.locationValue, currentLine.otherDetail, currentLine.locationType, currentLine.sensitiveLocation, (label) => setCurrentLine((prev) => ({ ...prev, sensitiveLocation: true, sensitiveLocationLabel: label })))} className="focus:!border-[#E91E63] focus:!ring-0" /></div>
                                             <div className="flex-1"><Input label="פרטים נוספים" placeholder="הערות..." value={currentLine.details} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCurrentLine({...currentLine, details: e.target.value})} className="focus:!border-[#E91E63] focus:!ring-0" /></div>
                                         </div>
                                     ) : (
@@ -879,10 +1144,12 @@ function NewTripContent() {
                                         </div>
                                     )}
                                     <div className="w-full md:w-auto mt-2 md:mt-0">
-                                        <button onClick={handleAddLine} className="bg-brand-green hover:bg-[#7CB342] text-white h-[52px] w-full md:w-[60px] rounded-lg flex items-center justify-center shadow-lg transition-all active:scale-95 flex-shrink-0 mb-[1px]" title="לאישור השורה ופתיחת שורה חדשה">
-                                            <Check size={28} strokeWidth={3} />
-                                            <span className="md:hidden mr-2 font-bold">הוסף שורה ללו״ז</span>
-                                        </button>
+                                        <Tooltip label="לאישור השורה ופתיחת שורה חדשה">
+                                            <button onClick={handleAddLine} className="bg-brand-green hover:bg-[#7CB342] text-white h-[52px] w-full md:w-[60px] rounded-lg flex items-center justify-center shadow-lg transition-all active:scale-95 flex-shrink-0 mb-[1px]" aria-label="לאישור השורה ופתיחת שורה חדשה">
+                                                <Check size={28} strokeWidth={3} />
+                                                <span className="md:hidden mr-2 font-bold">הוסף שורה ללו״ז</span>
+                                            </button>
+                                        </Tooltip>
                                     </div>
                                 </div>
                             </div>
@@ -959,9 +1226,11 @@ function NewTripContent() {
                                         </div>
                                     </div>
                                 </div>
-                                <button onClick={handleRemoveStaff} className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors" title="הסר אחראי">
-                                    <Trash2 size={18}/>
-                                </button>
+                                <Tooltip label="הסר אחראי">
+                                    <button onClick={handleRemoveStaff} className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors" aria-label="הסר אחראי">
+                                        <Trash2 size={18}/>
+                                    </button>
+                                </Tooltip>
                             </div>
                         ) : (
                             !showAddStaffForm ? (
@@ -1023,6 +1292,21 @@ function NewTripContent() {
             </>
         )}
       </div>
+      {sensitiveDialog ? (
+        <SensitiveLocationDialog
+          matchedLabel={sensitiveDialog.matchedLabel}
+          onConfirm={sensitiveDialog.onConfirm}
+          onClose={() => setSensitiveDialog(null)}
+        />
+      ) : null}
+      {regulationBriefDialog ? (
+        <RowRegulationBriefDialog
+          brief={regulationBriefDialog.brief}
+          onConfirm={regulationBriefDialog.onConfirm}
+          onClose={() => setRegulationBriefDialog(null)}
+          onNavigateLink={handleRegulationLinkNavigate}
+        />
+      ) : null}
       <style jsx>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } } .animate-fadeIn { animation: fadeIn 0.3s ease-out; }`}</style>
     </>
   )

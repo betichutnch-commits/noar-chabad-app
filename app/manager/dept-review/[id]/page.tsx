@@ -16,7 +16,7 @@ import { TripDetailsView } from '@/components/TripDetailsView'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { useUser } from '@/hooks/useUser'
-import { isDeptTripsOfficer, isManagerUser } from '@/lib/auth'
+import { isDeptReviewOfficer } from '@/lib/auth'
 import { getTripStatusConfig, normalizeTripStatus } from '@/lib/tripStatus'
 import type { AppProfile, TripRecord } from '@/lib/types'
 
@@ -76,10 +76,8 @@ export default function DeptReviewDetailPage({
   useEffect(() => {
     if (userLoading || !user) return
 
-    const isOfficer = isDeptTripsOfficer(user, profile)
-    const isManager = isManagerUser(user, profile)
-
-    if (profile && !isOfficer && !isManager) {
+    const isOfficer = isDeptReviewOfficer(user, profile)
+    if (profile && !isOfficer) {
       router.replace('/dashboard')
       return
     }
@@ -98,11 +96,7 @@ export default function DeptReviewDetailPage({
         return
       }
 
-      if (
-        isOfficer &&
-        !isManager &&
-        String(profile?.department || '').trim() !== String(tripData.department || '').trim()
-      ) {
+      if (String(profile?.department || '').trim() !== String(tripData.department || '').trim()) {
         router.replace('/manager/dept-review')
         return
       }
@@ -188,7 +182,7 @@ export default function DeptReviewDetailPage({
   const StatusIcon = status.icon
   const normalized = normalizeTripStatus(trip.status)
   const canTakeAction =
-    normalized === 'pending_dept_review' && isDeptTripsOfficer(user, profile)
+    normalized === 'pending_dept_review' && isDeptReviewOfficer(user, profile)
 
   return (
     <div className="min-h-screen bg-surface-base font-sans text-text-primary pb-32" dir="rtl">

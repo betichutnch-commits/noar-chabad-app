@@ -1,0 +1,16 @@
+{
+  "insuranceDeclaration": {
+    "title": "תצהיר ביטוח (נספח א')",
+    "description": "הצהרת המסגרת על כיסוי ביטוחי תקף לפעילות חוץ, כולל אחריות ונזקי גוף.",
+    "severity": "mandatory",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 6 + נספח א'", "confidence": "direct" }]
+  },
+  "incidentReporting": {
+    "title": "דיווח תאונות ואירועים",
+    "description": "דיווח מיידי למוקד טבע / משרד החינוך לפי חומרת האירוע; תיעוד במערכת הארגון.",
+    "severity": "mandatory",
+    "documentKey": "emergency-incident-report",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 6", "confidence": "direct" }]
+  },
+  "organizationalNote": "בארגון נוער: אישור מזכירות ותיאום רכז/ת — לא 'מנהל בית ספר' / 'מורה'."
+}

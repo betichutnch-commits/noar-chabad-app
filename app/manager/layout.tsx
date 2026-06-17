@@ -1,41 +1,24 @@
 "use client"
 
 import React, { useState, useEffect, useRef } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
 import { ManagerSidebar } from '@/components/layout/ManagerSidebar'; 
-import { Menu, Bell, UserPlus, X, Mail, Users, AlertTriangle } from 'lucide-react';
+import { Menu, Bell, UserPlus, X, Mail, Users } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useUser } from '@/hooks/useUser';
 import { useManagerInboxSummary } from '@/hooks/useManagerInboxSummary';
-import { isDeptTripsOfficer, isManagerUser, formatUserRoleLabel } from '@/lib/auth';
+import { formatUserRoleLabel } from '@/lib/auth';
 import { DEPARTMENTS_CONFIG } from '@/lib/constants';
-import { parseMessageSubject } from '@/lib/inbox';
 import { PushPermissionBanner } from '@/components/PushPermissionBanner';
+import { useUnreadNotifications } from '@/hooks/useUnreadNotifications';
 
 export default function ManagerLayout({ children }: { children: React.ReactNode }) {
-  const { user, profile, loading, roleChangedNotice, clearRoleChangedNotice } = useUser();
-  const pathname = usePathname();
-  const router = useRouter();
+  const { user, roleChangedNotice, clearRoleChangedNotice } = useUser();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const { counts, pendingUsersList: recentUsers, unreadMessagesList: recentMessages } = useManagerInboxSummary();
-
-  useEffect(() => {
-    if (loading || !user) return;
-    const isOfficer = isDeptTripsOfficer(user, profile);
-    const isManager = isManagerUser(user, profile);
-
-    if (isOfficer && !isManager) {
-      const allowedPrefixes = ['/manager/dept-review', '/manager/profile'];
-      const isAllowed = allowedPrefixes.some((p) => pathname?.startsWith(p));
-      if (!isAllowed) {
-        router.replace('/manager/dept-review');
-      }
-    }
-  }, [loading, user, profile, pathname, router]);
+  const { counts, pendingUsersList: recentUsers } = useManagerInboxSummary();
+  const { unreadNotifications, markRead, markAllRead } = useUnreadNotifications(user?.id);
   
-  const [activeBubble, setActiveBubble] = useState<'messages' | 'users' | null>(null);
-  const [clearingMessages, setClearingMessages] = useState(false);
+  const [activeBubble, setActiveBubble] = useState<'notifications' | 'users' | null>(null);
   const fabContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -50,7 +33,7 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
     };
   }, []);
 
-  const hasAnyAlerts = counts.newMessages > 0 || counts.newUsers > 0;
+  const hasAnyAlerts = unreadNotifications.length > 0 || counts.newUsers > 0;
 
   const normalizeDepartment = (department?: string) =>
     String(department || '').trim().replace(/״/g, '"').replace(/\s+/g, ' ');
@@ -66,21 +49,9 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
     return textClass || 'text-gray-500';
   };
 
-  const clearAllRecentMessages = async () => {
-    if (clearingMessages || recentMessages.length === 0) return;
-    setClearingMessages(true);
-    try {
-      await Promise.all(
-        recentMessages.map((m) =>
-          fetch(`/api/contact-messages/${m.id}/treated`, {
-            method: 'POST',
-            credentials: 'include',
-          }),
-        ),
-      );
-    } finally {
-      setClearingMessages(false);
-    }
+  const clearAllRecentNotifications = async () => {
+    if (unreadNotifications.length === 0) return;
+    await markAllRead();
   };
 
   return (
@@ -150,73 +121,56 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
       )}
       
       {/* FABs */}
-      {hasAnyAlerts && (
+      {(hasAnyAlerts || true) && (
         <div className="md:hidden fixed bottom-6 left-6 z-[60] flex flex-col gap-4 items-start" ref={fabContainerRef}>
             
-            {/* בועת הודעות */}
-            {counts.newMessages > 0 && (
-                <div className="relative">
-                    {activeBubble === 'messages' && (
+            {/* בועת התראות */}
+            <div className="relative">
+                    {activeBubble === 'notifications' && (
                         <div className="absolute bottom-16 left-0 w-72 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden animate-fadeIn origin-bottom-left z-20">
                             <div className="bg-brand-cyan p-3 flex justify-between items-center text-white">
-                                <span className="text-sm font-bold flex items-center gap-2"><Mail size={16}/> הודעות חדשות</span>
+                                <span className="text-sm font-bold flex items-center gap-2"><Mail size={16}/> התראות חדשות</span>
                                 <div className="flex items-center gap-3">
                                     <button
-                                      onClick={() => void clearAllRecentMessages()}
-                                      disabled={clearingMessages || recentMessages.length === 0}
+                                      onClick={() => void clearAllRecentNotifications()}
+                                      disabled={unreadNotifications.length === 0}
                                       className="text-[11px] font-bold border border-white/70 rounded-md px-2 py-1 hover:bg-white/10 disabled:opacity-60 disabled:hover:bg-transparent"
                                     >
-                                      {clearingMessages ? 'מסמן...' : 'סמן הכל כנקרא'}
+                                      סמן הכל כנקרא
                                     </button>
                                     <button onClick={() => setActiveBubble(null)}><X size={16}/></button>
                                 </div>
                             </div>
                             <div className="max-h-60 overflow-y-auto bg-gray-50/50">
-                                {recentMessages.map((m) => {
-                                    const details = m.displayDetails || { fullName: 'משתמש', mainRole: '', secondaryInfo: '' };
-                                    const parsedSubject = parseMessageSubject(String(m.subject || ''));
-                                    
-                                    return (
-                                        <Link key={m.id} href="/manager/inbox" onClick={() => setActiveBubble(null)} className="block p-3 border-b border-gray-100 bg-white hover:bg-cyan-50">
-                                            <div className="flex items-center gap-1.5 mb-1 text-[10px] min-w-0 overflow-hidden whitespace-nowrap">
-                                                <span className="font-black text-gray-800">{details.fullName}</span>
-                                                {details.secondaryInfo && (
-                                                    <>
-                                                        <span className="text-gray-300">|</span>
-                                                        <span className={`font-bold ${getDepartmentTextClass(details.secondaryInfo)}`}>{details.secondaryInfo}</span>
-                                                    </>
-                                                )}
-                                                
-                                                {details.mainRole && (
-                                                    <>
-                                                        <span className="text-gray-300">|</span>
-                                                        <span className="text-gray-500 font-medium">{details.mainRole}</span>
-                                                    </>
-                                                )}
-                                            </div>
-                                            
-                                            <div className="text-xs text-gray-500 truncate flex items-center gap-1.5 min-w-0">
-                                              <span className="truncate">{parsedSubject.cleanSubject}</span>
-                                              <span className={`shrink-0 inline-flex items-center justify-center w-4 h-4 rounded ${parsedSubject.type === 'bug' ? 'text-red-600 bg-red-50' : 'text-cyan-700 bg-cyan-50'}`}>
-                                                {parsedSubject.type === 'bug' ? <AlertTriangle size={10}/> : <Mail size={10}/>}
-                                              </span>
-                                            </div>
-                                        </Link>
-                                    );
-                                })}
+                                {unreadNotifications.length === 0 ? (
+                                  <div className="p-6 text-center text-gray-400 text-xs">אין התראות חדשות</div>
+                                ) : (
+                                  unreadNotifications.map((n) => (
+                                    <Link
+                                      key={n.id}
+                                      href={String(n.link || '/manager')}
+                                      onClick={() => {
+                                        setActiveBubble(null);
+                                        void markRead(n.id);
+                                      }}
+                                      className="block p-3 border-b border-gray-100 bg-white hover:bg-cyan-50"
+                                    >
+                                      <div className="text-xs text-gray-700 font-bold line-clamp-2">{n.title}</div>
+                                    </Link>
+                                  ))
+                                )}
                             </div>
-                            <Link href="/manager/inbox" className="block p-2 text-center text-xs font-bold text-brand-cyan bg-white border-t hover:bg-gray-50">לכל ההודעות</Link>
+                            <Link href="/dashboard/inbox" className="block p-2 text-center text-xs font-bold text-brand-cyan bg-white border-t hover:bg-gray-50">לכל ההתראות</Link>
                         </div>
                     )}
                     <button 
-                        onClick={() => setActiveBubble(activeBubble === 'messages' ? null : 'messages')}
-                        className={`w-12 h-12 rounded-2xl shadow-lg border flex items-center justify-center transition-all relative ${activeBubble === 'messages' ? 'bg-brand-cyan text-white border-brand-cyan' : 'bg-white text-gray-600 border-gray-200'}`}
+                        onClick={() => setActiveBubble(activeBubble === 'notifications' ? null : 'notifications')}
+                        className={`w-12 h-12 rounded-2xl shadow-lg border flex items-center justify-center transition-all relative ${activeBubble === 'notifications' ? 'bg-brand-cyan text-white border-brand-cyan' : 'bg-white text-gray-600 border-gray-200'}`}
                     >
-                        {activeBubble === 'messages' ? <X size={20}/> : <Bell size={20} />}
-                        {counts.newMessages > 0 && !activeBubble && <span className="absolute -top-1 -right-1 w-4 h-4 bg-brand-pink text-white text-[9px] font-bold rounded-full flex items-center justify-center border border-white animate-pulse">{counts.newMessages}</span>}
+                        {activeBubble === 'notifications' ? <X size={20}/> : <Bell size={20} />}
+                        {unreadNotifications.length > 0 && !activeBubble && <span className="absolute -top-1 -right-1 w-4 h-4 bg-brand-pink text-white text-[9px] font-bold rounded-full flex items-center justify-center border border-white animate-pulse">{unreadNotifications.length}</span>}
                     </button>
                 </div>
-            )}
 
             {/* בועת משתמשים */}
             {counts.newUsers > 0 && (
@@ -225,7 +179,16 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
                         <div className="absolute bottom-16 left-0 w-72 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden animate-fadeIn origin-bottom-left z-20">
                             <div className="bg-purple-600 p-3 flex justify-between items-center text-white">
                                 <span className="text-sm font-bold flex items-center gap-2"><Users size={16}/> נרשמים ממתינים</span>
-                                <button onClick={() => setActiveBubble(null)}><X size={16}/></button>
+                                <div className="flex items-center gap-3">
+                                    <button
+                                      onClick={() => void clearAllRecentNotifications()}
+                                      disabled={unreadNotifications.length === 0}
+                                      className="text-[11px] font-bold border border-white/70 rounded-md px-2 py-1 hover:bg-white/10 disabled:opacity-60 disabled:hover:bg-transparent"
+                                    >
+                                      סמן הכל כנקרא
+                                    </button>
+                                    <button onClick={() => setActiveBubble(null)}><X size={16}/></button>
+                                </div>
                             </div>
                             <div className="max-h-60 overflow-y-auto bg-gray-50/50">
                                 {recentUsers.map((u) => {

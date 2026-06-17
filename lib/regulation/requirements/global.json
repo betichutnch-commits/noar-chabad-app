@@ -1,0 +1,155 @@
+[
+  {
+    "id": "org_role_secretary_approval",
+    "kind": "approval",
+    "title": "אישור מזכירות (מנהל מסגרת בחוזר)",
+    "description": "בחוזר: מנהל המסגרת החינוכית מאשר את הפעילות. בארגון נוער: אישור מזכירות הארגון לפני ביצוע.",
+    "severity": "mandatory",
+    "systemHints": { "documentKey": "secretary-and-trip-coordinator-approval", "profileRole": "secretary_general" },
+    "sources": [
+      { "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" },
+      { "kind": "organization_policy", "confidence": "organization" }
+    ]
+  },
+  {
+    "id": "org_role_coordinator_planning",
+    "kind": "procedure",
+    "title": "תכנון על ידי רכז/ת (מורה בחוזר)",
+    "description": "בחוזר: המורה/צוות פדגוגי מכין ומלווה. בארגון: רכז/ת הסניף אחראי/ת על תכנון הטיול, רשימת משתתפים והיערכות.",
+    "severity": "mandatory",
+    "systemHints": { "profileRole": "branch_coordinator" },
+    "sources": [
+      { "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" },
+      { "kind": "organization_policy", "confidence": "organization" }
+    ]
+  },
+  {
+    "id": "trip_leader_assigned",
+    "kind": "staff_role",
+    "title": "מינוי אחראי טיול",
+    "description": "יש למנות אחראי טיול בשטח — בוגר מעל גיל 18 בחינוך בלתי פורמלי. באחריותו כל המלווים והבטיחות בשטח.",
+    "severity": "mandatory",
+    "systemHints": { "staffRoleKey": "trip_leader", "documentKey": "appendix-c-trip-leader-appointment" },
+    "sources": [
+      { "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" },
+      { "kind": "external_guidance", "url": "https://www.mokedteva.co.il/InfoCenter/FAQ", "confidence": "secondary" }
+    ]
+  },
+  {
+    "id": "parent_consent",
+    "kind": "document",
+    "title": "אישור הורים / הסכמת השתתפות",
+    "description": "אישור הורים לכל משתתף — כולל פרטי הפעילות, סיכונים והצהרות נדרשות.",
+    "severity": "mandatory",
+    "systemHints": { "documentKey": "participant-list" },
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" }]
+  },
+  {
+    "id": "risk_assessment",
+    "kind": "risk",
+    "title": "הערכת סיכונים וניהול סיכונים",
+    "description": "טבלת ניהול סיכונים לפי התרחשויות בלו״ז — גורמי סיכון, מניעה, אחראים.",
+    "severity": "mandatory",
+    "systemHints": { "documentKey": "risk-management" },
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" }]
+  },
+  {
+    "id": "staff_plan_approved",
+    "kind": "staff_minimum",
+    "title": "מצבת צוות מאושרת",
+    "description": "מינימום תפקידים לפי סוג הטיול — מאושר על ידי מנהל (מזכירות) ומאויש ברשימת הצוות.",
+    "severity": "mandatory",
+    "systemHints": { "documentKey": "staff-list" },
+    "sources": [
+      { "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" },
+      { "kind": "circular", "circularSiduri": 450, "section": "מצבת צוות", "confidence": "secondary" }
+    ]
+  },
+  {
+    "id": "business_license_venues",
+    "kind": "license",
+    "title": "רישוי עסק / תו סגול לאתרים",
+    "description": "בביקור באתרים (אטרקציות, מוזיאונים, פארקים) — לוודא רישיון עסק בתוקף ותו סגול כנדרש.",
+    "severity": "mandatory",
+    "whenTags": ["attraction", "license_required"],
+    "systemHints": { "documentKey": "business-license-insurance" },
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 3", "confidence": "direct" }]
+  },
+  {
+    "id": "staff_certifications",
+    "kind": "document",
+    "title": "תעודות הכשרה למלווים",
+    "description": "חובש, מאבטח, מלווה נשק, מדריך מוסמך — לפי דרישות סוג הפעילות.",
+    "severity": "conditional",
+    "whenTags": ["license_required", "height", "water"],
+    "systemHints": { "documentKey": "staff-certifications" },
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2 + פרקים ב'-ג'", "confidence": "direct" }]
+  },
+  {
+    "id": "emergency_procedure",
+    "kind": "procedure",
+    "title": "נהלי חירום ודיווח",
+    "description": "פרטי קשר חירום, דיווח למזכירות, רכז, חדר מצב וגורמי סיוע.",
+    "severity": "mandatory",
+    "systemHints": { "documentKey": "emergency-procedure" },
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" }]
+  },
+  {
+    "id": "moked_teva_coordination_open_field",
+    "kind": "coordination",
+    "title": "תיאום מוקד טבע — שטחים פתוחים",
+    "description": "יש להוציא אישור טיול כשהפעילות כוללת טיול בשטחים הפתוחים (יום או לילה). הגשה 10–14 ימים מראש.",
+    "severity": "conditional",
+    "whenTags": ["outdoor", "coordination_required"],
+    "systemHints": { "documentKey": "moked-teva-approval" },
+    "sources": [
+      { "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" },
+      { "kind": "external_guidance", "url": "https://www.mokedteva.co.il/InfoCenter/FAQ", "confidence": "secondary" }
+    ]
+  },
+  {
+    "id": "moked_teva_coordination_attractions",
+    "kind": "coordination",
+    "title": "תיאום מוקד טבע — אטרקציות",
+    "description": "כל אטרקציה לסוגיה — מחייבת אישור טיול / תיאום במערכת מוקד טבע.",
+    "severity": "conditional",
+    "whenTags": ["attraction", "coordination_required"],
+    "systemHints": { "documentKey": "moked-teva-approval" },
+    "sources": [
+      { "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" },
+      { "kind": "external_guidance", "url": "https://www.mokedteva.co.il/InfoCenter/FAQ", "confidence": "secondary" }
+    ]
+  },
+  {
+    "id": "moked_teva_coordination_overnight_field",
+    "kind": "coordination",
+    "title": "תיאום מוקד טבע — לינה/לילה בשטח",
+    "description": "טיול עם לינה או פעילות לילה בשטחים פתוחים — אישור טיול נדרש.",
+    "severity": "conditional",
+    "whenTags": ["sleeping", "night", "outdoor", "coordination_required"],
+    "systemHints": { "documentKey": "moked-teva-approval" },
+    "sources": [
+      { "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" },
+      { "kind": "external_guidance", "url": "https://www.mokedteva.co.il/InfoCenter/FAQ", "confidence": "secondary" }
+    ]
+  },
+  {
+    "id": "transport_ministry_guidelines",
+    "kind": "procedure",
+    "title": "נוהל הסעות משרד החינוך",
+    "description": "הסעות תלמידים/חניכים לפי נוהל הסעות בתוקף — מלווה הסעה, בדיקות אוטובוס.",
+    "severity": "conditional",
+    "whenTags": ["transport"],
+    "systemHints": { "documentKey": "bus-pre-departure-check" },
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "נוהל הסעות", "confidence": "direct" }]
+  },
+  {
+    "id": "participant_roster",
+    "kind": "document",
+    "title": "רשימת משתתפים מעודכנת",
+    "description": "רשימת חניכים וצוות — כולל פרטי קשר, רגישויות, שיבוצים.",
+    "severity": "mandatory",
+    "systemHints": { "documentKey": "participant-list" },
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" }]
+  }
+]

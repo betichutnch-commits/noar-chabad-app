@@ -1,6 +1,7 @@
 "use client";
 
 import { LayoutGrid, Rows3 } from "lucide-react";
+import { Tooltip } from "@/components/ui/Tooltip";
 
 export type TripsViewMode = "cards" | "table";
 
@@ -31,34 +32,36 @@ export function ViewModeToggle({ value, onChange, className = "" }: Props) {
       aria-label="מצב תצוגת רשימה"
       className={`inline-flex items-center gap-0.5 rounded-xl border border-border-subtle bg-surface-card p-0.5 shadow-sm ${className}`}
     >
-      <button
-        type="button"
-        onClick={() => onChange("cards")}
-        className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition-all ${
-          value === "cards"
-            ? "bg-gray-800 text-white shadow-sm"
-            : "text-gray-500 hover:bg-gray-50"
-        }`}
-        aria-pressed={value === "cards"}
-        title="כרטיסים"
-      >
-        <LayoutGrid size={16} aria-hidden />
-        כרטיסים
-      </button>
-      <button
-        type="button"
-        onClick={() => onChange("table")}
-        className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition-all ${
-          value === "table"
-            ? "bg-gray-800 text-white shadow-sm"
-            : "text-gray-500 hover:bg-gray-50"
-        }`}
-        aria-pressed={value === "table"}
-        title="תצוגה קומפקטית"
-      >
-        <Rows3 size={16} aria-hidden />
-        קומפקטי
-      </button>
+      <Tooltip label="כרטיסים">
+        <button
+          type="button"
+          onClick={() => onChange("cards")}
+          className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition-all ${
+            value === "cards"
+              ? "bg-gray-800 text-white shadow-sm"
+              : "text-gray-500 hover:bg-gray-50"
+          }`}
+          aria-pressed={value === "cards"}
+        >
+          <LayoutGrid size={16} aria-hidden />
+          כרטיסים
+        </button>
+      </Tooltip>
+      <Tooltip label="תצוגה קומפקטית">
+        <button
+          type="button"
+          onClick={() => onChange("table")}
+          className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition-all ${
+            value === "table"
+              ? "bg-gray-800 text-white shadow-sm"
+              : "text-gray-500 hover:bg-gray-50"
+          }`}
+          aria-pressed={value === "table"}
+        >
+          <Rows3 size={16} aria-hidden />
+          קומפקטי
+        </button>
+      </Tooltip>
     </div>
   );
 }

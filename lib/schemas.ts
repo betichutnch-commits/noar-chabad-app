@@ -19,7 +19,8 @@ export const loginSchema = z.object({
 
 export const registerSchema = z.object({
     branch: z.string().optional(), // אופציונלי כי לא רלוונטי למטה
-    fullName: requiredString("חובה להזין שם מלא"),
+    firstName: requiredString("חובה להזין שם פרטי"),
+    lastName: requiredString("חובה להזין שם משפחה"),
     phone: phoneValidator,
     idNumber: idValidator,
     email: z.string().email("כתובת אימייל לא תקינה"),

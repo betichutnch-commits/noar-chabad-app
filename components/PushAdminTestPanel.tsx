@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/Button'
-import { Loader2, Send } from 'lucide-react'
+import { ChevronDown, Loader2, Send } from 'lucide-react'
 import type { NotificationKind } from '@/lib/notifications/types'
 
 type SubRow = {
@@ -44,6 +44,63 @@ const TARGET_OPTIONS: Array<{ value: TestTarget; label: string }> = [
   { value: 'dept_trips_officers', label: 'אחראי/ות טיולי מחלקה שלי' },
   { value: 'all_managers', label: 'כל המנהלים (בטיחות + טכני)' },
 ]
+
+function StyledSelect<T extends string>({
+  value,
+  options,
+  onChange,
+}: {
+  value: T
+  options: Array<{ value: T; label: string }>
+  onChange: (next: T) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [rootEl, setRootEl] = useState<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    const onDocClick = (event: MouseEvent) => {
+      if (rootEl && !rootEl.contains(event.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [rootEl])
+
+  const active = options.find((o) => o.value === value)?.label || ''
+
+  return (
+    <div className="relative mt-1" ref={setRootEl}>
+      <button
+        type="button"
+        onClick={() => setOpen((p) => !p)}
+        className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-medium text-gray-800 inline-flex items-center justify-between"
+      >
+        <span className="truncate">{active}</span>
+        <ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open ? (
+        <div className="absolute top-full mt-1 right-0 z-[140] min-w-full rounded-xl border border-amber-100 bg-white shadow-xl overflow-hidden">
+          <div className="p-1.5 max-h-56 overflow-y-auto">
+            {options.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => {
+                  onChange(opt.value)
+                  setOpen(false)
+                }}
+                className={`w-full rounded-lg px-2.5 py-1.5 text-right text-xs font-bold transition-colors ${
+                  opt.value === value ? 'bg-amber-50 text-amber-800' : 'text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}
 
 export function PushAdminTestPanel({ enabled }: Props) {
   const [loading, setLoading] = useState(true)
@@ -150,32 +207,20 @@ export function PushAdminTestPanel({ enabled }: Props) {
       <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-2">
         <label className="text-xs font-bold text-amber-900">
           סוג טסט
-          <select
+          <StyledSelect
             value={kind}
-            onChange={(e) => setKind(e.target.value as NotificationKind)}
-            className="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-medium text-gray-800"
-          >
-            {TEST_KIND_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+            onChange={(next) => setKind(next)}
+            options={TEST_KIND_OPTIONS}
+          />
         </label>
 
         <label className="text-xs font-bold text-amber-900">
           יעד שליחה
-          <select
+          <StyledSelect
             value={target}
-            onChange={(e) => setTarget(e.target.value as TestTarget)}
-            className="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-medium text-gray-800"
-          >
-            {TARGET_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+            onChange={(next) => setTarget(next)}
+            options={TARGET_OPTIONS}
+          />
         </label>
       </div>
 
@@ -221,7 +266,7 @@ export function PushAdminTestPanel({ enabled }: Props) {
         <div className="mt-3 space-y-2 max-h-40 overflow-y-auto pr-1">
           {subs.map((s) => (
             <div key={s.id} className="rounded-xl bg-white border border-amber-100 px-3 py-2">
-              <div className="text-[11px] font-bold text-gray-800 truncate" title={s.endpoint}>
+              <div className="text-[11px] font-bold text-gray-800 truncate" data-tooltip={s.endpoint}>
                 {endpointPreview(s.endpoint)}
               </div>
               <div className="text-[10px] text-gray-500 mt-1 flex flex-wrap gap-x-3 gap-y-1">

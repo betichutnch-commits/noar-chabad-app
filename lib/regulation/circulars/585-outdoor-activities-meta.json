@@ -1,0 +1,35 @@
+{
+  "siduri": 585,
+  "title": "חוזר מנכ\"ל | פעילות חוץ כולל אטרקציות",
+  "subtitle": "הנחיות לקיום פעילות חוץ, אטרקציות ומתקנים במסגרות חינוך בלתי פורמלי (תנועות נוער, ארגוני נוער)",
+  "officialUrl": "https://apps.education.gov.il/Mankal/horaa.aspx?siduri=585",
+  "replacingInstruction": "0467",
+  "effectiveFrom": "2026-02-02",
+  "sourcePdfPath": "docs/regulation/source/chozer-585.pdf",
+  "targetAudience": [
+    "תנועות נוער",
+    "ארגוני נוער",
+    "מסגרות חינוך בלתי פורמלי",
+    "מתנ\"סים",
+    "יחידות נוער ברשות"
+  ],
+  "lastKnownUpdate": "2026-02",
+  "extractionStatus": "complete",
+  "extractionNotes": "פרק א' מורחב. מיפוי licensed-schedule-map ל-18 פעילויות בלו״ז. פרקים ב'-ג': 20 טבלאות בפרק ב' (כולל b.17.1 מתנפחים מכרטיס מידע + חוזר), 20 בפרק ג'. מקור מתנפחים: inflatables-guidance-youth.pdf.",
+  "relatedSiduri": [450, 255, 172, 201, 202, 203],
+  "primaryTopics": [
+    "הגדרת פעילות חוץ ואטרקציה",
+    "רישוי עסקים ואתרים (רישיון עסק, תו סגול)",
+    "תכנון מקדים והערכת סיכונים",
+    "אישור הורים והסכמות",
+    "צוות מלווה, רפואה ואבטחה",
+    "הסעות מאורגנות",
+    "פעילויות מים, גובה, אתגר",
+    "לינה ומחנאות",
+    "תיאום עם הלשכה לתיאום טיולים / מוקד טבע (כשחל)"
+  ],
+  "organizationalContext": {
+    "orgType": "youth_organization",
+    "roleMappingFile": "../organizational-role-mapping.json"
+  }
+}

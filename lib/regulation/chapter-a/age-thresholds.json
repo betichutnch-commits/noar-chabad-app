@@ -1,0 +1,100 @@
+[
+  {
+    "id": "age_general_min",
+    "notes": "גיל מינימום כללי לפעילות חוץ — לפי סוג פעילות בפרקים ב'-ג'.",
+    "minAge": 6,
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 4", "confidence": "direct" }]
+  },
+  {
+    "id": "age_height_ropes",
+    "activityKeys": ["attraction_height"],
+    "activityTypeId": "ropes_park",
+    "minAge": 8,
+    "notes": "פארק חבלים / גובה — גיל מינימום לפי מתקן ודרגת קושי.",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ב' מתחם חבלים", "confidence": "direct" }]
+  },
+  {
+    "id": "age_water_general",
+    "activityKeys": ["attraction_water"],
+    "minAge": 6,
+    "notes": "פעילות מים כללית — לפי הנחיות האתר.",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ג'", "confidence": "direct" }]
+  },
+  {
+    "id": "age_water_park",
+    "activityTypeId": "water_park",
+    "minAge": 6,
+    "maxAge": null,
+    "notes": "פארק מים — גיל מינימום לפי טבלת היערכות בפרק ג'.",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ג' פארק מים", "confidence": "direct" }]
+  },
+  {
+    "id": "age_pool",
+    "activityTypeId": "pool",
+    "minAge": 6,
+    "notes": "בריכה — לפי הנחיות המפעיל והחוזר.",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ג' בריכה", "confidence": "direct" }]
+  },
+  {
+    "id": "age_kayak",
+    "activityTypeId": "kayak_rafting",
+    "minAge": 10,
+    "notes": "קיאקים/רפטינג — גיל מינימום לפי מפעיל.",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ג' קיאקים", "confidence": "direct" }]
+  },
+  {
+    "id": "age_paintball",
+    "activityTypeId": "paintball",
+    "minAge": 12,
+    "notes": "פיינטבול / לייזר טאג — גיל מינימום לפי חוזר ומפעיל.",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ב' פיינטבול", "confidence": "direct" }]
+  },
+  {
+    "id": "age_karting",
+    "activityTypeId": "karting",
+    "minAge": 14,
+    "notes": "קארטינג — גיל מינימום לנהיגה במסלול מאורגן.",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ב' קארטינג", "confidence": "direct" }]
+  },
+  {
+    "id": "age_atv",
+    "activityTypeId": "jeeps_atv",
+    "minAge": 16,
+    "notes": "טרקטורונים/ג'יפים מאורגנים — לפי מפעיל ורישוי.",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ב' רכבי שטח", "confidence": "direct" }]
+  },
+  {
+    "id": "age_cycling",
+    "activityTypeId": "cycling",
+    "minAge": 10,
+    "notes": "אופניים מאורגנים — לפי מסלול ומפעיל.",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ב' אופניים", "confidence": "direct" }]
+  },
+  {
+    "id": "age_inflatables",
+    "activityTypeId": "inflatables",
+    "minAge": 6,
+    "notes": "מתנפחים — גובה וגיל לפי מתקן.",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ב' מתנפחים", "confidence": "direct" }]
+  },
+  {
+    "id": "age_amusement",
+    "activityTypeId": "amusement_park",
+    "minAge": 6,
+    "notes": "לונה פארק — לפי מתקן בודד.",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ב' לונה פארק", "confidence": "direct" }]
+  },
+  {
+    "id": "age_field_sleeping",
+    "activityKeys": ["sleeping_field"],
+    "minAge": 10,
+    "notes": "לינת שטח — לפי חוזר 450 ו-585.",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' + חוזר 450", "confidence": "direct" }]
+  },
+  {
+    "id": "age_trip_leader",
+    "notes": "אחראי טיול — בוגר מעל גיל 18 בחינוך בלתי פורמלי.",
+    "minAge": 18,
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "confidence": "direct" }, { "kind": "circular", "circularSiduri": 450, "confidence": "secondary" }]
+  }
+]

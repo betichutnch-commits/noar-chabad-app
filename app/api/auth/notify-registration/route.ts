@@ -37,8 +37,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Not a pending registration' }, { status: 403 })
   }
 
-  const fullName = String((user.user_metadata as Record<string, unknown>)?.full_name || 'משתמש חדש')
-  const department = String((user.user_metadata as Record<string, unknown>)?.department || '')
+  const meta = (user.user_metadata as Record<string, unknown>) || {}
+  const fullName =
+    String(meta.full_name || '').trim() ||
+    `${String(meta.first_name || meta.official_name || '').trim()} ${String(meta.last_name || '').trim()}`.trim() ||
+    'משתמש חדש'
+  const department = String(meta.department || '')
 
   await notifyUsers(
     { mode: 'safety_admins' },

@@ -4,6 +4,7 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import { MapPin } from "lucide-react";
 import { getTripStatusConfig } from "@/lib/tripStatus";
+import { formatHebrewDateRange } from "@/lib/dateUtils";
 import type { TripCardAlert, TripCardTripModel } from "@/components/TripCard";
 import { getTripTypeRibbonClass } from "@/components/TripCard";
 
@@ -14,9 +15,17 @@ type Props = {
   trips: TripCardTripModel[];
   detailHref: (tripId: string) => string;
   getAlert?: (trip: TripCardTripModel) => TripCardAlert | undefined;
+  getAssignmentLabel?: (trip: TripCardTripModel) => string;
+  renderAssignmentActions?: (trip: TripCardTripModel) => React.ReactNode;
 };
 
-export function ManagerTripsCompactTable({ trips, detailHref, getAlert }: Props) {
+export function ManagerTripsCompactTable({
+  trips,
+  detailHref,
+  getAlert,
+  getAssignmentLabel,
+  renderAssignmentActions,
+}: Props) {
   const router = useRouter();
 
   return (
@@ -31,7 +40,9 @@ export function ManagerTripsCompactTable({ trips, detailHref, getAlert }: Props)
               <th className="p-4">תאריכים</th>
               <th className="p-4">משתתפים</th>
               <th className="p-4">סטטוס</th>
+              <th className="p-4">שיוך</th>
               <th className="p-4">התראות</th>
+              <th className="p-4">פעולות</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
@@ -48,6 +59,10 @@ export function ManagerTripsCompactTable({ trips, detailHref, getAlert }: Props)
               const href = detailHref(trip.id);
               const firstLoc =
                 (d.timeline as Array<{ finalLocation?: string }> | undefined)?.[0]?.finalLocation;
+              const endDate = typeof d.endDate === "string" ? d.endDate : trip.start_date || "";
+              const dateRangeHeb =
+                formatHebrewDateRange(trip.start_date || "", endDate) ||
+                new Date(trip.start_date).toLocaleDateString("he-IL");
 
               return (
                 <tr
@@ -59,7 +74,7 @@ export function ManagerTripsCompactTable({ trips, detailHref, getAlert }: Props)
                     <div className="flex items-start gap-2">
                       <span
                         className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${getTripTypeRibbonClass(tripType)}`}
-                        title={tripType || "סוג"}
+                        data-tooltip={tripType || "סוג"}
                         aria-hidden
                       />
                       <div className="min-w-0">
@@ -81,11 +96,11 @@ export function ManagerTripsCompactTable({ trips, detailHref, getAlert }: Props)
                       </div>
                     </div>
                   </td>
-                  <td className="p-4 align-top text-gray-600 max-w-[10rem] truncate" title={trip.department || ""}>
+                  <td className="p-4 align-top text-gray-600 max-w-[10rem] truncate" data-tooltip={trip.department || ""}>
                     {trip.department || "—"}
                   </td>
                   <td className="p-4 align-top whitespace-nowrap text-gray-600">
-                    {new Date(trip.start_date).toLocaleDateString("he-IL")}
+                    {dateRangeHeb}
                   </td>
                   <td className="p-4 align-top text-gray-600 whitespace-nowrap">{travelers}</td>
                   <td className="p-4 align-top">
@@ -96,8 +111,19 @@ export function ManagerTripsCompactTable({ trips, detailHref, getAlert }: Props)
                       {status.text}
                     </span>
                   </td>
+                  <td className="p-4 align-top text-xs font-bold text-gray-700">
+                    {getAssignmentLabel ? getAssignmentLabel(trip) : "—"}
+                  </td>
                   <td className="p-4 align-top text-xs">
                     {alert ? <span className={alertCellClass(alert.tone)}>{alert.label}</span> : "—"}
+                  </td>
+                  <td
+                    className="p-4 align-top text-xs"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                    }}
+                  >
+                    {renderAssignmentActions ? renderAssignmentActions(trip) : "—"}
                   </td>
                 </tr>
               );

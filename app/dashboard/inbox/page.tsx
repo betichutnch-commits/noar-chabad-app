@@ -46,6 +46,7 @@ export default function InboxPage() {
     created_at?: string;
     message?: string;
     link?: string;
+    actions?: Array<{ label: string; url: string }> | null;
   };
   type SentMessageItem = {
     id: string;
@@ -115,7 +116,10 @@ export default function InboxPage() {
 
   const markAsRead = async (id: string) => {
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
-      await supabase.from('notifications').update({ is_read: true }).eq('id', id);
+      await fetch(`/api/notifications/${encodeURIComponent(id)}/read`, {
+        method: 'PATCH',
+        credentials: 'include',
+      }).catch(() => {});
   };
 
   const toggleExpand = (id: string, isRead: boolean = true) => {
@@ -306,11 +310,19 @@ export default function InboxPage() {
                               {isExpanded && (
                                 <div className="px-4 pb-6 pt-2 pl-12 border-t border-gray-100 animate-fadeIn">
                                   <p className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap">{note.message}</p>
-                                  {note.link && (
+                                  {note.actions?.length ? (
+                                    <div className="mt-4 flex flex-wrap gap-2">
+                                      {note.actions.map((action, idx) => (
+                                        <a key={idx} href={action.url} className="text-xs font-bold text-white bg-brand-cyan px-4 py-2 rounded-lg hover:bg-cyan-600 transition-colors">
+                                          {action.label}
+                                        </a>
+                                      ))}
+                                    </div>
+                                  ) : note.link ? (
                                     <div className="mt-4">
                                       <a href={note.link} className="text-xs font-bold text-white bg-brand-cyan px-4 py-2 rounded-lg hover:bg-cyan-600 transition-colors">לפרטים נוספים</a>
                                     </div>
-                                  )}
+                                  ) : null}
                                 </div>
                               )}
                             </div>
@@ -346,11 +358,19 @@ export default function InboxPage() {
                               <h3 className="text-xl font-black text-gray-800">{selectedIncoming.title || 'ללא כותרת'}</h3>
                               <div className="text-xs text-gray-400">{formatDate(selectedIncoming.created_at || '')}</div>
                               <div className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap">{selectedIncoming.message}</div>
-                              {selectedIncoming.link && (
+                              {selectedIncoming.actions?.length ? (
+                                <div className="flex flex-wrap gap-2">
+                                  {selectedIncoming.actions.map((action, idx) => (
+                                    <a key={idx} href={action.url} className="inline-block text-xs font-bold text-white bg-brand-cyan px-4 py-2 rounded-lg hover:bg-cyan-600 transition-colors">
+                                      {action.label}
+                                    </a>
+                                  ))}
+                                </div>
+                              ) : selectedIncoming.link ? (
                                 <a href={selectedIncoming.link} className="inline-block text-xs font-bold text-white bg-brand-cyan px-4 py-2 rounded-lg hover:bg-cyan-600 transition-colors">
                                   לפרטים נוספים
                                 </a>
-                              )}
+                              ) : null}
                             </div>
                           ) : (
                             <div className="h-full flex items-center justify-center text-gray-300 font-bold">בחר הודעה להצגה</div>

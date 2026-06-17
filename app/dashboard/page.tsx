@@ -4,20 +4,25 @@ import React, { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { Header } from '@/components/layout/Header'
 import { 
-  Loader2, Search, MapPin, ShieldAlert, Sun, Trash2, Calendar
+  Loader2, Search, MapPin, ShieldAlert, Sun, Trash2, Calendar, PlusCircle
 } from 'lucide-react'
 import { TripCard } from '@/components/TripCard' 
 import { formatHebrewDate } from '@/lib/dateUtils'
 import { MultiSelectFilter } from '@/components/ui/MultiSelectFilter'
 import { Modal } from '@/components/ui/Modal'
+import Link from 'next/link'
 
 // ייבוא Hook ו-Zod
 import { useUser } from '@/hooks/useUser'
 import { cancellationSchema } from '@/lib/schemas'
 import type { TripRecord } from '@/lib/types'
+import { useDeptReviewQueue } from '@/hooks/useDeptReviewQueue'
 
 export default function DashboardPage() {
-  const { user, loading: userLoading } = useUser('/');
+  const { user, profile, loading: userLoading } = useUser('/');
+  const { queueTrips, pendingCount, enabled: hasDeptReviewAccess } = useDeptReviewQueue(user);
+  const role = String(profile?.role || user?.user_metadata?.role || '').toLowerCase();
+  const canCreatePashash = role === 'coordinator' || role === 'dept_staff' || role === 'dept_trips_officer';
 
   const [tripsLoading, setTripsLoading] = useState(true);
   const [trips, setTrips] = useState<Array<TripRecord & { details?: Record<string, unknown>; cancellation_reason?: string }>>([]);
@@ -246,6 +251,46 @@ export default function DashboardPage() {
               <div className="hidden md:block h-full"><WeatherCard /></div>
           </div>
 
+          {hasDeptReviewAccess && (
+            <section className="bg-surface-card rounded-3xl border border-border-subtle shadow-sm p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="text-base font-black text-text-primary">טיולים ממתינים לבחינתך</h3>
+                  <p className="text-xs text-text-secondary mt-1">
+                    {pendingCount > 0 ? `${pendingCount} טיולים ממתינים כרגע` : 'אין כרגע טיולים ממתינים'}
+                  </p>
+                </div>
+                <Link href="/hq/dept-review" className="text-xs font-bold text-brand-cyan hover:underline">
+                  למסך המלא
+                </Link>
+              </div>
+
+              {pendingCount === 0 ? (
+                <div className="text-xs text-gray-400 py-3">מעולה, התור נקי כרגע.</div>
+              ) : (
+                <div className="space-y-2">
+                  {queueTrips.slice(0, 5).map((trip) => (
+                    <Link
+                      key={trip.id}
+                      href={`/hq/dept-review/${trip.id}`}
+                      className="flex items-center justify-between rounded-xl border border-gray-100 px-3 py-2 hover:bg-cyan-50 transition-colors"
+                    >
+                      <div className="min-w-0">
+                        <div className="text-sm font-bold text-gray-800 truncate">{trip.name}</div>
+                        <div className="text-[11px] text-gray-500 truncate">
+                          {trip.coordinator_name || 'רכז/ת לא ידוע/ה'} • {trip.branch || 'ללא סניף'}
+                        </div>
+                      </div>
+                      <span className="text-[11px] text-gray-500 shrink-0 mr-2">
+                        {formatHebrewDate(trip.start_date)}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
           <div className="space-y-4 pt-2">
               <div className="flex flex-col md:flex-row justify-between items-end gap-4">
                   <div className="flex gap-2 bg-surface-card p-1.5 rounded-2xl border border-border-subtle w-full md:w-auto overflow-x-auto no-scrollbar shadow-sm">
@@ -258,6 +303,15 @@ export default function DashboardPage() {
 
                   {/* תיקון: z-30 מבטיח שהתפריט יעלה על הכרטיסים, אבל השורה כולה תיכנס מתחת להיידר (z-50) */}
                   <div className="flex flex-col-reverse md:flex-row gap-2 w-full md:w-auto z-30">
+                      {canCreatePashash && (
+                        <Link
+                          href="/dashboard/new-trip"
+                          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-brand-cyan px-4 py-3 text-sm font-bold text-white hover:bg-cyan-600 transition-colors whitespace-nowrap"
+                        >
+                          <PlusCircle size={16} />
+                          בקשת פש״ש חדשה
+                        </Link>
+                      )}
                       <MultiSelectFilter 
                         options={filterOptions}
                         selected={selectedTypes}

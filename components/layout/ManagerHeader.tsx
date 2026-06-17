@@ -2,12 +2,13 @@
 
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { Bell, X, UserPlus, Users, Mail, AlertTriangle } from 'lucide-react';
+import { Bell, X, UserPlus, Users, Mail } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useManagerInboxSummary } from '@/hooks/useManagerInboxSummary';
 import { formatUserRoleLabel } from '@/lib/auth';
-import { parseMessageSubject } from '@/lib/inbox';
+import { useUnreadNotifications } from '@/hooks/useUnreadNotifications';
+import { resolveDisplayName } from '@/lib/userDisplay';
 
 export const ManagerHeader = ({ title }: { title: string }) => {
   // אתחול עם ערכים דיפולטיביים
@@ -17,36 +18,31 @@ export const ManagerHeader = ({ title }: { title: string }) => {
     is_tech_admin?: boolean;
     role_label: string;
   }>({ full_name: 'מנהל מערכת', avatar_url: null, role_label: 'מחלקת בטיחות ומפעלים' });
-  const { counts, pendingUsersList, unreadMessagesList } = useManagerInboxSummary();
+  const { counts, pendingUsersList } = useManagerInboxSummary();
+  // Note: hook needs user id; fetched below via effect.
+  const [authUserId, setAuthUserId] = useState<string | undefined>(undefined);
+  const { unreadNotifications, markRead, markAllRead } = useUnreadNotifications(authUserId);
   
   const [isBellOpen, setIsBellOpen] = useState(false);
   const [isUsersOpen, setIsUsersOpen] = useState(false);
-  const [clearingMessages, setClearingMessages] = useState(false);
-
-  const clearAllUnreadMessages = async () => {
-    if (clearingMessages || unreadMessagesList.length === 0) return;
-    setClearingMessages(true);
-    try {
-      await Promise.all(
-        unreadMessagesList.map((m) =>
-          fetch(`/api/contact-messages/${m.id}/treated`, {
-            method: 'POST',
-            credentials: 'include',
-          }),
-        ),
-      );
-    } finally {
-      setClearingMessages(false);
-    }
-  };
 
   useEffect(() => {
     const initManagerProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      setAuthUserId(user.id);
       const meta = user.user_metadata || {};
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id, full_name, official_name, last_name')
+        .eq('id', user.id)
+        .single();
       setManagerProfile({
-        full_name: meta.full_name || meta.official_name || meta.name || 'מנהל מערכת',
+        full_name: resolveDisplayName({
+          meta: meta as Record<string, unknown>,
+          profile: (profile || null) as Record<string, unknown> | null,
+          fallback: 'מנהל מערכת',
+        }),
         avatar_url: meta.avatar_url,
         is_tech_admin: meta.role === 'admin' || meta.role === 'safety_admin',
         role_label: formatUserRoleLabel({
@@ -76,7 +72,17 @@ export const ManagerHeader = ({ title }: { title: string }) => {
                     <div className="absolute top-full left-0 mt-4 bg-white rounded-2xl shadow-2xl border border-gray-100 w-80 overflow-hidden animate-fadeIn z-[100]">
                         <div className="bg-purple-600 p-3 flex justify-between items-center text-white">
                             <span className="text-sm font-bold flex items-center gap-2"><Users size={16}/> נרשמים ממתינים</span>
-                            <button onClick={() => setIsUsersOpen(false)} aria-label="סגירת חלון משתמשים"><X size={16}/></button>
+                            <div className="flex items-center gap-3">
+                                <button
+                                  aria-label="סמן הכל כנקרא"
+                                  onClick={() => void markAllRead()}
+                                  disabled={unreadNotifications.length === 0}
+                                  className="text-[11px] font-bold border border-white/70 rounded-md px-2 py-1 hover:bg-white/10 disabled:opacity-60 disabled:hover:bg-transparent"
+                                >
+                                  סמן הכל כנקרא
+                                </button>
+                                <button onClick={() => setIsUsersOpen(false)} aria-label="סגירת חלון משתמשים"><X size={16}/></button>
+                            </div>
                         </div>
                         <div className="max-h-60 overflow-y-auto">
                             {pendingUsersList.length === 0 ? (
@@ -84,7 +90,12 @@ export const ManagerHeader = ({ title }: { title: string }) => {
                             ) : (
                                 pendingUsersList.map((u) => (
                                     <Link key={u.id} href="/manager/users" onClick={() => setIsUsersOpen(false)} className="block p-3 border-b border-gray-50 hover:bg-purple-50 transition-colors">
-                                        <div className="font-bold text-gray-800 text-sm">{u.raw_user_meta_data?.full_name}</div>
+                                        <div className="font-bold text-gray-800 text-sm">
+                                          {resolveDisplayName({
+                                            meta: (u.raw_user_meta_data || {}) as Record<string, unknown>,
+                                            fallback: 'משתמש',
+                                          })}
+                                        </div>
                                         <div className="text-xs text-gray-500">{u.raw_user_meta_data?.department || 'ללא מחלקה'}</div>
                                     </Link>
                                 ))
@@ -99,7 +110,7 @@ export const ManagerHeader = ({ title }: { title: string }) => {
             <div className="relative">
                 <button aria-label="פתיחת הודעות חדשות" onClick={() => { setIsBellOpen(!isBellOpen); setIsUsersOpen(false); }} className="text-text-muted hover:text-brand-cyan transition-colors relative p-3 bg-surface-card rounded-2xl shadow-sm border border-border-subtle hover:border-brand-cyan group">
                     <Bell size={22} className="group-hover:rotate-12 transition-transform" />
-                    {counts.newMessages > 0 && <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-brand-pink rounded-full border-2 border-white animate-pulse"></span>}
+                    {unreadNotifications.length > 0 && <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-brand-pink rounded-full border-2 border-white animate-pulse"></span>}
                 </button>
                 {isBellOpen && (
                     <div className="absolute top-full left-0 mt-4 bg-white rounded-2xl shadow-2xl border border-gray-100 w-[450px] overflow-hidden animate-fadeIn z-[100]">
@@ -107,60 +118,39 @@ export const ManagerHeader = ({ title }: { title: string }) => {
                             <span className="text-sm font-bold">הודעות חדשות</span>
                             <div className="flex items-center gap-3">
                                 <button
-                                  aria-label="מחיקת כל ההודעות החדשות"
-                                  onClick={() => void clearAllUnreadMessages()}
-                                  disabled={clearingMessages || unreadMessagesList.length === 0}
+                                  aria-label="סמן הכל כנקרא"
+                                  onClick={() => void markAllRead()}
+                                  disabled={unreadNotifications.length === 0}
                                   className="text-[11px] font-bold border border-white/70 rounded-md px-2 py-1 hover:bg-white/10 disabled:opacity-60 disabled:hover:bg-transparent"
                                 >
-                                  {clearingMessages ? 'מסמן...' : 'סמן הכל כנקרא'}
+                                  סמן הכל כנקרא
                                 </button>
                                 <button aria-label="סגירת חלון הודעות" onClick={() => setIsBellOpen(false)}><X size={16}/></button>
                             </div>
                         </div>
                         <div className="max-h-60 overflow-y-auto">
-                            {unreadMessagesList.length === 0 ? (
+                            {unreadNotifications.length === 0 ? (
                                 <div className="p-4 text-center text-gray-400 text-xs">אין הודעות חדשות</div>
                             ) : (
-                                unreadMessagesList.map((m) => {
-                                    // חילוץ בטוח עם ערכי ברירת מחדל
-                                    const { fullName, mainRole, secondaryInfo } = m.displayDetails || { fullName: 'משתמש', mainRole: '', secondaryInfo: '' };
-                                    const parsedSubject = parseMessageSubject(String(m.subject || ''));
-                                    
-                                    return (
-                                        <Link key={m.id} href="/manager/inbox" onClick={() => setIsBellOpen(false)} className="block p-3 border-b border-gray-50 hover:bg-cyan-50 transition-colors group">
-                                            <div className="flex items-center text-xs mb-1 gap-1.5 min-w-0 overflow-hidden whitespace-nowrap">
-                                                {/* שם מלא */}
-                                                <span className="font-bold text-gray-900">{fullName}</span>
-
-                                                {/* מפריד + מחלקה (אם יש) */}
-                                                {secondaryInfo && (
-                                                    <>
-                                                        <span className="text-gray-300">|</span>
-                                                        <span className="text-brand-cyan font-bold">{secondaryInfo}</span>
-                                                    </>
-                                                )}
-
-                                                {/* מפריד + תפקיד וסניף (אם יש) */}
-                                                {mainRole && (
-                                                    <>
-                                                        <span className="text-gray-300">|</span>
-                                                        <span className="text-gray-600 font-medium">{mainRole}</span>
-                                                    </>
-                                                )}
-                                            </div>
-                                            <div className="flex gap-2 text-xs text-gray-500 items-center min-w-0">
-                                                <Mail size={12} className="text-brand-cyan mt-0.5 shrink-0"/>
-                                                <span className="line-clamp-1">{parsedSubject.cleanSubject}</span>
-                                                <span className={`shrink-0 inline-flex items-center justify-center w-4 h-4 rounded ${parsedSubject.type === 'bug' ? 'text-red-600 bg-red-50' : 'text-cyan-700 bg-cyan-50'}`}>
-                                                  {parsedSubject.type === 'bug' ? <AlertTriangle size={10}/> : <Mail size={10}/>}
-                                                </span>
-                                            </div>
-                                        </Link>
-                                    );
-                                })
+                                unreadNotifications.map((n) => (
+                                  <Link
+                                    key={n.id}
+                                    href={String(n.link || '/manager')}
+                                    onClick={() => {
+                                      setIsBellOpen(false);
+                                      void markRead(n.id);
+                                    }}
+                                    className="block p-3 border-b border-gray-50 hover:bg-cyan-50 transition-colors group"
+                                  >
+                                    <div className="flex gap-2 text-xs text-gray-500 items-center min-w-0">
+                                      <Mail size={12} className="text-brand-cyan mt-0.5 shrink-0"/>
+                                      <span className="line-clamp-2 font-bold text-gray-800">{n.title}</span>
+                                    </div>
+                                  </Link>
+                                ))
                             )}
                         </div>
-                        <Link href="/manager/inbox" className="block p-2 text-center text-xs font-bold text-brand-cyan bg-gray-50 hover:underline">לכל ההודעות</Link>
+                        <Link href="/dashboard/inbox" className="block p-2 text-center text-xs font-bold text-brand-cyan bg-gray-50 hover:underline">לכל ההודעות</Link>
                     </div>
                 )}
             </div>

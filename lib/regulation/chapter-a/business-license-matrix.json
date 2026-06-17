@@ -1,0 +1,108 @@
+[
+  {
+    "activityTypeId": "water_park",
+    "label": "פארק מים",
+    "requiresBusinessLicense": true,
+    "requiresOtherPermit": true,
+    "notes": "רישיון עסק + תו סגול לפי דרישת האתר",
+    "circularSectionId": "g.5",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ג' פארק מים + טבלת רישוי עמ' 12–13", "confidence": "direct" }]
+  },
+  {
+    "activityTypeId": "pool",
+    "label": "בריכה / מתחם שחייה",
+    "requiresBusinessLicense": true,
+    "requiresOtherPermit": true,
+    "circularSectionId": "g.3",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ג' בריכה", "confidence": "direct" }]
+  },
+  {
+    "activityTypeId": "kayak_rafting",
+    "label": "קיאקים / רפטינג / שייט",
+    "requiresBusinessLicense": true,
+    "requiresOtherPermit": true,
+    "notes": "מפעיל מורשה, ציוד תקני, ביטוח",
+    "circularSectionId": "g.6",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ג' שייט וקיאקים", "confidence": "direct" }]
+  },
+  {
+    "activityTypeId": "sailing",
+    "label": "שייט / שייט טורנדו",
+    "requiresBusinessLicense": true,
+    "requiresOtherPermit": true,
+    "circularSectionId": "g.4",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ג' שייט", "confidence": "direct" }]
+  },
+  {
+    "activityTypeId": "surf_sup",
+    "label": "גלישה / סאפ",
+    "requiresBusinessLicense": true,
+    "requiresOtherPermit": true,
+    "circularSectionId": "g.7",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ג' גלישה", "confidence": "direct" }]
+  },
+  {
+    "activityTypeId": "inflatables",
+    "label": "מתקנים מתנפחים / איי ג'אמפ",
+    "requiresBusinessLicense": true,
+    "notes": "בדיקת תקינות מתקן ומפעיל מוסמך",
+    "circularSectionId": "b.8",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ב' מתנפחים", "confidence": "direct" }]
+  },
+  {
+    "activityTypeId": "karting",
+    "label": "קארטינג",
+    "requiresBusinessLicense": true,
+    "circularSectionId": "b.12",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ב' קארטינג", "confidence": "direct" }]
+  },
+  {
+    "activityTypeId": "ropes_park",
+    "label": "פארק חבלים / קיר טיפוס",
+    "requiresBusinessLicense": true,
+    "requiresOtherPermit": true,
+    "notes": "מדריכים מוסמכים + רישוי מתקן",
+    "circularSectionId": "b.3",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ב' מתחם חבלים", "confidence": "direct" }]
+  },
+  {
+    "activityTypeId": "paintball",
+    "label": "פיינטבול / לייזר טאג",
+    "requiresBusinessLicense": true,
+    "circularSectionId": "b.10",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ב' פיינטבול", "confidence": "direct" }]
+  },
+  {
+    "activityTypeId": "jeeps_atv",
+    "label": "ג'יפים / טרקטורונים / טיול ג'יפים",
+    "requiresBusinessLicense": true,
+    "requiresOtherPermit": true,
+    "circularSectionId": "b.6",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ב' רכבי שטח", "confidence": "direct" }]
+  },
+  {
+    "activityTypeId": "cycling",
+    "label": "אופניים / רכיבה מאורגנת",
+    "requiresBusinessLicense": true,
+    "requiresOtherPermit": true,
+    "circularSectionId": "b.5",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ב' אופניים", "confidence": "direct" }]
+  },
+  {
+    "activityTypeId": "amusement_park",
+    "label": "לונה פארק / מתקני שעשועים",
+    "requiresBusinessLicense": true,
+    "requiresOtherPermit": true,
+    "circularSectionId": "b.11",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ב' לונה פארק", "confidence": "direct" }]
+  },
+  {
+    "activityTypeId": "field_sleeping",
+    "label": "לינת שטח",
+    "requiresBusinessLicense": false,
+    "requiresOtherPermit": true,
+    "notes": "תיאום מוקד טבע — לא רישיון עסק אלא אישור תיאום",
+    "circularSectionId": "a.2",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" }]
+  }
+]

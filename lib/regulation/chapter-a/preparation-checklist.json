@@ -1,0 +1,135 @@
+[
+  {
+    "id": "prep_activity_file",
+    "topic": "תיק פעילות",
+    "description": "תכנית מפורטת, לו״ז, רשימת משתתפים, הערכת סיכונים ומסמכי תכנון — לפי דרישות החוזר והארגון.",
+    "severity": "mandatory",
+    "documentKey": "risk-management",
+    "requirementKind": "document",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" }]
+  },
+  {
+    "id": "prep_schedule_safety",
+    "topic": "לו״ז ודגשי בטיחות",
+    "description": "לו״ז מפורט עם התרחשויות, מיקומים, דגשי בטיחות וחלופות.",
+    "severity": "mandatory",
+    "documentKey": "schedule-safety-highlights",
+    "requirementKind": "document",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" }]
+  },
+  {
+    "id": "prep_secretary_approval",
+    "topic": "אישור מזכירות",
+    "description": "אישור מנהל מסגרת בחוזר — בארגון: אישור מזכירות לפני ביצוע.",
+    "severity": "mandatory",
+    "documentKey": "secretary-and-trip-coordinator-approval",
+    "requirementKind": "approval",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" }]
+  },
+  {
+    "id": "prep_parent_consent",
+    "topic": "אישור הורים",
+    "description": "הסכמת הורים לכל משתתף — פרטי פעילות, סיכונים, הצהרות בריאות.",
+    "severity": "mandatory",
+    "documentKey": "participant-list",
+    "requirementKind": "document",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" }]
+  },
+  {
+    "id": "prep_moked_teva",
+    "topic": "תיאום מוקד טבע",
+    "description": "אישור טיול / תיאום הלשכה לתיאום טיולים כשנדרש — לפי סוג הפעילות והמיקום.",
+    "severity": "conditional",
+    "documentKey": "moked-teva-approval",
+    "requirementKind": "coordination",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" }]
+  },
+  {
+    "id": "prep_licensing",
+    "topic": "רישוי עסק / אתר",
+    "description": "וידוא רישיון עסק, תו סגול או היתרים נוספים לפי סוג הפעילות והמתקן.",
+    "severity": "mandatory",
+    "documentKey": "business-license-insurance",
+    "requirementKind": "license",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 3", "confidence": "direct" }]
+  },
+  {
+    "id": "prep_trip_leader",
+    "topic": "מינוי אחראי טיול",
+    "description": "מינוי אחראי טיול בוגר (18+) — נספח ג' / מינוי בכתב.",
+    "severity": "mandatory",
+    "documentKey": "appendix-c-trip-leader-appointment",
+    "requirementKind": "staff_role",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" }]
+  },
+  {
+    "id": "prep_staff_roster",
+    "topic": "מצבת צוות",
+    "description": "מינימום תפקידים מאושר ואיוש שמות — מדריכים, חובש, מלווה הסעה.",
+    "severity": "mandatory",
+    "documentKey": "staff-list",
+    "requirementKind": "staff_role",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" }]
+  },
+  {
+    "id": "prep_staff_certs",
+    "topic": "הסמכות צוות",
+    "description": "תעודות הכשרה תקפות — חובש, מדריך מוסמך, מלווה הסעה לפי דרישת הפעילות.",
+    "severity": "conditional",
+    "documentKey": "staff-certifications",
+    "requirementKind": "document",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2 + פרקים ב'-ג'", "confidence": "direct" }]
+  },
+  {
+    "id": "prep_briefings",
+    "topic": "תדריכים",
+    "description": "תדריך צוות, תדריך משתתפים, הנחיות בטיחות וחירום — לפני יציאה לשטח.",
+    "severity": "mandatory",
+    "documentKey": "student-briefing",
+    "requirementKind": "procedure",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" }]
+  },
+  {
+    "id": "prep_medical",
+    "topic": "רפואה וליווי",
+    "description": "קביעת סוג ליווי רפואי (חובש/רופא/פרמדיק) לפי סוג הפעילות, גיל ומספר משתתפים.",
+    "severity": "mandatory",
+    "requirementKind": "staff_role",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 5", "confidence": "direct" }]
+  },
+  {
+    "id": "prep_insurance",
+    "topic": "ביטוח ותצהיר",
+    "description": "כיסוי ביטוחי תקף, תצהיר ביטוח (נספח א') וידיעה על נהלי תאונות.",
+    "severity": "mandatory",
+    "requirementKind": "document",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 6 + נספח א'", "confidence": "direct" }]
+  },
+  {
+    "id": "prep_emergency",
+    "topic": "חירום",
+    "description": "רשימת קשרים חיוניים, נוהל חירום רפואי ודיווח תקריות.",
+    "severity": "mandatory",
+    "documentKey": "essential-contact-list",
+    "requirementKind": "procedure",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" }]
+  },
+  {
+    "id": "prep_transport",
+    "topic": "הסעות",
+    "description": "בדיקת נהג, רכב, ביטוח הסעה, רשימת נוסעים ומסמכי אוטובוס כשחל.",
+    "severity": "conditional",
+    "documentKey": "transport-table",
+    "requirementKind": "document",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' + נוהל הסעות", "confidence": "direct" }]
+  },
+  {
+    "id": "prep_police",
+    "topic": "אישורי משטרה / ביטחון",
+    "description": "כשנדרש — אישור משטרה או גורם ביטחוני לפי מיקום הפעילות.",
+    "severity": "conditional",
+    "documentKey": "police-approvals",
+    "requirementKind": "approval",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" }]
+  }
+]

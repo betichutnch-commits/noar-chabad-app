@@ -6,6 +6,7 @@ import { ManagerHeader } from '@/components/layout/ManagerHeader'
 import { Loader2, AlertCircle, CheckCircle, UserPlus, FileText, Clock, ArrowLeft, Shield } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { isManagerUser } from '@/lib/auth'
 
 // ייבוא Hook
 import { useUser } from '@/hooks/useUser'
@@ -25,7 +26,7 @@ export default function ManagerHomePage() {
         if (!user) return;
 
         // בדיקת הרשאות בסיסית
-        const isManager = profile?.role === 'admin' || profile?.role === 'safety_admin' || user.user_metadata?.department === 'בטיחות ומפעלים' || profile?.role === 'dept_staff'; // הוספתי dept_staff כי גם להם יש גישה
+        const isManager = isManagerUser(user, profile)
         
         if (profile && !isManager) {
              router.push('/dashboard');
@@ -117,7 +118,7 @@ export default function ManagerHomePage() {
 
         {/* קישורים מהירים */}
         <h3 className="text-lg font-bold text-gray-800 mb-4">גישה מהירה</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             
             <Link href="/manager/inbox" className="bg-surface-card p-4 rounded-2xl border border-border-subtle shadow-sm flex items-center justify-between hover:border-brand-cyan hover:shadow-md transition-all group">
                 <div className="flex items-center gap-3">
@@ -145,6 +146,21 @@ export default function ManagerHomePage() {
                     </div>
                 </div>
                 <div className="bg-gray-50 p-2 rounded-full text-gray-400 group-hover:bg-orange-600 group-hover:text-white transition-colors">
+                    <ArrowLeft size={16} />
+                </div>
+            </Link>
+
+            <Link href="/manager/approvals?filter=approved" className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between hover:border-emerald-400 hover:shadow-md transition-all group">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600">
+                        <CheckCircle size={20} />
+                    </div>
+                    <div>
+                        <div className="font-bold text-gray-800 text-sm">טיולים שאושרו לפרסום ותכנון</div>
+                        <div className="text-[10px] text-gray-400">כניסה לתכנון הטיולים שאושרו</div>
+                    </div>
+                </div>
+                <div className="bg-gray-50 p-2 rounded-full text-gray-400 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
                     <ArrowLeft size={16} />
                 </div>
             </Link>

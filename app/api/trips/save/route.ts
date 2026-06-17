@@ -58,7 +58,7 @@ export async function POST(request: Request) {
     details: body.tripData.details,
   }
 
-  const sendSubmitNotifications = async () => {
+  const sendSubmitNotifications = async (tripId: string) => {
     if (body.status !== 'pending') return
     const tripName = String(body.tripData.name || 'טיול')
     const coord = String(body.tripData.coordinator_name || 'רכז')
@@ -74,7 +74,7 @@ export async function POST(request: Request) {
           kind: 'trip.submitted_dept_review',
           title: 'בקשת טיול חדשה לאישור ראשוני',
           body: `${coord} הגיש/ה את "${tripName}" לאישור במחלקה.`,
-          url: '/manager/dept-review',
+          url: `/hq/dept-review/${tripId}`,
           inAppType: 'info',
         },
       )
@@ -88,7 +88,7 @@ export async function POST(request: Request) {
           kind: 'trip.submitted_safety',
           title: 'בקשת טיול חדשה',
           body: `${coord} הגיש/ה את "${tripName}" למחלקת הבטיחות.`,
-          url: '/manager/approvals',
+          url: `/manager/approvals/${tripId}`,
           inAppType: 'info',
         },
       )
@@ -115,7 +115,7 @@ export async function POST(request: Request) {
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
-    await sendSubmitNotifications()
+    await sendSubmitNotifications(body.editId)
     return NextResponse.json({ id: body.editId })
   }
 
@@ -124,6 +124,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  await sendSubmitNotifications()
+  await sendSubmitNotifications(data.id)
   return NextResponse.json({ id: data.id })
 }

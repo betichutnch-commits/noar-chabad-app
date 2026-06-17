@@ -5,9 +5,8 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
-import { getCoordinatorsPluralTitle, getDeptTripsOfficerTitle } from '@/lib/auth'
 import { 
-  LayoutDashboard, CheckSquare, Users, LogOut, Mail, User, X, ClipboardList, FileBarChart, Settings
+  LayoutDashboard, CheckSquare, Users, LogOut, Mail, User, X, FileBarChart, Settings
 } from 'lucide-react'
 
 interface SidebarProps {
@@ -17,25 +16,12 @@ interface SidebarProps {
 
 export const ManagerSidebar = ({ isOpen = true, onClose }: SidebarProps) => {
   const pathname = usePathname();
-  const [role, setRole] = useState<string>('');
-  const [department, setDepartment] = useState<string>('');
-  const [counts, setCounts] = useState({ pendingTrips: 0, pendingUsers: 0, pendingDeptReview: 0 });
+  const [counts, setCounts] = useState({ pendingTrips: 0, pendingUsers: 0 });
   
   useEffect(() => {
     const checkRoleAndCounts = async () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
-
-        const { data: profile } = await supabase
-            .from('profiles')
-            .select('role, department')
-            .eq('id', user.id)
-            .single();
-
-        const userRole = String(profile?.role || '').toLowerCase();
-        const userDepartment = String(profile?.department || '');
-        setRole(userRole);
-        setDepartment(userDepartment);
 
         const tripsCountPromise = supabase
             .from('trips')
@@ -45,49 +31,18 @@ export const ManagerSidebar = ({ isOpen = true, onClose }: SidebarProps) => {
             .from('profiles')
             .select('id', { count: 'exact', head: true })
             .eq('status', 'pending');
-        const officerCountPromise =
-            userRole === 'dept_trips_officer' && userDepartment
-                ? supabase
-                    .from('trips')
-                    .select('id', { count: 'exact', head: true })
-                    .eq('status', 'pending_dept_review')
-                    .eq('department', userDepartment)
-                : null;
-
-        const [trips, users, officer] = await Promise.all([
+        const [trips, users] = await Promise.all([
             tripsCountPromise,
             usersCountPromise,
-            officerCountPromise,
         ]);
 
         setCounts({
             pendingTrips: trips.count || 0,
             pendingUsers: users.count || 0,
-            pendingDeptReview: officer?.count || 0,
         });
     };
     checkRoleAndCounts();
   }, []);
-
-  const isOfficer = role === 'dept_trips_officer';
-
-  const officerMenu = [
-      {
-          label: 'אישור ראשוני',
-          href: '/manager/dept-review',
-          icon: ClipboardList,
-          badge: counts.pendingDeptReview,
-          badgeColor: 'bg-brand-pink',
-          isActive: (path: string | null) =>
-              !!path && path.startsWith('/manager/dept-review') && !path.startsWith('/manager/dept-review/coordinators'),
-      },
-      {
-          label: `${getCoordinatorsPluralTitle(department)} המחלקה`,
-          href: '/manager/dept-review/coordinators',
-          icon: Users,
-      },
-      { label: 'פרופיל אישי', href: '/manager/profile', icon: User },
-  ];
 
   const safetyMenu = [
     { label: 'לוח בקרה', href: '/manager', icon: LayoutDashboard, exact: true },
@@ -121,7 +76,7 @@ export const ManagerSidebar = ({ isOpen = true, onClose }: SidebarProps) => {
     isActive?: (path: string | null) => boolean;
   };
 
-  const menuItems: MenuItem[] = isOfficer ? officerMenu : safetyMenu;
+  const menuItems: MenuItem[] = safetyMenu;
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -143,7 +98,7 @@ export const ManagerSidebar = ({ isOpen = true, onClose }: SidebarProps) => {
                  <Image src="/logo.png" alt="Logo" fill className="object-contain" priority />
               </div>
               <div className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-1">
-                  {isOfficer ? `${getDeptTripsOfficerTitle(department)}${department ? ` • ${department}` : ''}` : 'ממשק ניהול'}
+                  ממשק ניהול
               </div>
           </div>
 

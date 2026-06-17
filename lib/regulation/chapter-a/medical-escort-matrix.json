@@ -1,0 +1,92 @@
+[
+  {
+    "id": "med_water_small",
+    "activityKeys": ["attraction_water"],
+    "whenTags": ["water"],
+    "escortType": "medic",
+    "ratio": "1:25",
+    "participantMin": 1,
+    "participantMax": 50,
+    "mandatory": true,
+    "notes": "פעילות מים — חובש מוסמך בשטח.",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 5", "confidence": "direct" }]
+  },
+  {
+    "id": "med_water_large",
+    "activityKeys": ["attraction_water"],
+    "whenTags": ["water", "license_required"],
+    "escortType": "doctor",
+    "participantMin": 51,
+    "mandatory": true,
+    "notes": "פארק מים / מים בקנה מידה גדול — רופא או פרמדיק לפי טבלה.",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ג' פארק מים", "confidence": "direct" }]
+  },
+  {
+    "id": "med_water_park_paramedic",
+    "activityTypeId": "water_park",
+    "escortType": "paramedic",
+    "mandatory": true,
+    "notes": "פארק מים מסחרי — ליווי רפואי מוגבר לפי דרישת החוזר.",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ג' פארק מים", "confidence": "direct" }]
+  },
+  {
+    "id": "med_pool",
+    "activityTypeId": "pool",
+    "escortType": "medic",
+    "ratio": "1:50",
+    "mandatory": true,
+    "notes": "בריכה — מציל/חובש לפי תקן האתר.",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ג' בריכה", "confidence": "direct" }]
+  },
+  {
+    "id": "med_height",
+    "activityKeys": ["attraction_height"],
+    "whenTags": ["height"],
+    "escortType": "medic",
+    "mandatory": true,
+    "notes": "פעילות גובה/חבלים — חובש מוסמך בשטח.",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ב' מתחם חבלים", "confidence": "direct" }]
+  },
+  {
+    "id": "med_field_trip",
+    "whenTags": ["outdoor"],
+    "escortType": "first_aid_kit",
+    "mandatory": true,
+    "notes": "טיול שדה — ערכת עזרה ראשונה ואחראי מוסמך לעזרה ראשונה בצוות.",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 5", "confidence": "direct" }]
+  },
+  {
+    "id": "med_organized_transport",
+    "activityKeys": ["transport_organized"],
+    "escortType": "first_aid_kit",
+    "mandatory": true,
+    "notes": "הסעה מאורגנת — ערכת עזרה ראשונה באוטובוס.",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "נוהל הסעות", "confidence": "direct" }]
+  },
+  {
+    "id": "med_sleeping_field",
+    "activityKeys": ["sleeping_field"],
+    "whenTags": ["sleeping", "night"],
+    "escortType": "medic",
+    "ratio": "1:40",
+    "mandatory": true,
+    "notes": "לינת שטח רב-יומית — ליווי רפואי מוגבר.",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' + חוזר 450", "confidence": "direct" }]
+  },
+  {
+    "id": "med_challenge_inflatables",
+    "activityTypeId": "inflatables",
+    "escortType": "medic",
+    "mandatory": true,
+    "notes": "מתנפחים — חובש בשטח בזמן הפעילות.",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ב' מתנפחים", "confidence": "direct" }]
+  },
+  {
+    "id": "med_karting",
+    "activityTypeId": "karting",
+    "escortType": "medic",
+    "mandatory": true,
+    "notes": "קארטינג — חובש/רופא לפי מספר משתתפים.",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ב' קארטינג", "confidence": "direct" }]
+  }
+]

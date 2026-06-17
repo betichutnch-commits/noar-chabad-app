@@ -1,0 +1,59 @@
+[
+  {
+    "id": "coord_open_field",
+    "label": "שטח פתוח / טיול שדה",
+    "description": "פעילות בשטחים פתוחים — תיאום עם הלשכה לתיאום טיולים / מוקד טבע לפני מועד הפעילות.",
+    "requiresMokedTeva": true,
+    "leadDaysMin": 10,
+    "whenTags": ["outdoor", "coordination_required"],
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" }]
+  },
+  {
+    "id": "coord_attraction",
+    "label": "אטרקציה / מתקן מסחרי",
+    "description": "אטרקציות ומתקנים — תיאום מוקד טבע ואישור מסגרת לפני ביצוע.",
+    "requiresMokedTeva": true,
+    "leadDaysMin": 10,
+    "whenTags": ["attraction", "license_required"],
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" }]
+  },
+  {
+    "id": "coord_sleeping_field",
+    "label": "לינת שטח / מחנאות",
+    "description": "לינה בשטח פתוח — תיאום מוגבר, מינימום 14 ימים לפני מועד הלינה.",
+    "requiresMokedTeva": true,
+    "leadDaysMin": 14,
+    "activityKeys": ["sleeping_field"],
+    "whenTags": ["sleeping", "night"],
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" }]
+  },
+  {
+    "id": "coord_night_hike",
+    "label": "מסלול לילה",
+    "description": "הליכה/מסלול בלילה — תיאום מוקד טבע.",
+    "requiresMokedTeva": true,
+    "leadDaysMin": 10,
+    "activityKeys": ["transport_walk_night", "hiking_night"],
+    "whenTags": ["night"],
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" }]
+  },
+  {
+    "id": "coord_sensitive_area",
+    "label": "אזורים רגישים",
+    "description": "פעילות באיו״ש, ירושלים מזרחית, אזור ביטחוני או גנ״י — תיאום חובה לפי הנחיות מוקד טבע.",
+    "requiresMokedTeva": true,
+    "leadDaysMin": 14,
+    "requiresSensitiveArea": true,
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" }, { "kind": "external_guidance", "url": "https://www.mokedteva.co.il", "confidence": "secondary" }]
+  },
+  {
+    "id": "coord_organized_transport",
+    "label": "נסיעה מאורגנת",
+    "description": "הסעה מאורגנת — רישום ותיאום לפי נוהל הסעות משרד החינוך.",
+    "requiresMokedTeva": true,
+    "leadDaysMin": 10,
+    "activityKeys": ["transport_organized"],
+    "whenTags": ["transport"],
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' + נוהל הסעות", "confidence": "direct" }]
+  }
+]

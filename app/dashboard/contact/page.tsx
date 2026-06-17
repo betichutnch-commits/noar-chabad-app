@@ -6,6 +6,7 @@ import { Header } from '@/components/layout/Header'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
+import { Tooltip } from '@/components/ui/Tooltip'
 import { Send, HelpCircle, Image as ImageIcon, X, AlertTriangle, Info, Loader2 } from 'lucide-react'
 import { useUser } from '@/hooks/useUser'
 import { contactSchema } from '@/lib/schemas'
@@ -194,10 +195,12 @@ export default function ContactPage() {
                             onPaste={handlePaste}
                         ></textarea>
                         
-                        <label className="absolute bottom-3 left-3 text-gray-400 hover:text-brand-pink cursor-pointer p-3 bg-gray-50 rounded-lg shadow-sm border border-gray-200 transition-all active:scale-95" title="צרף קובץ תמונה">
-                            <ImageIcon size={22}/>
-                            <input type="file" accept="image/*" className="hidden" onChange={handleFileChange}/>
-                        </label>
+                        <Tooltip label="צרף קובץ תמונה" className="absolute bottom-3 left-3">
+                            <label className="text-gray-400 hover:text-brand-pink cursor-pointer p-3 bg-gray-50 rounded-lg shadow-sm border border-gray-200 transition-all active:scale-95">
+                                <ImageIcon size={22}/>
+                                <input type="file" accept="image/*" className="hidden" onChange={handleFileChange}/>
+                            </label>
+                        </Tooltip>
                      </div>
                  </div>
 

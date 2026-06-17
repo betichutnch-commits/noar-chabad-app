@@ -6,6 +6,7 @@ import { Header } from '@/components/layout/Header'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
+import { Tooltip } from '@/components/ui/Tooltip'
 import { 
   User, Mail, Building2, Save, Loader2, Camera, 
   ShieldCheck, Lock, Trash2, ArrowRight, Info, MapPin, ExternalLink
@@ -250,7 +251,9 @@ function ProfileContent() {
                     </label>
                 </div>
                 {formData.profileImage && (
-                    <button onClick={handleRemoveImageClick} className="absolute -bottom-2 -right-2 bg-white text-red-500 p-2 rounded-full shadow-md border border-gray-100 hover:bg-red-50 transition-colors z-20" title="הסר תמונה"><Trash2 size={16}/></button>
+                    <Tooltip label="הסר תמונה" className="absolute -bottom-2 -right-2 z-20">
+                        <button onClick={handleRemoveImageClick} className="bg-white text-red-500 p-2 rounded-full shadow-md border border-gray-100 hover:bg-red-50 transition-colors" aria-label="הסר תמונה"><Trash2 size={16}/></button>
+                    </Tooltip>
                 )}
             </div>
 

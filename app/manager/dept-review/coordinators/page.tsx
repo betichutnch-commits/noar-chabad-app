@@ -19,7 +19,7 @@ import {
   User as UserIcon,
 } from 'lucide-react'
 import { useUser } from '@/hooks/useUser'
-import { getCoordinatorsPluralTitle, isDeptTripsOfficer, isManagerUser } from '@/lib/auth'
+import { getCoordinatorsPluralTitle, isDeptReviewOfficer } from '@/lib/auth'
 
 type CoordinatorRow = {
   id: string
@@ -46,9 +46,8 @@ export default function DeptCoordinatorsListPage() {
     if (userLoading) return
     if (!user) return
 
-    const isOfficer = isDeptTripsOfficer(user, profile)
-    const isManager = isManagerUser(user, profile)
-    if (!isOfficer && !isManager) {
+    const isOfficer = isDeptReviewOfficer(user, profile)
+    if (!isOfficer) {
       window.location.href = '/dashboard'
       return
     }
@@ -233,7 +232,7 @@ const DetailRow = ({ icon, label, value }: { icon: React.ReactNode; label: strin
   <div className="flex items-center gap-2 bg-white rounded-xl border border-gray-100 px-3 py-2">
     <span className="text-gray-400">{icon}</span>
     <span className="text-xs text-gray-500 w-16 shrink-0">{label}</span>
-    <span className="font-medium text-gray-800 truncate" title={value}>
+    <span className="font-medium text-gray-800 truncate" data-tooltip={value}>
       {value}
     </span>
   </div>

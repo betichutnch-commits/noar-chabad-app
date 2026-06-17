@@ -13,6 +13,9 @@ import { formatHebrewDateRange, formatHebrewDate } from '@/lib/dateUtils'
 import { useSignedUrl } from '@/hooks/useSignedUrl'; // <--- זה חייב להיות למעלה
 import { getCoordinatorRoleTitle, getDepartmentLanguage } from '@/lib/auth';
 import type { AppProfile, TripRecord } from '@/lib/types';
+import { Tooltip } from '@/components/ui/Tooltip';
+import { RowRegulationBriefBadges } from '@/components/plan/RowRegulationBriefBadges';
+import type { RowRegulationBrief } from '@/lib/regulation';
 
 // --- רכיב עזר פנימי להצגת קובץ מאובטח (מוגדר מחוץ לקומפוננטה הראשית) ---
 type FileRef = { path?: string; url?: string };
@@ -23,6 +26,10 @@ type TimelineItem = {
     finalLocation?: string;
     otherDetail?: string;
     details?: string;
+    sensitiveLocation?: boolean;
+    sensitiveLocationLabel?: string;
+    regulationBrief?: RowRegulationBrief;
+    regulationBriefAcknowledged?: boolean;
     requiresLicense?: boolean;
     licenseFile?: FileRef | null;
     insuranceFile?: FileRef | null;
@@ -44,6 +51,9 @@ type TripDetails = {
     phone?: string;
     secondaryStaffObj?: SecondaryStaff | null;
     generalComments?: string;
+    sensitiveArea?: boolean;
+    inSensitiveArea?: boolean;
+    requiresSensitiveCoordination?: boolean;
 };
 type NewStaffData = { name: string; role: string; idNumber: string; phone: string; email: string };
 
@@ -133,6 +143,9 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
     
     const d = (trip.details ?? {}) as TripDetails;
     const timeline = d.timeline || [];
+    const sensitiveTimelineCount = timeline.filter((item) => item.sensitiveLocation).length;
+    const hasLegacySensitive = Boolean(d.sensitiveArea || d.inSensitiveArea || d.requiresSensitiveCoordination);
+    const hasSensitiveTrip = hasLegacySensitive || sensitiveTimelineCount > 0;
     const typeConfig = TRIP_TYPES_CONFIG.find(t => t.id === d.tripType) || TRIP_TYPES_CONFIG[4];
     const isPast = new Date(trip.start_date) < new Date(new Date().setHours(0,0,0,0));
     const isCancelled = trip.status === 'cancelled';
@@ -339,7 +352,16 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                                             <div className="flex-1 flex flex-col justify-center">
                                                 <h3 className="text-sm md:text-base font-black text-gray-800 leading-tight mb-2">{item.finalSubCategory}</h3>
                                                 <div className="space-y-2">
-                                            <div className="flex items-start gap-2 text-xs text-gray-700 font-medium"><MapPin size={14} className="text-brand-pink shrink-0 mt-0.5"/><span>{item.finalLocation}</span></div>
+                                            <div className="flex flex-wrap items-center gap-2 text-xs text-gray-700 font-medium">
+                                              <MapPin size={14} className="text-brand-pink shrink-0 mt-0.5" />
+                                              <span>{item.finalLocation}</span>
+                                              <RowRegulationBriefBadges brief={item.regulationBrief} />
+                                              {item.sensitiveLocation && !item.regulationBrief?.sensitiveLocation ? (
+                                                <span className="rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-[10px] font-black text-orange-800">
+                                                  אזור רגיש
+                                                </span>
+                                              ) : null}
+                                            </div>
                                                     {item.otherDetail && item.finalSubCategory !== item.otherDetail && (
                                                         <div className="flex items-start gap-2 text-xs text-gray-800 bg-slate-50 p-2 rounded border border-gray-100">
                                                             <div className="shrink-0 mt-0.5">{item.category === 'sleeping' ? <Tent size={14} className="text-purple-500"/> : <Info size={14} className="text-gray-400"/>}</div>
@@ -401,8 +423,12 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                                     <div className="text-[10px] font-bold text-purple-600 uppercase">{secondStaffTitle}</div>
                                     {isEditable && !isPublic && (
                                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button onClick={onEditStaff} className="p-1 hover:bg-gray-100 rounded text-gray-500 hover:text-blue-500" title="עריכה"><Edit2 size={12}/></button>
-                                            <button onClick={onDeleteStaff} className="p-1 hover:bg-gray-100 rounded text-gray-500 hover:text-red-500" title="מחיקה"><Trash2 size={12}/></button>
+                                            <Tooltip label="עריכה">
+                                                <button onClick={onEditStaff} className="p-1 hover:bg-gray-100 rounded text-gray-500 hover:text-blue-500" aria-label="עריכה"><Edit2 size={12}/></button>
+                                            </Tooltip>
+                                            <Tooltip label="מחיקה">
+                                                <button onClick={onDeleteStaff} className="p-1 hover:bg-gray-100 rounded text-gray-500 hover:text-red-500" aria-label="מחיקה"><Trash2 size={12}/></button>
+                                            </Tooltip>
                                         </div>
                                     )}
                                 </div>
@@ -448,6 +474,20 @@ export const TripDetailsView: React.FC<TripDetailsViewProps> = ({
                             <div className="bg-green-50 border border-green-100 rounded-xl p-4 flex gap-3 items-center"><CheckCircle size={20} className="text-green-600 shrink-0"/><div><span className="block text-sm font-bold text-green-700">הכל תקין</span><span className="text-xs text-green-600">כל האישורים הנדרשים הועלו.</span></div></div>
                         )}
                     </div>
+
+                    {hasSensitiveTrip && (
+                        <div className="rounded-3xl border border-orange-200 bg-orange-50 p-5">
+                            <h3 className="mb-1 flex items-center gap-2 font-bold text-orange-900">
+                                <AlertTriangle size={18} className="text-orange-600" />
+                                אזור רגיש — תיאום מוקד טבע
+                            </h3>
+                            <p className="text-xs text-orange-800">
+                                {sensitiveTimelineCount > 0
+                                  ? `${sensitiveTimelineCount} שורות בלו״ז מסומנות באזור רגיש — נדרש תיאום מוקד טבע (מינימום 14 ימים מראש) לפי חוזר 585.`
+                                  : "נדרש תיאום מוקד טבע (מינימום 14 ימים מראש) לפי חוזר 585."}
+                            </p>
+                        </div>
+                    )}
 
                     {d.generalComments && (
                         <div className="bg-yellow-50 rounded-3xl p-6 border border-yellow-100">

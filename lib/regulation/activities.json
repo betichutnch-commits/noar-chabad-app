@@ -1,0 +1,210 @@
+[
+  {
+    "key": "transport_walk_day",
+    "label": "הליכה ביום",
+    "description": "התניידות רגלית בשטח פתוח ביום.",
+    "tags": ["outdoor", "transport"],
+    "planCategoryKey": "transport",
+    "planSubCategoryLabels": ["הליכה ביום"],
+    "circularChapter": "a",
+    "circularSectionId": "a.2",
+    "preparationTableRef": "chapter-a/preparation-checklist",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" }]
+  },
+  {
+    "key": "transport_walk_night",
+    "label": "הליכה בלילה",
+    "description": "התניידות רגלית בשטח פתוח בלילה — דורשת תכנון מוגבר.",
+    "tags": ["outdoor", "transport", "night", "coordination_required"],
+    "planCategoryKey": "transport",
+    "planSubCategoryLabels": ["הליכה בלילה"],
+    "circularChapter": "a",
+    "circularSectionId": "a.2",
+    "preparationTableRef": "chapter-a/coordination-rules#coord_night_hike",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" }]
+  },
+  {
+    "key": "transport_organized",
+    "label": "נסיעה מאורגנת",
+    "description": "הסעה מאורגנת באוטובוס/רכב — נוהל הסעות משרד החינוך.",
+    "tags": ["transport", "coordination_required"],
+    "planCategoryKey": "transport",
+    "planSubCategoryLabels": ["נסיעה מאורגנת"],
+    "circularChapter": "a",
+    "circularSectionId": "a.2",
+    "preparationTableRef": "chapter-a/coordination-rules#coord_organized_transport",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' + נוהל הסעות", "confidence": "direct" }]
+  },
+  {
+    "key": "hiking_day",
+    "label": "מסלול יום בטבע",
+    "description": "טיול שדה / מסלול בטבע בשטחים פתוחים.",
+    "tags": ["outdoor", "coordination_required"],
+    "planCategoryKey": "hiking",
+    "planSubCategoryLabels": ["מסלול יום"],
+    "circularChapter": "a",
+    "circularSectionId": "a.2",
+    "preparationTableRef": "chapter-a/coordination-rules#coord_open_field",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" }]
+  },
+  {
+    "key": "hiking_night",
+    "label": "מסלול לילה",
+    "description": "מסלול בטבע בשעות הלילה.",
+    "tags": ["outdoor", "night", "coordination_required"],
+    "planCategoryKey": "hiking",
+    "planSubCategoryLabels": ["מסלול לילה"],
+    "circularChapter": "a",
+    "circularSectionId": "a.2",
+    "preparationTableRef": "chapter-a/coordination-rules#coord_night_hike",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" }]
+  },
+  {
+    "key": "hiking_jeeps",
+    "label": "טיול ג'יפים",
+    "description": "נסיעת שטח מאורגנת — פרק ב' אתגר.",
+    "tags": ["outdoor", "attraction", "license_required", "coordination_required"],
+    "planCategoryKey": "hiking",
+    "planSubCategoryLabels": ["טיול ג׳יפים"],
+    "circularChapter": "b",
+    "circularSectionId": "b.6",
+    "preparationTableRef": "chapter-b/preparation-tables#b.11.1",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ב' סעיף 6", "confidence": "direct" }]
+  },
+  {
+    "key": "attraction_licensed",
+    "label": "אטרקציה (רישוי נדרש)",
+    "description": "אטרקציה/מתקן העושה שימוש במיתקן מסחרי או פעילות אתגר — חובת רישוי עסק ולעיתים תו סגול.",
+    "tags": ["attraction", "license_required", "coordination_required"],
+    "planCategoryKey": "attraction",
+    "planSubCategoryLabels": [
+      "טרקטורונים",
+      "אופניים",
+      "ג׳יפים",
+      "פיינטבול",
+      "לונה פארק",
+      "קארטינג",
+      "מתקנים מתנפחים",
+      "איי ג'אמפ",
+      "לייזר טאג"
+    ],
+    "circularChapter": "b",
+    "circularSectionId": null,
+    "preparationTableRef": "chapter-b/preparation-tables#b.17.1",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ב' סעיף 17 + טבלת רישוי", "confidence": "direct" }]
+  },
+  {
+    "key": "attraction_water",
+    "label": "פעילות מים",
+    "description": "פעילות במים — פארק מים, שייט, רפטינג, בריכה וכו'.",
+    "tags": ["attraction", "water", "license_required", "coordination_required"],
+    "planCategoryKey": "attraction",
+    "planSubCategoryLabels": ["פארק מים", "קיאקים/רפטינג", "שייט", "בריכה", "גלישה/סאפ", "שייט טורנדו"],
+    "circularChapter": "c",
+    "circularSectionId": "g.5",
+    "preparationTableRef": "chapter-c/preparation-tables",
+    "sources": [
+      { "kind": "circular", "circularSiduri": 585, "section": "פרק ג'", "confidence": "direct" },
+      { "kind": "circular", "circularSiduri": 255, "confidence": "secondary" }
+    ]
+  },
+  {
+    "key": "attraction_height",
+    "label": "פעילות גובה / חבלים",
+    "description": "פארק חבלים, קיר טיפוס — דרישות הסמכה למדריכים.",
+    "tags": ["attraction", "height", "license_required", "coordination_required"],
+    "planCategoryKey": "attraction",
+    "planSubCategoryLabels": ["פארק חבלים", "קיר טיפוס"],
+    "circularChapter": "b",
+    "circularSectionId": "b.3",
+    "preparationTableRef": "chapter-b/preparation-tables#b.3.3",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק ב' מתחם חבלים", "confidence": "direct" }]
+  },
+  {
+    "key": "attraction_cultural",
+    "label": "אטרקציה תרבותית (ללא רישוי מיוחד)",
+    "description": "מוזיאון, מרכז מבקרים, אתר מורשת — ביקור באתר עם רישוי עסק/תו סגול לפי דרישת האתר.",
+    "tags": ["attraction"],
+    "planCategoryKey": "attraction",
+    "planSubCategoryLabels": ["מוזיאון", "מרכז מבקרים", "אתר מורשת", "קבר צדיק"],
+    "circularChapter": "a",
+    "circularSectionId": "a.3",
+    "preparationTableRef": "chapter-a/preparation-checklist",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 3", "confidence": "direct" }]
+  },
+  {
+    "key": "food_catering",
+    "label": "אוכל / קייטרינג",
+    "description": "הזנה — כולל קייטרינג, על האש, אוכל מוכן.",
+    "tags": ["food"],
+    "planCategoryKey": "food",
+    "planSubCategoryLabels": ["קייטרינג", "על האש", "אוכל קנוי", "אוכל ביתי מבושל"],
+    "circularChapter": "a",
+    "circularSectionId": null,
+    "preparationTableRef": "chapter-a/preparation-checklist",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א'", "confidence": "direct" }]
+  },
+  {
+    "key": "settlement_indoor",
+    "label": "פעילות במבנה / יישוב",
+    "description": "פעילות באולם, בית כנסת, סניף, מתנ\"ס.",
+    "tags": ["settlement"],
+    "planCategoryKey": "settlement",
+    "planSubCategoryLabels": ["פעילות בסניף", "אירוע באולם", "פעילות בבית כנסת", "פעילות בבית חב\"ד", "פעילות במתנ\"ס"],
+    "circularChapter": "a",
+    "circularSectionId": null,
+    "preparationTableRef": null,
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א'", "confidence": "direct" }]
+  },
+  {
+    "key": "settlement_outdoor",
+    "label": "פעילות בשטח פתוח / פארק",
+    "description": "פעילות בשטח פתוח, פארק, גינה — עשוי לדרוש תיאום אם בשטחים פתוחים.",
+    "tags": ["outdoor", "settlement", "coordination_required"],
+    "planCategoryKey": "settlement",
+    "planSubCategoryLabels": ["פעילות בשטח פתוח", "פעילות בשטח מגודר תחת כיפת השמיים", "פארק/גינה"],
+    "circularChapter": "a",
+    "circularSectionId": "a.2",
+    "preparationTableRef": "chapter-a/coordination-rules#coord_open_field",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" }]
+  },
+  {
+    "key": "sleeping_building",
+    "label": "לינת מבנה",
+    "description": "לינה במבנה — אכסניה, בית ספר שדה, מלון מאושר.",
+    "tags": ["sleeping"],
+    "planCategoryKey": "sleeping",
+    "planSubCategoryLabels": ["לינת מבנה"],
+    "circularChapter": "a",
+    "circularSectionId": null,
+    "preparationTableRef": "chapter-a/preparation-checklist",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א'", "confidence": "direct" }]
+  },
+  {
+    "key": "sleeping_field",
+    "label": "לינת שטח / מחנאות",
+    "description": "לינה בשטח פתוח, מחנאות — דרישות מוגברות לאחראי טיול ותיאום.",
+    "tags": ["sleeping", "outdoor", "night", "coordination_required"],
+    "planCategoryKey": "sleeping",
+    "planSubCategoryLabels": ["לינת שטח"],
+    "circularChapter": "a",
+    "circularSectionId": "a.2",
+    "preparationTableRef": "chapter-a/coordination-rules#coord_sleeping_field",
+    "sources": [
+      { "kind": "circular", "circularSiduri": 585, "section": "פרק א' סעיף 2", "confidence": "direct" },
+      { "kind": "circular", "circularSiduri": 450, "section": "לינה רב-יומית", "confidence": "secondary" }
+    ]
+  },
+  {
+    "key": "general_activity",
+    "label": "פעילות כללית",
+    "description": "פעילות שלא מסווגת — יש לבחור קטגוריה מדויקת יותר כשאפשר.",
+    "tags": [],
+    "planCategoryKey": "other",
+    "planSubCategoryLabels": ["פעילות כללית", "טקס / התכנסות", "זמן חופשי"],
+    "circularChapter": "a",
+    "circularSectionId": null,
+    "preparationTableRef": "chapter-a/preparation-checklist",
+    "sources": [{ "kind": "circular", "circularSiduri": 585, "section": "פרק א'", "confidence": "direct" }]
+  }
+]

@@ -44,12 +44,11 @@ export async function POST(request: Request) {
   }
 
   const admin = createSupabaseServiceRoleClient()
+  const bug = (body.category || '').toLowerCase() === 'bug'
   const safetyIds =
-    admin != null
+    !bug && admin != null
       ? await resolveRecipientUserIds(admin, { mode: 'safety_admins' })
       : []
-
-  const bug = (body.category || '').toLowerCase() === 'bug'
   let techIds: string[] = []
   if (bug && admin) {
     techIds = await resolveRecipientUserIds(admin, { mode: 'tech_admins' })

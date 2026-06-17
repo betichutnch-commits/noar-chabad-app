@@ -12,14 +12,16 @@ import {
 interface SidebarProps {
     isOpen?: boolean;
     onClose?: () => void;
+    showDeptReview?: boolean;
 }
 
-export const Sidebar = ({ isOpen = true, onClose }: SidebarProps) => {
+export const Sidebar = ({ isOpen = true, onClose, showDeptReview = false }: SidebarProps) => {
   const pathname = usePathname();
 
   const menuItems = [
     { label: 'ראשי', href: '/dashboard', icon: Home, exact: true },
     { label: 'הודעות ועדכונים', href: '/dashboard/inbox', icon: Bell },
+    ...(showDeptReview ? [{ label: 'אישור ראשוני מחלקתי', href: '/hq/dept-review', icon: FileText }] : []),
     { label: 'בקשת פש"ש חדשה', href: '/dashboard/new-trip', icon: PlusCircle },
     { label: 'הטיולים שלי', href: '/dashboard/my-trips', icon: FileText },
     { label: 'פרופיל אישי', href: '/dashboard/profile', icon: User },
@@ -35,12 +37,13 @@ export const Sidebar = ({ isOpen = true, onClose }: SidebarProps) => {
     <>
         {/* Overlay */}
         <div 
+            data-dashboard-chrome
             className={`fixed inset-0 bg-black/60 z-[90] transition-opacity duration-300 md:hidden backdrop-blur-sm
             ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
             onClick={onClose}
         ></div>
 
-        <aside className={`w-56 bg-white border-l border-gray-200 h-screen fixed right-0 top-0 z-[100] flex flex-col shadow-2xl transition-transform duration-300
+        <aside data-dashboard-chrome className={`w-56 bg-white border-l border-gray-200 h-screen fixed right-0 top-0 z-[100] flex flex-col shadow-2xl transition-transform duration-300
             ${isOpen ? 'translate-x-0' : 'translate-x-full'} 
             md:translate-x-0 md:z-40 md:shadow-none`}
         >

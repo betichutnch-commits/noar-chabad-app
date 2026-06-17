@@ -1,0 +1,30 @@
+[
+  {
+    "siduri": 585,
+    "title": "פעילות חוץ כולל אטרקציות",
+    "officialUrl": "https://apps.education.gov.il/Mankal/horaa.aspx?siduri=585",
+    "relation": "primary",
+    "notes": "חוזר עיקרי לפעילויות חוץ ואטרקציות — בסיס לרגולציה במערכת."
+  },
+  {
+    "siduri": 450,
+    "title": "טיולים",
+    "officialUrl": "https://apps.education.gov.il/Mankal/horaa.aspx?siduri=450",
+    "relation": "complementary",
+    "notes": "חוזר מקביל לטיולים (עדכון 2022). משלים את 585 בנושאי טיול רב-יומי, אחראי טיול, מסמכים."
+  },
+  {
+    "siduri": 255,
+    "title": "הבטחת הבטיחות בסיורים, פעילויות שדה ופעילויות מים",
+    "officialUrl": "https://apps.education.gov.il/Mankal/Horaa.aspx?siduri=255",
+    "relation": "complementary",
+    "notes": "מים, שדה, סיורים — חפיפה עם אטרקציות אתגר."
+  },
+  {
+    "siduri": 172,
+    "title": "ניהול שגרת הבטיחות",
+    "officialUrl": "https://apps.education.gov.il/Mankal/Horaa.aspx?siduri=172",
+    "relation": "reference",
+    "notes": "שגרת בטיחות במוסד/מסגרת."
+  }
+]

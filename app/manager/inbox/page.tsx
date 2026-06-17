@@ -10,9 +10,10 @@ import {
   User, Loader2, MessageCircle, ImageIcon, Send
 } from 'lucide-react';
 import { useSignedUrl } from '@/hooks/useSignedUrl'; // Import חובה
-import { parseMessageContent, isOpenMessageStatus, normalizeMessageStatus, parseMessageSubject } from '@/lib/inbox';
-import { getUserRoleShortLabel } from '@/lib/auth';
+import { parseMessageContent, isOpenMessageStatus, normalizeMessageStatus } from '@/lib/inbox';
+import { formatUserRoleLabel, getUserRoleShortLabel } from '@/lib/auth';
 import { DEPARTMENTS_CONFIG } from '@/lib/constants';
+import { resolveDisplayNameFromMeta, resolveDisplayNameFromProfile } from '@/lib/userDisplay';
 import Image from 'next/image';
 
 // --- רכיב עזר לתמונה מאובטחת ---
@@ -43,6 +44,8 @@ interface Message {
   replied_at?: string;
   profiles?: {
     full_name: string;
+    official_name?: string;
+    last_name?: string;
     nickname?: string;
     phone: string;
     avatar_url: string;
@@ -73,6 +76,14 @@ export default function InboxPage() {
     currentIndex: 0,
   });
 
+  const cleanSubjectLabel = (subject: string) =>
+    String(subject || '')
+      .replace(/\[\s*תקלה\s*\]/g, '')
+      .replace(/\[\s*פניה\s*\]/g, '')
+      .replace(/\[\s*פנייה\s*\]/g, '')
+      .replace(/^[:\-\s]+/, '')
+      .trim();
+
   // ... fetchMessages, useEffect, handleSendReply, markAsTreated (כמו בקוד ששלחת, ללא שינוי)
   // אני מעתיק אותם כאן כדי שיהיה קובץ מלא
 
@@ -92,6 +103,38 @@ export default function InboxPage() {
       .split(' ')
       .find((cls) => cls.startsWith('text-'));
     return textClass ? `${base} ${textClass}` : `${base} text-gray-600`;
+  };
+
+  const getContactRoleLine = ({
+    role,
+    branchName,
+    department,
+    fallbackLabel,
+  }: {
+    role?: string;
+    branchName?: string;
+    department?: string;
+    fallbackLabel?: string;
+  }) => {
+    const normalizedRole = String(role || "").toLowerCase().trim();
+    const branch = String(branchName || "").trim();
+    const dept = String(department || "").trim();
+
+    if (normalizedRole === "coordinator") {
+      return branch ? `רכז ${branch}` : "רכז";
+    }
+
+    if (normalizedRole === "dept_staff" || normalizedRole === "dept_trips_officer") {
+      return dept ? `מטה - ${dept}` : "מטה";
+    }
+
+    if (normalizedRole === "admin" || normalizedRole === "safety_admin") {
+      return dept ? `מטה - ${dept}` : "מטה";
+    }
+
+    if (branch) return `רכז ${branch}`;
+    if (dept) return `מטה - ${dept}`;
+    return fallbackLabel || "מטה";
   };
 
   const fetchMessages = useCallback(async () => {
@@ -135,41 +178,81 @@ export default function InboxPage() {
         
         const { data: profiles } = await supabase
             .from('profiles')
-            .select('id, full_name, nickname, phone, avatar_url, email, role, department')
+            .select('id, full_name, official_name, last_name, nickname, phone, avatar_url, email, role, department')
             .in('id', userIds);
 
-        const { data: usersMeta } = await supabase
-            .from('users_management_view')
-            .select('id, raw_user_meta_data')
-            .in('id', userIds);
+        const userMetaRes = await fetch('/api/manager/inbox/user-meta', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ userIds }),
+        });
+        const userMetaPayload = (await userMetaRes.json().catch(() => ({}))) as {
+          users?: Array<{ id: string; raw_user_meta_data: Record<string, unknown> }>;
+        };
+        const usersMeta = Array.isArray(userMetaPayload.users) ? userMetaPayload.users : [];
 
         const displayNameById = new Map<string, string>();
+        const rawMetaById = new Map<string, Record<string, unknown>>();
+        const metaRoleById = new Map<string, string>();
+        const metaDepartmentById = new Map<string, string>();
+        const metaBranchById = new Map<string, string>();
         for (const row of usersMeta || []) {
           const meta = (row.raw_user_meta_data || {}) as Record<string, unknown>;
-          const nickname = String(meta.nickname || meta.nick_name || '').trim();
-          const fullName = String(meta.full_name || meta.name || meta.official_name || '').trim();
-          if (nickname) {
-            displayNameById.set(String(row.id), nickname);
-          } else if (fullName) {
-            displayNameById.set(String(row.id), fullName);
-          }
+          rawMetaById.set(String(row.id), meta);
+          const displayName = resolveDisplayNameFromMeta(meta, '');
+          if (displayName) displayNameById.set(String(row.id), displayName);
+          const metaRole = String(meta.role || '').trim();
+          if (metaRole) metaRoleById.set(String(row.id), metaRole);
+          const metaDepartment = String(meta.department || '').trim();
+          if (metaDepartment) metaDepartmentById.set(String(row.id), metaDepartment);
+          const metaBranch = String(meta.branch_name || meta.branch || '').trim();
+          if (metaBranch) metaBranchById.set(String(row.id), metaBranch);
         }
 
         const combined = filteredMsgs.map(msg => {
             const userProfile = profiles?.find(p => p.id === msg.user_id);
-            const roleLabel = getUserRoleShortLabel(userProfile?.role, userProfile?.department);
+            const userMeta = rawMetaById.get(String(msg.user_id)) || {};
+            const resolvedRole = String(userProfile?.role || metaRoleById.get(String(msg.user_id)) || 'user');
+            const resolvedDepartment = String(userProfile?.department || metaDepartmentById.get(String(msg.user_id)) || '');
+            const resolvedBranch = String(metaBranchById.get(String(msg.user_id)) || '');
+            const roleLabel = formatUserRoleLabel({
+              role: resolvedRole,
+              department: resolvedDepartment,
+              branchName: resolvedBranch,
+            });
+            const contactRoleLine = getContactRoleLine({
+              role: resolvedRole,
+              branchName: resolvedBranch,
+              department: resolvedDepartment,
+              fallbackLabel: roleLabel,
+            });
+            const firstName = String(
+              userProfile?.official_name ||
+              userMeta.first_name ||
+              userMeta.official_name ||
+              '',
+            ).trim();
+            const lastName = String(
+              userProfile?.last_name ||
+              userMeta.last_name ||
+              '',
+            ).trim();
+            const composedFullName = `${firstName} ${lastName}`.trim();
             const displayName =
+              composedFullName ||
+              resolveDisplayNameFromProfile((userProfile || null) as Record<string, unknown> | null, '') ||
               displayNameById.get(String(msg.user_id)) ||
-              String(userProfile?.nickname || '').trim() ||
-              String(userProfile?.full_name || '').trim() ||
               'משתמש לא נמצא';
             return {
                 ...msg,
                 profiles: {
-                  ...(userProfile || { phone: '', avatar_url: '', role: 'user', department: '-' }),
+                  ...(userProfile || { phone: '', avatar_url: '', role: resolvedRole, department: resolvedDepartment || '-' }),
                   full_name: displayName,
+                  role: resolvedRole,
+                  department: resolvedDepartment || userProfile?.department || '-',
                 },
-                displayRole: roleLabel,
+                displayRole: contactRoleLine,
             };
         });
 
@@ -251,7 +334,8 @@ export default function InboxPage() {
   };
 
   const content = selectedMsg ? parseMessageContent(selectedMsg.message) : null;
-  const selectedParsedSubject = selectedMsg ? parseMessageSubject(selectedMsg.subject || '') : null;
+  const selectedIsBugByCategory =
+    selectedMsg ? String(selectedMsg.category || 'general').toLowerCase().trim() === 'bug' : false;
   const messageImagePaths = messages
     .map((msg) => parseMessageContent(String(msg.message || '')).imagePath)
     .filter((path): path is string => Boolean(path));
@@ -325,7 +409,7 @@ export default function InboxPage() {
                     ) : (
                         messages.map(msg => {
                             const isSelected = selectedMsg?.id === msg.id;
-                            const parsedSubject = parseMessageSubject(msg.subject || '');
+                            const isBugByCategory = String(msg.category || 'general').toLowerCase().trim() === 'bug';
                             
                             return (
                               <React.Fragment key={msg.id}>
@@ -337,7 +421,7 @@ export default function InboxPage() {
                                     }}
                                     className={`w-full p-4 text-right border-b border-border-subtle transition-colors flex flex-col gap-2
                                     ${isSelected ? 'bg-cyan-50 border-r-4 border-r-brand-cyan' : 'bg-surface-card hover:bg-surface-muted/60'}`}
-                                    aria-label={`פתיחת פנייה ${parsedSubject.cleanSubject}`}
+                                    aria-label={`פתיחת פנייה ${cleanSubjectLabel(msg.subject || '')}`}
                                 >
                                     <div className="flex justify-between items-start gap-2">
                                         <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -374,15 +458,15 @@ export default function InboxPage() {
                                           <span className="text-[10px] text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded-md">
                                               {new Date(msg.created_at).toLocaleDateString('he-IL')}
                                           </span>
-                                          <span className={`inline-flex items-center justify-center w-5 h-5 rounded ${parsedSubject.type === 'bug' ? 'text-red-600 bg-red-50' : 'text-cyan-700 bg-cyan-50'}`}>
-                                            {parsedSubject.type === 'bug' ? <AlertTriangle size={12}/> : <Mail size={12}/>}
+                                          <span className={`inline-flex items-center justify-center w-5 h-5 rounded ${isBugByCategory ? 'text-red-600 bg-red-50' : 'text-cyan-700 bg-cyan-50'}`}>
+                                            {isBugByCategory ? <AlertTriangle size={12}/> : <Mail size={12}/>}
                                           </span>
                                         </div>
                                     </div>
 
                                     <div className="mr-9 flex items-center gap-2 min-w-0">
                                       <h4 className={`text-xs font-bold line-clamp-1 ${isSelected ? 'text-brand-cyan' : 'text-gray-600'}`}>
-                                          {parsedSubject.cleanSubject}
+                                          {cleanSubjectLabel(msg.subject || '')}
                                       </h4>
                                     </div>
                                 </button>
@@ -480,9 +564,9 @@ export default function InboxPage() {
                                 </div>
                                 <div>
                                     <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                      <h2 className="text-xl font-black text-gray-800 leading-tight">{selectedParsedSubject?.cleanSubject}</h2>
-                                      <span className={`inline-flex items-center justify-center w-6 h-6 rounded ${selectedParsedSubject?.type === 'bug' ? 'text-red-600 bg-red-50' : 'text-cyan-700 bg-cyan-50'}`}>
-                                        {selectedParsedSubject?.type === 'bug' ? <AlertTriangle size={14}/> : <Mail size={14}/>}
+                                      <h2 className="text-xl font-black text-gray-800 leading-tight">{cleanSubjectLabel(selectedMsg.subject || '')}</h2>
+                                      <span className={`inline-flex items-center justify-center w-6 h-6 rounded ${selectedIsBugByCategory ? 'text-red-600 bg-red-50' : 'text-cyan-700 bg-cyan-50'}`}>
+                                        {selectedIsBugByCategory ? <AlertTriangle size={14}/> : <Mail size={14}/>}
                                       </span>
                                     </div>
                                     <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">

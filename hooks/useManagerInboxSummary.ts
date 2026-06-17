@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { isOpenMessageStatus, normalizeMessageStatus } from "@/lib/inbox";
 import { getCoordinatorRoleTitle, getDeptTripsOfficerTitle } from "@/lib/auth";
+import { resolveDisplayNameFromMeta } from "@/lib/userDisplay";
 
 type MetadataRecord = Record<string, string | undefined>;
 type DisplayDetails = { fullName: string; mainRole: string; secondaryInfo: string };
@@ -20,9 +21,7 @@ const findValue = (obj: Record<string, unknown> | null | undefined, keys: string
 };
 
 const resolveUserDetails = (meta: Record<string, unknown>): DisplayDetails => {
-  const nickname = String(meta.nickname || meta.nick_name || '').trim();
-  const fullName = String(meta.full_name || meta.name || meta.official_name || "משתמש");
-  const displayName = nickname || fullName;
+  const displayName = resolveDisplayNameFromMeta(meta, "משתמש");
   const role = String(meta.role || "user").toLowerCase().trim();
   const department = String(findValue(meta, ["department", "dept", "mador", "unit", "agaf", "מחלקה", "מדור"]) || "");
   const branch = String(findValue(meta, ["branch_name", "branch", "snif", "location", "area", "city", "place", "סניף", "שם סניף"]) || "");
@@ -31,7 +30,11 @@ const resolveUserDetails = (meta: Record<string, unknown>): DisplayDetails => {
     const title = getCoordinatorRoleTitle(department);
     return { fullName: displayName, mainRole: branch ? `${title} ${branch}` : title, secondaryInfo: department };
   }
-  if (role.includes("dept_trips_officer") || role === "officer") {
+  if (
+    role.includes("dept_trips_officer") ||
+    role === "officer" ||
+    (role.includes("dept_staff") && (meta.can_dept_review === true || String(meta.can_dept_review || "").toLowerCase() === "true"))
+  ) {
     return { fullName: displayName, mainRole: getDeptTripsOfficerTitle(department), secondaryInfo: department || "כללי" };
   }
   if (role.includes("staff") || role.includes("mate") || role.includes("hq") || role === "office" || role.includes("dept_staff")) {

@@ -6,8 +6,8 @@ const MANAGER_DEPARTMENT = "בטיחות ומפעלים";
 export type SupportedRole =
   | "admin"
   | "safety_admin"
+  | "secretary"
   | "dept_staff"
-  | "dept_trips_officer"
   | "coordinator"
   | "user";
 
@@ -15,6 +15,7 @@ export interface UserLikeProfile {
   role?: string | null;
   department?: string | null;
   is_tech_admin?: boolean | null;
+  can_dept_review?: boolean | null;
 }
 
 const resolveRole = (user: User | null, profile?: UserLikeProfile | null): string => {
@@ -22,29 +23,50 @@ const resolveRole = (user: User | null, profile?: UserLikeProfile | null): strin
   return String(profile?.role ?? meta.role ?? "").toLowerCase();
 };
 
+const isDeptReviewCapabilityEnabled = (value: unknown): boolean => {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") return ["true", "1", "yes"].includes(value.toLowerCase());
+  if (typeof value === "number") return value === 1;
+  return false;
+};
+
+const isLegacyDeptTripsOfficerRole = (role: string): boolean => role === "dept_trips_officer";
+
 export const isManagerUser = (user: User | null, profile?: UserLikeProfile | null): boolean => {
   if (!user) return false;
 
   const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
   const role = resolveRole(user, profile);
-  const department = String(profile?.department ?? meta.department ?? "");
   const isTechAdmin = Boolean(profile?.is_tech_admin ?? meta.is_tech_admin);
 
-  return (
-    role === "admin" ||
-    role === "safety_admin" ||
-    role === "dept_staff" ||
-    isTechAdmin ||
-    department.includes(MANAGER_DEPARTMENT)
-  );
+  return role === "admin" || role === "safety_admin" || role === "secretary" || isTechAdmin;
 };
 
-export const isDeptTripsOfficer = (
+export const isTechAdminUser = (user: User | null, profile?: UserLikeProfile | null): boolean => {
+  if (!user) return false;
+  const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
+  return Boolean(profile?.is_tech_admin ?? meta.is_tech_admin);
+};
+
+export const hasDeptReviewCapability = (
   user: User | null,
   profile?: UserLikeProfile | null,
 ): boolean => {
   if (!user) return false;
-  return resolveRole(user, profile) === "dept_trips_officer";
+  const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
+  const role = resolveRole(user, profile);
+  if (isLegacyDeptTripsOfficerRole(role)) return true;
+  if (role !== "dept_staff") return false;
+
+  const capabilityValue = profile?.can_dept_review ?? meta.can_dept_review;
+  return isDeptReviewCapabilityEnabled(capabilityValue);
+};
+
+export const isDeptReviewOfficer = (
+  user: User | null,
+  profile?: UserLikeProfile | null,
+): boolean => {
+  return hasDeptReviewCapability(user, profile);
 };
 
 export interface RoleLabelInput {
@@ -109,12 +131,14 @@ export const formatUserRoleLabel = ({
       return "מנהל מערכת";
     case "safety_admin":
       return "מנהל בטיחות";
+    case "secretary":
+      return "מזכ״לית הארגון";
     case "dept_staff":
       return department ? `צוות מטה - ${department}` : "צוות מטה";
     case "dept_trips_officer":
       return department
-        ? `${getDeptTripsOfficerTitle(department)} - ${department}`
-        : "אחראי/ת טיולי הרכזים/ות";
+        ? `צוות מטה - ${department} (${getDeptTripsOfficerTitle(department)})`
+        : `צוות מטה (${getDeptTripsOfficerTitle(department)})`;
     case "coordinator":
       return branchName
         ? `${getCoordinatorRoleTitle(department)} ${branchName}`
@@ -137,16 +161,21 @@ export const getUserRoleShortLabel = (
       return "מנהל מערכת";
     case "safety_admin":
       return "מנהל בטיחות";
+    case "secretary":
+      return "מזכ״לית";
     case "dept_staff":
       return "צוות מטה";
     case "dept_trips_officer":
-      return getDeptTripsOfficerTitle(department);
+      return `צוות מטה (${getDeptTripsOfficerTitle(department)})`;
     case "coordinator":
       return getCoordinatorRoleTitle(department);
     default:
       return "משתמש";
   }
 };
+
+// Backward-compat for older imports/usages.
+export const isDeptTripsOfficer = isDeptReviewOfficer;
 
 export const sanitizeInternalReturnUrl = (
   value: string | null | undefined,

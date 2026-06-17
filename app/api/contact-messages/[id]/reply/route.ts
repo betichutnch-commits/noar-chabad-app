@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
-import { isManagerUser } from "@/lib/auth";
+import { isManagerUser, isTechAdminUser } from "@/lib/auth";
 import type { User } from "@supabase/supabase-js";
 import { notifyUserIds } from "@/lib/notifications";
 
@@ -38,12 +38,17 @@ export async function POST(request: Request, { params }: RouteContext) {
 
   const { data: messageRow, error: messageLoadError } = await supabase
     .from("contact_messages")
-    .select("id, user_id, subject")
+    .select("id, user_id, subject, category")
     .eq("id", id)
     .single();
 
   if (messageLoadError || !messageRow) {
     return NextResponse.json({ error: "Message not found" }, { status: 404 });
+  }
+
+  const isBugCategory = String(messageRow.category || "general").toLowerCase() === "bug";
+  if (isBugCategory && !isTechAdminUser(userLike, profile)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const now = new Date().toISOString();

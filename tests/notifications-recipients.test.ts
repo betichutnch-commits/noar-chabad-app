@@ -30,15 +30,19 @@ describe("resolveRecipientUserIds", () => {
 
   it("matches dept_trips_officer by normalized department with fallback", async () => {
     const from = vi.fn(() => ({
-      select: vi.fn(() => ({
-        eq: vi.fn().mockResolvedValue({
-          data: [
-            { id: "o1", department: "תמים" },
-            { id: "o2", department: "בת מלך" },
-          ],
-          error: null,
-        }),
-      })),
+      select: vi.fn().mockResolvedValue({
+        data: [
+          {
+            id: "o1",
+            raw_user_meta_data: { role: "dept_staff", department: "תמים", can_dept_review: true },
+          },
+          {
+            id: "o2",
+            raw_user_meta_data: { role: "dept_staff", department: "בת מלך", can_dept_review: true },
+          },
+        ],
+        error: null,
+      }),
     }));
     const admin = { from } as unknown as SupabaseClient;
 
@@ -52,10 +56,8 @@ describe("resolveRecipientUserIds", () => {
     const fallbackAdmin = {
       from: vi.fn(() => ({
         select: vi.fn((cols: string) => {
-          if (cols.includes("department")) {
-            return {
-              eq: vi.fn().mockResolvedValue({ data: [], error: null }),
-            };
+          if (cols.includes("raw_user_meta_data")) {
+            return Promise.resolve({ data: [], error: null });
           }
           return {
             in: vi.fn().mockResolvedValue({

@@ -11,6 +11,9 @@ export type NotificationKind =
   | 'user.status_changed'
   | 'user.role_changed'
   | 'trip.secondary_staff'
+  | 'trip.assigned_safety'
+
+export type NotifyAction = { label: string; url: string }
 
 export type NotifyPayload = {
   kind: NotificationKind
@@ -19,6 +22,7 @@ export type NotifyPayload = {
   /** Path or full URL — normalized in notify layer */
   url: string
   inAppType?: string
+  actions?: NotifyAction[]
 }
 
 export type RecipientSelector =

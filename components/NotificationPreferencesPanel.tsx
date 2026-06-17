@@ -19,6 +19,7 @@ const KIND_OPTIONS: { kind: NotificationKind; label: string }[] = [
   { kind: 'user.status_changed', label: 'עדכון סטטוס חשבון' },
   { kind: 'user.role_changed', label: 'עדכון תפקיד' },
   { kind: 'trip.secondary_staff', label: 'שיבוץ צוות נוסף לטיול' },
+  { kind: 'trip.assigned_safety', label: 'שיוך טיול לטיפול בטיחות' },
 ]
 
 type Props = {
