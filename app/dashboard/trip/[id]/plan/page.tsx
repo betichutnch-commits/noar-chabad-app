@@ -13,11 +13,11 @@ import {
   ShieldAlert,
   Backpack,
   Printer,
+  Palette,
   StickyNote,
   CalendarDays,
   Clock3,
   GripVertical,
-  Check,
   ChevronDown,
   RefreshCw,
   Info,
@@ -38,12 +38,14 @@ import {
   Route,
   Maximize2,
   Minimize2,
+  Database,
   Download,
   Eye,
   ExternalLink,
 } from "lucide-react";
 import { EmergencyProcedureContent } from "@/components/EmergencyMedicalDocuments";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { useUser } from "@/hooks/useUser";
@@ -59,12 +61,14 @@ import {
   type TripAutofillMeta,
   type UploadedDocumentFile,
 } from "@/lib/tripDocumentAutofill";
+import { formatUploadedFileAssociation } from "@/lib/tripPlanLicenseTargets";
 import type { TripDocumentDefinition } from "@/lib/tripDocumentsCatalog";
 import type { RequiredStaffContext, RequiredStaffPlanRow } from "@/lib/tripRequiredRoles";
 import { computeRowDetailsSummaryCounts } from "@/lib/planRowDetailsSummary";
 import { normalizePlanRowTasks, type PlanRowTask } from "@/lib/planRowTasks";
 import { AssigneeResponsibilitiesBoard } from "@/components/plan/AssigneeResponsibilitiesBoard";
 import { OccurrenceDetailsCell } from "@/components/plan/OccurrenceDetailsCell";
+import { EquipmentSourceInput } from "@/components/plan/EquipmentSourceInput";
 import { TripRegulationCompliancePanel } from "@/components/plan/TripRegulationCompliancePanel";
 import { circular585, detectSensitiveLocation } from "@/lib/regulation";
 import { SensitiveLocationDialog } from "@/components/plan/SensitiveLocationDialog";
@@ -72,8 +76,17 @@ import { RowResponsibilitiesCell } from "@/components/plan/RowResponsibilitiesCe
 import { buildAssigneeBoards } from "@/lib/planAssigneeResponsibilities";
 import { RiskMitigationDisplay } from "@/components/plan/RiskMitigationDisplay";
 import { PlanPrintQuickDialog } from "@/components/plan/PlanPrintQuickDialog";
+import { PlanDesignQuickDialog } from "@/components/plan/PlanDesignQuickDialog";
+import { PlanDesignBriefField } from "@/components/plan/PlanDesignBriefField";
+import { RegulationOccurrenceBadges } from "@/components/plan/RegulationOccurrenceBadges";
+import { TripPlanTasksTab } from "@/components/plan/TripPlanTasksTab";
+import { buildTripPlanTasks, type TripPlanTaskUploadContext } from "@/lib/tripPlanTasks";
+import { buildMokedTevaTripCopyData } from "@/lib/mokedTevaTripCopyData";
+import { emptyPlanDesignDraft, DESIGN_STATUS_OPTIONS } from "@/lib/planDesign";
 import { authFetch } from "@/lib/authFetch";
 import { PLAN_TRIP_PAGE_TITLE } from "@/lib/planTripLabels";
+import { getTripParticipantLabels, localizeParticipantCopy } from "@/lib/tripParticipantLabels";
+import { getInstructionAudienceLabels } from "@/lib/planRowGuidelines";
 import { PlanTableTour } from "@/components/plan/PlanTableTour";
 import { PlanTableTourPicker } from "@/components/plan/PlanTableTourPicker";
 import {
@@ -96,6 +109,17 @@ import {
 } from "@/lib/staffRoster";
 import { StaffAssigneePicker } from "@/components/plan/StaffAssigneePicker";
 import { ParticipantsTab } from "./ParticipantsTab";
+import {
+  getMotifsForPlanRow,
+  getMotifsForPurchaseContext,
+  getMotifsForSuppliersContext,
+  hasSustainabilityEventText,
+  type SustainabilityMotif,
+} from "@/lib/sustainability";
+import { SustainabilityBriefDialog } from "@/components/sustainability/SustainabilityBriefDialog";
+import { SustainabilityIconBadge } from "@/components/sustainability/SustainabilityIcon";
+import { SustainabilityMotifStrip } from "@/components/sustainability/SustainabilityMotifStrip";
+import { useSustainabilityMotifsEnabled } from "@/contexts/SustainabilityMotifsContext";
 
 type PlanPrint = {
   id: string;
@@ -107,6 +131,21 @@ type PlanPrint = {
   page_type?: string | null;
   print_location?: string | null;
   notes?: string | null;
+  status?: string | null;
+  design_id?: string | null;
+};
+type PlanDesign = {
+  id: string;
+  row_id: string;
+  document_name: string;
+  designer_name?: string | null;
+  size_settings?: string | null;
+  notes?: string | null;
+  content_mode?: "text" | "file" | null;
+  document_text?: string | null;
+  designer_instructions?: string | null;
+  brief_file_name?: string | null;
+  output_file_name?: string | null;
   status?: string | null;
 };
 type PlanRow = {
@@ -152,13 +191,15 @@ type PlanRow = {
     source_details?: string | null;
   }>;
   prints: PlanPrint[];
+  designs: PlanDesign[];
 };
 
-type PlanSection = "safety" | "equipment" | "prints" | "notes" | "details" | "responsibilities";
-type PlanSectionWithDone = PlanSection;
+type PlanSection = "safety" | "equipment" | "designs" | "prints" | "notes" | "details" | "responsibilities";
+type PlanSectionWithDone = Exclude<PlanSection, "designs">;
 type ExpandedColsState = {
   safety: boolean;
   equipment: boolean;
+  designs: boolean;
   prints: boolean;
   notes: boolean;
   details: boolean;
@@ -167,17 +208,19 @@ type ExpandedColsState = {
 const emptyExpandedCols = (): ExpandedColsState => ({
   safety: false,
   equipment: false,
+  designs: false,
   prints: false,
   notes: false,
   details: false,
   responsibilities: false,
 });
-type PlanTab = "schedule" | "participants" | "transport";
-type QuickActionId = "documents" | "emergency" | "equipment" | "purchases" | "risks" | "refunds" | "contacts" | "roles" | "guidelines" | "prints";
-type QuickActionSurfaceId = QuickActionId | "suppliers" | "printShops";
+type PlanTab = "schedule" | "tasks" | "participants" | "transport";
+type QuickActionId = "documents" | "emergency" | "equipment" | "purchases" | "risks" | "refunds" | "contacts" | "roles" | "guidelines" | "designs" | "prints";
+type QuickActionSurfaceId = QuickActionId | "suppliers" | "printShops" | "designers";
 type PurchaseOverride = { id?: string; equipment_id: string; status?: string | null; owner?: string | null; unit_price?: number | string | null };
 type SupplierRecord = { id?: string; name: string; phone?: string | null; email?: string | null; address?: string | null };
 type PrintShopRecord = { id?: string; name: string; phone?: string | null; email?: string | null; address?: string | null };
+type DesignerRecord = { id?: string; name: string; phone?: string | null; email?: string | null; address?: string | null };
 type TripContactRow = { role: string; firstName: string; lastName: string; phone: string; extraPhone: string; email: string; notes: string };
 type TripInvoiceRecord = {
   id: string;
@@ -214,6 +257,7 @@ const bytesLabel = (v?: number | null) => {
 
 const plannerTabs: Array<{ id: PlanTab; label: string; Icon: typeof Route }> = [
   { id: "schedule", label: "לו״ז מפורט", Icon: Route },
+  { id: "tasks", label: "משימות", Icon: ClipboardList },
   { id: "participants", label: "פרטי חניכים וצוות", Icon: UsersRound },
   { id: "transport", label: "ניהול הסעות", Icon: Bus },
 ];
@@ -228,6 +272,7 @@ const quickActionButtons: Array<{ id: QuickActionId; label: string; Icon: typeof
   { id: "contacts", label: "רשימת קשר", Icon: Phone },
   { id: "roles", label: "הגדרות תפקיד", Icon: Settings },
   { id: "guidelines", label: "הנחיות וחוזרי מנכ״ל", Icon: ScrollText },
+  { id: "designs", label: "עיצובים", Icon: Palette },
   { id: "prints", label: "הדפסות", Icon: Printer },
 ];
 
@@ -257,6 +302,11 @@ const printStatusOptions: StyledStatusOption[] = [
   { value: "הודפס", label: "הודפס" },
   { value: "נאסף", label: "נאסף" },
   { value: "בוטל", label: "בוטל" },
+];
+
+const designStatusOptions: StyledStatusOption[] = [
+  { value: "", label: "בחר סטטוס" },
+  ...DESIGN_STATUS_OPTIONS.map((option) => ({ value: option.value, label: option.label })),
 ];
 
 const purchaseStatusOptions: StyledStatusOption[] = [
@@ -522,7 +572,7 @@ const documentCatalog: TripDocumentDefinition[] = [
 
 const documentCategoryTone = (category: string) => {
   if (category.includes("אישור")) return "border-purple-100 bg-purple-50 text-purple-700";
-  if (category.includes("חניכים")) return "border-cyan-100 bg-cyan-50 text-cyan-700";
+  if (category.includes("חניכ")) return "border-cyan-100 bg-cyan-50 text-cyan-700";
   if (category.includes("הסעות")) return "border-amber-100 bg-amber-50 text-amber-700";
   if (category.includes("תדרוכים")) return "border-blue-100 bg-blue-50 text-blue-700";
   if (category.includes("חירום")) return "border-red-100 bg-red-50 text-red-700";
@@ -532,7 +582,7 @@ const documentCategoryTone = (category: string) => {
 
 const documentCategoryBlockTone = (category: string) => {
   if (category.includes("אישור")) return "bg-purple-50/70 text-purple-900";
-  if (category.includes("חניכים")) return "bg-cyan-50/70 text-cyan-900";
+  if (category.includes("חניכ")) return "bg-cyan-50/70 text-cyan-900";
   if (category.includes("הסעות")) return "bg-amber-50/70 text-amber-900";
   if (category.includes("תדרוכים")) return "bg-blue-50/70 text-blue-900";
   if (category.includes("חירום")) return "bg-red-50/70 text-red-900";
@@ -623,81 +673,25 @@ function StyledStatusSelect({
   options: StyledStatusOption[];
   onChange: (next: string) => void;
   disabled?: boolean;
-  tone?: "cyan" | "emerald" | "purple";
+  tone?: "cyan" | "emerald" | "purple" | "fuchsia";
 }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const active = options.find((option) => option.value === value) || options[0];
-  const toneClass =
-    tone === "emerald"
-      ? "focus:ring-emerald-100 data-[open=true]:border-emerald-300 data-[open=true]:ring-emerald-100"
-      : tone === "purple"
-        ? "focus:ring-purple-100 data-[open=true]:border-purple-300 data-[open=true]:ring-purple-100"
-        : "focus:ring-cyan-100 data-[open=true]:border-cyan-300 data-[open=true]:ring-cyan-100";
-  const selectedClass =
-    tone === "emerald"
-      ? "bg-emerald-50 text-emerald-700"
-      : tone === "purple"
-        ? "bg-purple-50 text-purple-700"
-        : "bg-cyan-50 text-cyan-700";
   const isDocumentStatusSelect = options === documentStatusOptions;
-  const statusToneClass = documentStatusToneClasses(active?.value || "", "select");
-
-  useEffect(() => {
-    const onDocClick = (event: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, []);
+  const accent = tone === "emerald" ? "emerald" : tone === "purple" ? "purple" : tone === "fuchsia" ? "fuchsia" : "cyan";
+  const selectableOptions = options.filter((option) => option.value !== "");
+  const placeholderOption = options.find((option) => !option.value);
 
   return (
-    <div className={`relative ${isDocumentStatusSelect ? "flex justify-center" : ""}`} ref={rootRef}>
-      <button
-        type="button"
-        onClick={() => !disabled && setIsOpen((prev) => !prev)}
-        disabled={disabled}
-        data-open={isOpen}
-        className={
-          isDocumentStatusSelect
-            ? `relative inline-flex h-9 min-w-28 items-center justify-center rounded-full border px-4 pl-9 text-center text-xs font-black shadow-sm outline-none transition-all hover:shadow disabled:cursor-not-allowed disabled:opacity-60 data-[open=true]:ring-2 ${statusToneClass} ${toneClass}`
-            : `relative h-10 w-full rounded-2xl border border-gray-200 bg-gradient-to-b from-white to-slate-50 px-3 pl-9 text-center text-xs font-black text-gray-700 shadow-sm outline-none transition-all hover:border-gray-300 hover:shadow disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400 data-[open=true]:ring-2 ${toneClass}`
-        }
-      >
-        {active?.label || "בחר סטטוס"}
-        <ChevronDown
-          size={14}
-          className={`pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 transition-transform ${isOpen ? "rotate-180" : ""}`}
-        />
-      </button>
-      {isOpen ? (
-        <div className={`absolute top-full z-50 mt-1.5 min-w-48 overflow-hidden rounded-2xl border border-gray-100 bg-white p-1.5 text-center shadow-2xl ${isDocumentStatusSelect ? "right-1/2 translate-x-1/2" : "right-0 w-full"}`}>
-          {options.map((option) => {
-            const selected = option.value === value;
-            const optionToneClass = documentStatusToneClasses(option.value, "select");
-            return (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => {
-                  onChange(option.value);
-                  setIsOpen(false);
-                }}
-                className={`flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-center text-xs font-black transition-colors ${
-                  isDocumentStatusSelect ? `${optionToneClass} ${selected ? "ring-1 ring-inset ring-current/20" : "opacity-85 hover:opacity-100"}` : selected ? selectedClass : "text-gray-700 hover:bg-gray-50"
-                }`}
-              >
-                <Check size={13} className={selected ? "opacity-100" : "opacity-0"} />
-                <span className="flex-1">{option.label}</span>
-                <span className="w-[13px]" />
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
-    </div>
+    <Select
+      value={value}
+      onChange={onChange}
+      options={selectableOptions}
+      placeholder={placeholderOption?.label || "בחר סטטוס"}
+      clearable={false}
+      disabled={disabled}
+      accent={accent}
+      variant={isDocumentStatusSelect ? "pill" : "status"}
+      getOptionClassName={isDocumentStatusSelect ? (optionValue) => documentStatusToneClasses(optionValue, "select") : undefined}
+    />
   );
 }
 
@@ -766,11 +760,14 @@ export default function TripPlanPage() {
   const quickActionParam = searchParams.get("quickAction");
   const focusParam = searchParams.get("focus");
   const { user, profile, loading: userLoading } = useUser("/");
+  const sustainabilityMotifsEnabled = useSustainabilityMotifsEnabled();
   const [loading, setLoading] = useState(true);
   const [tripName, setTripName] = useState("");
   const [tripStartDate, setTripStartDate] = useState("");
+  const [tripDepartment, setTripDepartment] = useState<string | null>(null);
   const [tripAutofillMeta, setTripAutofillMeta] = useState<TripAutofillMeta | null>(null);
   const [activeTab, setActiveTab] = useState<PlanTab>("schedule");
+  const [taskFocusRowKey, setTaskFocusRowKey] = useState<string | null>(null);
   const [rows, setRows] = useState<PlanRow[]>([]);
   const [occurrenceSchemaMissing, setOccurrenceSchemaMissing] = useState(false);
   const [instructionsSchemaMissing, setInstructionsSchemaMissing] = useState(false);
@@ -780,6 +777,11 @@ export default function TripPlanPage() {
   const [rowFollowUp, setRowFollowUp] = useState<{ rowId: string; action: PlanRowFollowUpActionId } | null>(null);
   const [printQuickDialogRowId, setPrintQuickDialogRowId] = useState<string | null>(null);
   const [printDialogSavePrompt, setPrintDialogSavePrompt] = useState(false);
+  const [designQuickDialogRowId, setDesignQuickDialogRowId] = useState<string | null>(null);
+  const [designDialogSavePrompt, setDesignDialogSavePrompt] = useState(false);
+  const [designUploadError, setDesignUploadError] = useState("");
+  const [designsSchemaMissing, setDesignsSchemaMissing] = useState(false);
+  const [designFilter, setDesignFilter] = useState<"all" | "no_print" | "ready" | "in_progress">("all");
   const [savingRowId, setSavingRowId] = useState<string | null>(null);
   const [uploadingRowId, setUploadingRowId] = useState<string | null>(null);
   const [expandedCols, setExpandedCols] = useState<Record<string, ExpandedColsState>>({});
@@ -823,7 +825,6 @@ export default function TripPlanPage() {
   const [activeQuantityUnitPicker, setActiveQuantityUnitPicker] = useState<string | null>(null);
   const [customQuantityUnitKey, setCustomQuantityUnitKey] = useState<string | null>(null);
   const [customQuantityUnitValue, setCustomQuantityUnitValue] = useState("");
-  const [activeSourceSuggestionKey, setActiveSourceSuggestionKey] = useState<string | null>(null);
   const [activePrintLocationSuggestionKey, setActivePrintLocationSuggestionKey] = useState<string | null>(null);
   const [printDrafts, setPrintDrafts] = useState<
     Record<
@@ -834,9 +835,11 @@ export default function TripPlanPage() {
         print_size: string;
         page_type: string;
         print_location: string;
+        design_id: string;
       }
     >
   >({});
+  const [designDrafts, setDesignDrafts] = useState<Record<string, ReturnType<typeof emptyPlanDesignDraft>>>({});
   const [riskDialog, setRiskDialog] = useState<{
     open: boolean;
     rowId: string;
@@ -860,6 +863,10 @@ export default function TripPlanPage() {
     rowId: string;
     matchedLabel?: string;
     onConfirm: () => void;
+  } | null>(null);
+  const [sustainabilityBriefDialog, setSustainabilityBriefDialog] = useState<{
+    motifs: SustainabilityMotif[];
+    activityLabel: string;
   } | null>(null);
   const [riskSummaryDialog, setRiskSummaryDialog] = useState<{
     open: boolean;
@@ -913,21 +920,34 @@ export default function TripPlanPage() {
   const [printShopsSchemaMissing, setPrintShopsSchemaMissing] = useState(false);
   const [printShops, setPrintShops] = useState<PrintShopRecord[]>([]);
   const [showPrintShopsDialog, setShowPrintShopsDialog] = useState(false);
+  const [designersLoading, setDesignersLoading] = useState(false);
+  const [designersError, setDesignersError] = useState("");
+  const [designersSchemaMissing, setDesignersSchemaMissing] = useState(false);
+  const [designers, setDesigners] = useState<DesignerRecord[]>([]);
+  const [showDesignersDialog, setShowDesignersDialog] = useState(false);
+  const [designHubDraft, setDesignHubDraft] = useState(() => ({ rowId: "", ...emptyPlanDesignDraft() }));
+  const [designHubError, setDesignHubError] = useState("");
+  const [designHubUploading, setDesignHubUploading] = useState(false);
   const [documentsLoading, setDocumentsLoading] = useState(false);
   const [documentsError, setDocumentsError] = useState("");
   const [documentsSchemaMissing, setDocumentsSchemaMissing] = useState(false);
   const [documentOverrides, setDocumentOverrides] = useState<TripDocumentOverride[]>([]);
   const [documentParticipantsPayload, setDocumentParticipantsPayload] = useState<AutofillParticipantsPayload>(defaultAutofillParticipantsPayload);
   const [expandedDocumentDetails, setExpandedDocumentDetails] = useState<Set<string>>(new Set());
+  const [expandedDocumentSources, setExpandedDocumentSources] = useState<Set<string>>(new Set());
   const [expandedDocumentNotes, setExpandedDocumentNotes] = useState<Set<string>>(new Set());
   const [uploadingDocumentKey, setUploadingDocumentKey] = useState<string | null>(null);
   const purchaseSaveTimersRef = useRef<Record<string, number>>({});
   const invoiceSaveTimersRef = useRef<Record<string, number>>({});
   const printShopSaveTimersRef = useRef<Record<string, number>>({});
+  const designerSaveTimersRef = useRef<Record<string, number>>({});
   const printStatusSaveTimersRef = useRef<Record<string, number>>({});
+  const designSaveTimersRef = useRef<Record<string, number>>({});
   const documentSaveTimersRef = useRef<Record<string, number>>({});
 
   const tripId = String(params.id || "");
+  const participantLabels = useMemo(() => getTripParticipantLabels(tripDepartment), [tripDepartment]);
+  const instructionAudienceLabels = useMemo(() => getInstructionAudienceLabels(tripDepartment), [tripDepartment]);
   const draftStorageKey = `trip-plan-draft:${tripId}`;
   const documentsReturnStorageKey = `trip-documents-return:${tripId}`;
   const quickActionFullscreenStorageKey = `trip-quick-action-fullscreen:${tripId}`;
@@ -1004,8 +1024,8 @@ export default function TripPlanPage() {
         assignee_role_key: serverItem.assignee_role_key ?? localItem.assignee_role_key,
       };
     }) || serverRow.tasks || [];
-    const prints = (serverRow.prints || localRow.prints).map((serverPrint, idx) => {
-      const localPrint = localRow.prints[idx];
+    const prints = (serverRow.prints || localRow.prints || []).map((serverPrint, idx) => {
+      const localPrint = (localRow.prints || [])[idx];
       if (!localPrint) return serverPrint;
       return {
         ...localPrint,
@@ -1013,8 +1033,10 @@ export default function TripPlanPage() {
         print_size: serverPrint.print_size ?? localPrint.print_size,
         page_type: serverPrint.page_type ?? localPrint.page_type,
         print_location: serverPrint.print_location ?? localPrint.print_location,
+        design_id: serverPrint.design_id ?? localPrint.design_id,
       };
     });
+    const designs = serverRow.designs?.length ? serverRow.designs : localRow.designs || [];
 
     return {
       ...localRow,
@@ -1030,6 +1052,7 @@ export default function TripPlanPage() {
       safety,
       equipment,
       prints,
+      designs: designs || [],
       tasks,
     };
   }, []);
@@ -1065,7 +1088,8 @@ export default function TripPlanPage() {
         ...localItem,
         id: localItem.id || serverRow.tasks?.[idx]?.id,
       })),
-      prints: localRow.prints.length ? localRow.prints : serverRow.prints,
+      prints: (localRow.prints || []).length ? localRow.prints || [] : serverRow.prints || [],
+      designs: (localRow.designs || []).length ? localRow.designs || [] : serverRow.designs || [],
     };
   }, []);
 
@@ -1076,7 +1100,12 @@ export default function TripPlanPage() {
       if (!raw) return;
       const parsed = JSON.parse(raw) as { rows?: PlanRow[]; savedAt?: number };
       if (!Array.isArray(parsed?.rows) || parsed.rows.length === 0) return;
-      draftRowsRef.current = parsed.rows;
+      draftRowsRef.current = parsed.rows.map((row) => ({
+        ...row,
+        prints: row.prints || [],
+        designs: row.designs || [],
+        tasks: row.tasks || [],
+      }));
     } catch {
       // Ignore malformed local draft
     }
@@ -1089,12 +1118,14 @@ export default function TripPlanPage() {
 
     setTripName(String(payload?.trip?.name || "תכנון טיול"));
     setTripStartDate(String(payload?.trip?.start_date || ""));
+    setTripDepartment((payload?.trip?.department as string | null | undefined) || null);
     setTripAutofillMeta((payload?.trip as TripAutofillMeta | null) || null);
     const schemaMissing = payload?.schemaMissing as
-      | { occurrenceDetails?: boolean; instructions?: boolean; tasks?: boolean }
+      | { occurrenceDetails?: boolean; instructions?: boolean; tasks?: boolean; designs?: boolean }
       | undefined;
     setOccurrenceSchemaMissing(Boolean(schemaMissing?.occurrenceDetails || schemaMissing?.tasks));
     setInstructionsSchemaMissing(Boolean(schemaMissing?.instructions));
+    setDesignsSchemaMissing(Boolean(schemaMissing?.designs));
     const existingRows = Array.isArray(payload?.rows) ? (payload.rows as PlanRow[]) : [];
     const timeline = Array.isArray(payload?.trip?.details?.timeline) ? payload.trip.details.timeline : [];
     const rowsLookEmpty =
@@ -1108,7 +1139,8 @@ export default function TripPlanPage() {
           !r.owner_name &&
           (r.safety?.length || 0) === 0 &&
           (r.equipment?.length || 0) === 0 &&
-          (r.prints?.length || 0) === 0,
+          (r.prints?.length || 0) === 0 &&
+          (r.designs?.length || 0) === 0,
       );
 
     if (existingRows.length === 0) {
@@ -1135,6 +1167,8 @@ export default function TripPlanPage() {
       ...r,
       day_index: r.day_index ?? idx + 1,
       tasks: normalizePlanRowTasks(r.tasks),
+      prints: r.prints || [],
+      designs: r.designs || [],
     }));
     const localPrior =
       rowsRef.current.length > 0
@@ -1199,10 +1233,6 @@ export default function TripPlanPage() {
     }
   }, [tripId]);
 
-  useEffect(() => {
-    void loadStaffRoster();
-  }, [loadStaffRoster]);
-
   const planningRoles = useMemo(() => buildPlanningRoleOptions(requiredStaffRows), [requiredStaffRows]);
   const staffAssigneeMode = hasApprovedStaffPlan ? "roster" : "planning";
 
@@ -1224,6 +1254,11 @@ export default function TripPlanPage() {
     }
   }, [tripId]);
 
+  useEffect(() => {
+    void loadStaffRoster();
+    void loadPurchaseMeta();
+  }, [loadStaffRoster, loadPurchaseMeta]);
+
   const loadPrintShopsMeta = useCallback(async () => {
     if (!tripId) return;
     setPrintShopsLoading(true);
@@ -1238,6 +1273,23 @@ export default function TripPlanPage() {
       setPrintShopsError(err instanceof Error ? err.message : "טעינת פרטי בתי דפוס נכשלה");
     } finally {
       setPrintShopsLoading(false);
+    }
+  }, [tripId]);
+
+  const loadDesignersMeta = useCallback(async () => {
+    if (!tripId) return;
+    setDesignersLoading(true);
+    setDesignersError("");
+    try {
+      const res = await fetch(`/api/trips/${tripId}/plan/designers`, { credentials: "include" });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(String(payload?.error || "טעינת פרטי מעצבים נכשלה"));
+      setDesignersSchemaMissing(Boolean(payload?.schemaMissing));
+      setDesigners(Array.isArray(payload?.designers) ? payload.designers : []);
+    } catch (err) {
+      setDesignersError(err instanceof Error ? err.message : "טעינת פרטי מעצבים נכשלה");
+    } finally {
+      setDesignersLoading(false);
     }
   }, [tripId]);
 
@@ -1322,7 +1374,7 @@ export default function TripPlanPage() {
   }, [tripId]);
 
   const openQuickAction = (actionId: QuickActionId) => {
-    if (actionId !== "documents" && actionId !== "emergency" && actionId !== "purchases" && actionId !== "risks" && actionId !== "equipment" && actionId !== "prints" && actionId !== "roles" && actionId !== "contacts" && actionId !== "refunds") return;
+    if (actionId !== "documents" && actionId !== "emergency" && actionId !== "purchases" && actionId !== "risks" && actionId !== "equipment" && actionId !== "prints" && actionId !== "designs" && actionId !== "roles" && actionId !== "contacts" && actionId !== "refunds") return;
     const savedFullscreenState = window.sessionStorage.getItem(quickActionFullscreenStorageKey);
     if (savedFullscreenState) {
       try {
@@ -1339,6 +1391,7 @@ export default function TripPlanPage() {
       void loadInvoices();
     }
     if (actionId === "prints") void loadPrintShopsMeta();
+    if (actionId === "designs") void loadDesignersMeta();
     if (actionId === "roles") {
       setRolesQuickActionTab("assignees");
       void loadRequiredStaffPlan();
@@ -1535,6 +1588,36 @@ export default function TripPlanPage() {
     }, 700);
   };
 
+  const patchDesignerMeta = async (body: Record<string, unknown>) => {
+    const res = await fetch(`/api/trips/${tripId}/plan/designers`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(String(payload?.error || "שמירת מעצב נכשלה"));
+    return payload;
+  };
+
+  const updateDesigner = (name: string, patch: { phone?: string; email?: string; address?: string }) => {
+    setDesigners((prev) => {
+      const current = prev.find((designer) => designer.name === name);
+      const next = current ? { ...current, ...patch } : { name, phone: "", email: "", address: "", ...patch };
+      return current ? prev.map((designer) => (designer.name === name ? next : designer)) : [...prev, next];
+    });
+    window.clearTimeout(designerSaveTimersRef.current[name]);
+    designerSaveTimersRef.current[name] = window.setTimeout(() => {
+      const current = designers.find((designer) => designer.name === name);
+      const phone = patch.phone ?? current?.phone ?? "";
+      const email = patch.email ?? current?.email ?? "";
+      const address = patch.address ?? current?.address ?? "";
+      void patchDesignerMeta({ action: "updateDesigner", name, phone, email, address })
+        .then(() => loadDesignersMeta())
+        .catch((err) => setDesignersError(err instanceof Error ? err.message : "שמירת מעצב נכשלה"));
+    }, 700);
+  };
+
   const updatePrintStatus = (rowId: string, printId: string, status: string) => {
     setRows((prev) =>
       prev.map((row) =>
@@ -1671,7 +1754,7 @@ export default function TripPlanPage() {
     }
   };
 
-  const uploadDocumentFile = async (documentKey: string, file: File) => {
+  const uploadDocumentFile = async (documentKey: string, file: File, context?: TripPlanTaskUploadContext) => {
     setUploadingDocumentKey(documentKey);
     setDocumentsError("");
     try {
@@ -1679,6 +1762,11 @@ export default function TripPlanPage() {
       fd.append("action", "uploadDocumentFile");
       fd.append("documentKey", documentKey);
       fd.append("file", file);
+      if (context?.planRowId) fd.append("planRowId", context.planRowId);
+      if (context?.scheduleLabel) fd.append("scheduleLabel", context.scheduleLabel);
+      if (context?.occurrenceLabel) fd.append("occurrenceLabel", context.occurrenceLabel);
+      if (context?.businessName) fd.append("businessName", context.businessName);
+      if (context?.uploadKind) fd.append("uploadKind", context.uploadKind);
       const res = await fetch(`/api/trips/${tripId}/plan/documents`, {
         method: "POST",
         credentials: "include",
@@ -1717,18 +1805,23 @@ export default function TripPlanPage() {
   useEffect(() => {
     const init = async () => {
       if (!user) return;
-      const { data: trip } = await supabase.from("trips").select("user_id").eq("id", tripId).single();
-      if (!trip) {
-        router.push("/dashboard/my-trips");
-        return;
+      try {
+        const { data: trip } = await supabase.from("trips").select("user_id").eq("id", tripId).single();
+        if (!trip) {
+          router.push("/dashboard/my-trips");
+          return;
+        }
+        const manager = isManagerUser(user, profile);
+        if (!manager && String(trip.user_id) !== user.id) {
+          router.push("/dashboard");
+          return;
+        }
+        await loadPlan();
+      } catch (err) {
+        console.error("Failed to load trip plan", err);
+      } finally {
+        setLoading(false);
       }
-      const manager = isManagerUser(user, profile);
-      if (!manager && String(trip.user_id) !== user.id) {
-        router.push("/dashboard");
-        return;
-      }
-      await loadPlan();
-      setLoading(false);
     };
     if (!userLoading && user && tripId) void init();
   }, [userLoading, user, profile, tripId, router, loadPlan]);
@@ -1807,6 +1900,7 @@ export default function TripPlanPage() {
                   id: item.id || serverRow.tasks?.[idx]?.id,
                 })),
                 prints: serverRow.prints || current.prints,
+                designs: serverRow.designs || current.designs,
               };
             }),
           );
@@ -1992,6 +2086,7 @@ export default function TripPlanPage() {
       safety: [],
       equipment: [],
       prints: [],
+      designs: [],
       tasks: [],
     };
     const optimisticRows = [
@@ -2014,7 +2109,7 @@ export default function TripPlanPage() {
       });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok || !payload?.row) throw new Error(String(payload?.error || "Failed to create row"));
-      const serverRow = { ...(payload.row as PlanRow), safety: [], equipment: [], prints: [], tasks: [] };
+      const serverRow = { ...(payload.row as PlanRow), safety: [], equipment: [], prints: [], designs: [], tasks: [] };
       lastSavedSignatureRef.current[serverRow.id] = rowSignature(serverRow);
       setRows((prev) => prev.map((row) => (row.id === tempId ? serverRow : row)));
       rowsRef.current = rowsRef.current.map((row) => (row.id === tempId ? serverRow : row));
@@ -2112,7 +2207,126 @@ export default function TripPlanPage() {
       print_size: "",
       page_type: "",
       print_location: "",
+      design_id: "",
     };
+
+  const getDesignDraft = (rowId: string) => designDrafts[rowId] || emptyPlanDesignDraft();
+
+  const updateDesignDraft = (rowId: string, patch: Partial<ReturnType<typeof emptyPlanDesignDraft>>) => {
+    setDesignDrafts((prev) => ({
+      ...prev,
+      [rowId]: {
+        ...getDesignDraft(rowId),
+        ...patch,
+      },
+    }));
+  };
+
+  const addDesign = async (
+    rowId: string,
+    options?: { showFollowUpPrompt?: boolean; draft?: ReturnType<typeof emptyPlanDesignDraft> },
+  ) => {
+    const draft = options?.draft ?? getDesignDraft(rowId);
+    if (!draft.document_name.trim()) {
+      const message = "שם המסמך הוא שדה חובה";
+      if (options?.draft) setDesignHubError(message);
+      else setDesignUploadError(message);
+      return;
+    }
+    if (rowId.startsWith("temp-")) {
+      const message = "יש לשמור את שורת הלו״ז לפני הוספת עיצוב.";
+      if (options?.draft) setDesignHubError(message);
+      else setDesignUploadError(message);
+      return;
+    }
+    await flushPendingEdits();
+    if (options?.draft) {
+      setDesignHubUploading(true);
+      setDesignHubError("");
+    } else {
+      setUploadingRowId(rowId);
+      setDesignUploadError("");
+    }
+    try {
+      const fd = new FormData();
+      fd.append("document_name", draft.document_name.trim());
+      fd.append("designer_name", draft.designer_name.trim());
+      fd.append("size_settings", draft.size_settings.trim());
+      fd.append("notes", draft.notes.trim());
+      fd.append("content_mode", draft.content_mode);
+      fd.append("document_text", draft.document_text.trim());
+      fd.append("designer_instructions", draft.designer_instructions.trim());
+      fd.append("status", draft.status);
+      if (draft.brief_file) fd.append("brief_file", draft.brief_file);
+      if (draft.output_file) fd.append("output_file", draft.output_file);
+      const res = await authFetch(`/api/trips/${tripId}/plan/rows/${rowId}/designs`, {
+        method: "POST",
+        body: fd,
+      });
+      const payload = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        const message = payload.error || "שמירת העיצוב נכשלה";
+        if (options?.draft) setDesignHubError(message);
+        else setDesignUploadError(message);
+        return;
+      }
+      if (options?.draft) {
+        setDesignHubDraft((prev) => ({ rowId: prev.rowId, ...emptyPlanDesignDraft() }));
+      } else {
+        setDesignDrafts((prev) => ({
+          ...prev,
+          [rowId]: emptyPlanDesignDraft(),
+        }));
+      }
+      if (draft.designer_name.trim()) {
+        void patchDesignerMeta({ action: "updateDesigner", name: draft.designer_name.trim() }).catch(() => undefined);
+      }
+      await loadPlan();
+      void loadDesignersMeta();
+      if (options?.showFollowUpPrompt) {
+        setDesignQuickDialogRowId(rowId);
+        setDesignDialogSavePrompt(true);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "שמירת העיצוב נכשלה";
+      if (options?.draft) setDesignHubError(message);
+      else setDesignUploadError(message);
+    } finally {
+      if (options?.draft) setDesignHubUploading(false);
+      else setUploadingRowId(null);
+    }
+  };
+
+  const removeDesign = async (rowId: string, designId: string) => {
+    await flushPendingEdits();
+    await fetch(`/api/trips/${tripId}/plan/rows/${rowId}/designs/${designId}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    await loadPlan();
+  };
+
+  const updateDesignStatus = async (rowId: string, designId: string, status: string) => {
+    setRows((prev) =>
+      prev.map((row) =>
+        row.id === rowId
+          ? {
+              ...row,
+              designs: (row.designs || []).map((design) => (design.id === designId ? { ...design, status } : design)),
+            }
+          : row,
+      ),
+    );
+    window.clearTimeout(designSaveTimersRef.current[designId]);
+    designSaveTimersRef.current[designId] = window.setTimeout(async () => {
+      await fetch(`/api/trips/${tripId}/plan/rows/${rowId}/designs/${designId}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+    }, 500);
+  };
 
   const updatePrintDraft = (rowId: string, patch: Partial<ReturnType<typeof getPrintDraft>>) => {
     setPrintDrafts((prev) => ({
@@ -2142,6 +2356,7 @@ export default function TripPlanPage() {
       fd.append("print_size", draft.print_size);
       fd.append("page_type", draft.page_type);
       fd.append("print_location", draft.print_location);
+      if (draft.design_id) fd.append("design_id", draft.design_id);
       const res = await authFetch(`/api/trips/${tripId}/plan/rows/${rowId}/prints`, {
         method: "POST",
         body: fd,
@@ -2159,6 +2374,7 @@ export default function TripPlanPage() {
           print_size: "",
           page_type: "",
           print_location: "",
+          design_id: "",
         },
       }));
       await loadPlan();
@@ -2215,6 +2431,9 @@ export default function TripPlanPage() {
         const overrideStatus = override?.status === "לא נדרש" ? "לא נדרש" : readiness.status;
         return {
           ...document,
+          category: localizeParticipantCopy(document.category, tripDepartment),
+          title: localizeParticipantCopy(document.title, tripDepartment),
+          description: localizeParticipantCopy(document.description, tripDepartment),
           status: normalizeDocumentStatus(overrideStatus),
           owner: documentOwnerValue(document.key, override?.owner) || (document.key === MOKED_TEVA_DOCUMENT_KEY ? SAFETY_DEPARTMENT_OWNER : ""),
           dataSource: getDocumentDataSourceLabel(document),
@@ -2226,7 +2445,7 @@ export default function TripPlanPage() {
           uploadedFiles,
         };
       }),
-    [documentOverridesByKey, documentParticipantsPayload, rowsSorted, tripAutofillMeta, tripId, uploadedFilesByDocumentKey],
+    [documentOverridesByKey, documentParticipantsPayload, rowsSorted, tripAutofillMeta, tripDepartment, tripId, uploadedFilesByDocumentKey],
   );
   const documentSummary = useMemo(
     () => ({
@@ -2237,6 +2456,11 @@ export default function TripPlanPage() {
     }),
     [documentItems],
   );
+
+  useEffect(() => {
+    if (activeTab !== "tasks") return;
+    void loadDocumentsMeta();
+  }, [activeTab, loadDocumentsMeta]);
 
   useEffect(() => {
     if (activeQuickAction !== "documents" || !documentItems.length) return;
@@ -2259,6 +2483,22 @@ export default function TripPlanPage() {
     (col: PlanSection) => rowsSorted.some((row) => Boolean(expandedCols[row.id]?.[col])),
     [expandedCols, rowsSorted],
   );
+  const isPrintsColumnOpen = useCallback(() => isColumnOpen("prints"), [isColumnOpen]);
+  const printsColumnWidthClass = isPrintsColumnOpen() ? "min-w-[440px] w-[440px]" : "min-w-[64px] w-[64px]";
+  const toggleAllPrintsColumn = () => {
+    const hasRows = rowsSorted.length > 0;
+    if (!hasRows) return;
+    const anyOpen = rowsSorted.some((row) => Boolean(expandedCols[row.id]?.prints));
+    setExpandedCols((prev) => {
+      const next = { ...prev };
+      for (const row of rowsSorted) {
+        const current = next[row.id] || emptyExpandedCols();
+        next[row.id] = { ...current, designs: !anyOpen, prints: !anyOpen };
+      }
+      return next;
+    });
+    if (!anyOpen) scrollSectionIntoView("prints");
+  };
   const doneKeyBySection: Record<PlanSectionWithDone, keyof PlanRow> = {
     safety: "safety_done",
     equipment: "equipment_done",
@@ -2280,6 +2520,8 @@ export default function TripPlanPage() {
       if (action === "responsibility") {
         setPrintQuickDialogRowId(null);
         setPrintDialogSavePrompt(false);
+        setDesignQuickDialogRowId(null);
+        setDesignDialogSavePrompt(false);
         setExpandedCols((prev) => ({
           ...prev,
           [rowId]: { ...emptyExpandedCols(), ...prev[rowId], responsibilities: true },
@@ -2288,21 +2530,29 @@ export default function TripPlanPage() {
         scrollSectionIntoView("responsibilities");
         return;
       }
-      if (action === "print") {
+      if (action === "print" || action === "design") {
+        setPrintQuickDialogRowId(null);
+        setPrintDialogSavePrompt(false);
+        setDesignQuickDialogRowId(null);
+        setDesignDialogSavePrompt(false);
         setExpandedCols((prev) => ({
           ...prev,
-          [rowId]: { ...emptyExpandedCols(), ...prev[rowId], prints: true },
+          [rowId]: { ...emptyExpandedCols(), ...prev[rowId], designs: true, prints: true },
         }));
-        setPrintQuickDialogRowId(rowId);
-        setPrintDialogSavePrompt(false);
         if (meta?.taskText) {
-          updatePrintDraft(rowId, { page_type: meta.taskText });
+          if (action === "design") {
+            updateDesignDraft(rowId, { document_name: meta.taskText });
+          } else {
+            updatePrintDraft(rowId, { page_type: meta.taskText });
+          }
         }
         scrollSectionIntoView("prints");
         return;
       }
       setPrintQuickDialogRowId(null);
       setPrintDialogSavePrompt(false);
+      setDesignQuickDialogRowId(null);
+      setDesignDialogSavePrompt(false);
       setExpandedCols((prev) => ({
         ...prev,
         [rowId]: { ...emptyExpandedCols(), ...prev[rowId], details: true },
@@ -2356,12 +2606,18 @@ export default function TripPlanPage() {
         if (sourceType === "קיים") existing.add(value);
       }
     }
+    for (const supplier of suppliers) {
+      const name = String(supplier.name || "").trim();
+      if (!name) continue;
+      purchase.add(name);
+      all.add(name);
+    }
     return {
       existing: [...existing].sort((a, b) => a.localeCompare(b, "he")),
       purchase: [...purchase].sort((a, b) => a.localeCompare(b, "he")),
       all: [...all].sort((a, b) => a.localeCompare(b, "he")),
     };
-  }, [rows]);
+  }, [rows, suppliers]);
   const printLocationSuggestions = useMemo(() => {
     const values = new Set<string>();
     for (const row of rows) {
@@ -2393,6 +2649,43 @@ export default function TripPlanPage() {
       };
     },
     [tripStartDate],
+  );
+  const tripPlanTasks = useMemo(
+    () =>
+      buildTripPlanTasks({
+        planRows: rowsSorted.map((row) => {
+          const day = getDayDisplay(row.day_index ?? row.order_index + 1);
+          const scheduleLabel = [day.greg, row.time_text, row.event_text, row.location_text]
+            .map((part) => String(part || "").trim())
+            .filter(Boolean)
+            .join(" · ");
+          return {
+            id: row.id,
+            eventText: row.event_text,
+            locationText: row.location_text,
+            locationSensitive: row.location_sensitive,
+            scheduleLabel,
+            equipment: (row.equipment || []).map((item) => ({
+              source_details: item.source_details,
+              source_type: item.source_type,
+            })),
+          };
+        }),
+        documentOverrides,
+        tripDetails: (tripAutofillMeta?.details as Record<string, unknown> | undefined) || {},
+      }),
+    [documentOverrides, getDayDisplay, rowsSorted, tripAutofillMeta?.details],
+  );
+  const mokedTevaTripCopyData = useMemo(
+    () =>
+      buildMokedTevaTripCopyData({
+        trip: tripAutofillMeta,
+        tripName,
+        tripStartDate,
+        planRows: rowsSorted,
+        dayLabel: (dayIndex) => getDayDisplay(dayIndex).greg,
+      }),
+    [getDayDisplay, rowsSorted, tripAutofillMeta, tripName, tripStartDate],
   );
   const assigneeBoards = useMemo(
     () => buildAssigneeBoards(rowsSorted, (dayIndex) => getDayDisplay(dayIndex)),
@@ -2517,11 +2810,15 @@ export default function TripPlanPage() {
       fileSize: string;
       notes: string;
       status: string;
+      linkedDesignName: string;
     }> = [];
     for (const row of rowsSorted) {
       const day = getDayDisplay(row.day_index ?? row.order_index + 1);
       const rowLabel = [day.greg, row.time_text, row.location_text].map((part) => String(part || "").trim()).filter(Boolean).join(" · ");
       for (const print of row.prints || []) {
+        const linkedDesign = print.design_id
+          ? row.designs?.find((design) => design.id === print.design_id)
+          : undefined;
         items.push({
           key: print.id,
           rowId: row.id,
@@ -2535,11 +2832,108 @@ export default function TripPlanPage() {
           fileSize: bytesLabel(print.file_size_bytes),
           notes: print.notes || "",
           status: print.status || "",
+          linkedDesignName: linkedDesign?.document_name || "",
         });
       }
     }
     return items;
   }, [getDayDisplay, rowsSorted]);
+  const designItems = useMemo(() => {
+    const items: Array<{
+      key: string;
+      rowId: string;
+      occurrence: string;
+      rowLabel: string;
+      documentName: string;
+      designerName: string;
+      sizeSettings: string;
+      status: string;
+      contentMode: string;
+      printLink: string;
+      notes: string;
+      filesLabel: string;
+    }> = [];
+    for (const row of rowsSorted) {
+      const day = getDayDisplay(row.day_index ?? row.order_index + 1);
+      const rowLabel = [day.greg, row.time_text, row.location_text].map((part) => String(part || "").trim()).filter(Boolean).join(" · ");
+      for (const design of row.designs || []) {
+        const linkedPrint = row.prints?.find((print) => print.design_id === design.id);
+        const fileParts = [design.brief_file_name, design.output_file_name].map((part) => String(part || "").trim()).filter(Boolean);
+        items.push({
+          key: design.id,
+          rowId: row.id,
+          occurrence: row.event_text || row.location_text || "התרחשות ללא פירוט",
+          rowLabel,
+          documentName: design.document_name || "מסמך ללא שם",
+          designerName: design.designer_name || "",
+          sizeSettings: design.size_settings || "",
+          status: design.status || "",
+          contentMode: design.content_mode === "file" ? "קובץ" : "טקסט",
+          printLink: linkedPrint ? linkedPrint.file_name || "הודפס" : "",
+          notes: design.notes || "",
+          filesLabel: fileParts.length ? fileParts.join(" · ") : "-",
+        });
+      }
+    }
+    return items;
+  }, [getDayDisplay, rowsSorted]);
+  const filteredDesignItems = useMemo(() => {
+    if (designFilter === "all") return designItems;
+    if (designFilter === "no_print") return designItems.filter((item) => !item.printLink);
+    if (designFilter === "ready") return designItems.filter((item) => item.status === "מוכן להדפסה");
+    return designItems.filter((item) => item.status === "בטיפול");
+  }, [designFilter, designItems]);
+  const designSummary = useMemo(
+    () => ({
+      total: designItems.length,
+      ready: designItems.filter((item) => item.status === "מוכן להדפסה").length,
+      inProgress: designItems.filter((item) => item.status === "בטיפול").length,
+      noPrint: designItems.filter((item) => !item.printLink).length,
+    }),
+    [designItems],
+  );
+  const designerNamesFromDesigns = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          rows.flatMap((row) =>
+            (row.designs || []).map((design) => String(design.designer_name || "").trim()).filter(Boolean),
+          ),
+        ),
+      ).sort((a, b) => a.localeCompare(b, "he")),
+    [rows],
+  );
+  const designerSuggestionNames = useMemo(
+    () =>
+      Array.from(new Set([...designers.map((designer) => designer.name.trim()).filter(Boolean), ...designerNamesFromDesigns])).sort(
+        (a, b) => a.localeCompare(b, "he"),
+      ),
+    [designerNamesFromDesigns, designers],
+  );
+  const designersByName = useMemo(() => new Map(designers.map((designer) => [designer.name, designer])), [designers]);
+  const designerStats = useMemo(() => {
+    const stats = new Map<string, { count: number }>();
+    for (const item of designItems) {
+      const name = item.designerName.trim();
+      if (!name) continue;
+      stats.set(name, { count: (stats.get(name)?.count || 0) + 1 });
+    }
+    return stats;
+  }, [designItems]);
+  const designRowOptions = useMemo(
+    () =>
+      rowsSorted
+        .filter((row) => !row.id.startsWith("temp-"))
+        .map((row) => {
+          const day = getDayDisplay(row.day_index ?? row.order_index + 1);
+          const label = [row.event_text || row.location_text || "התרחשות", day.greg, row.time_text]
+            .map((part) => String(part || "").trim())
+            .filter(Boolean)
+            .join(" · ");
+          return { id: row.id, label };
+        }),
+    [getDayDisplay, rowsSorted],
+  );
   const printSummary = useMemo(
     () => ({
       total: printItems.length,
@@ -2607,6 +3001,19 @@ export default function TripPlanPage() {
     return items;
   }, [getDayDisplay, purchaseOverrides, rowsSorted]);
   const purchaseTotalCost = useMemo(() => purchaseItems.reduce((total, item) => total + item.totalPrice, 0), [purchaseItems]);
+  const purchaseSustainabilityMotifs = useMemo(() => {
+    if (!sustainabilityMotifsEnabled) return [];
+    const timeline = Array.isArray(tripAutofillMeta?.details?.timeline)
+      ? (tripAutofillMeta.details.timeline as Array<Record<string, unknown>>)
+      : [];
+    const timelineRows = timeline.map((item) => ({
+      category: String(item.category || ""),
+      finalSubCategory: String(item.finalSubCategory || item.subCategory || ""),
+      subCategory: String(item.subCategory || ""),
+    }));
+    const planRowInputs = rows.map((row) => ({ eventText: row.event_text ?? null }));
+    return getMotifsForPurchaseContext([...timelineRows, ...planRowInputs], sustainabilityMotifsEnabled);
+  }, [rows, tripAutofillMeta, sustainabilityMotifsEnabled]);
   const supplierNamesFromPurchases = useMemo(
     () => Array.from(new Set(purchaseItems.map((item) => item.supplier.trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, "he")),
     [purchaseItems],
@@ -2661,6 +3068,20 @@ export default function TripPlanPage() {
     Math.max(insertDialog.minDayIndex, insertDialog.maxDayIndex === null ? dayIndex : Math.min(dayIndex, insertDialog.maxDayIndex));
 
   const toggleRowCol = (rowId: string, col: PlanSection) => {
+    if (col === "designs" || col === "prints") {
+      const wasOpen = Boolean(expandedCols[rowId]?.prints);
+      setExpandedCols((prev) => ({
+        ...prev,
+        [rowId]: {
+          ...emptyExpandedCols(),
+          ...prev[rowId],
+          designs: !wasOpen,
+          prints: !wasOpen,
+        },
+      }));
+      if (!wasOpen) scrollSectionIntoView("prints");
+      return;
+    }
     const wasOpen = Boolean(expandedCols[rowId]?.[col]);
     setExpandedCols((prev) => ({
       ...prev,
@@ -2849,15 +3270,20 @@ export default function TripPlanPage() {
     `fixed inset-0 z-[220] flex items-stretch justify-center ${
       isQuickActionFullscreen(actionId) ? "p-0" : "p-3 pt-20 md:px-8 md:pb-6"
     }`;
+  const quickActionScrollBodyClass = "min-h-0 flex-1 overflow-y-auto overscroll-contain";
   const quickActionSubDialogShellClass = (actionId: QuickActionSurfaceId) =>
     `absolute inset-0 z-[230] flex items-center justify-center ${isQuickActionFullscreen(actionId) ? "p-0" : "p-4"}`;
   const quickActionPanelClass = (actionId: QuickActionSurfaceId, borderClass: string) =>
-    `relative flex h-full w-full flex-col overflow-hidden bg-white shadow-2xl ${
-      isQuickActionFullscreen(actionId) ? "max-w-none rounded-none border-0" : `max-w-7xl rounded-[2rem] border ${borderClass}`
+    `relative flex w-full min-h-0 flex-col overflow-hidden bg-white shadow-2xl ${
+      isQuickActionFullscreen(actionId)
+        ? "h-full max-w-none rounded-none border-0"
+        : `h-full max-h-[calc(100dvh-5rem)] max-w-7xl rounded-[2rem] border ${borderClass}`
     }`;
   const quickActionSubDialogPanelClass = (actionId: QuickActionSurfaceId, borderClass: string) =>
-    `relative flex w-full flex-col overflow-hidden bg-white shadow-2xl ${
-      isQuickActionFullscreen(actionId) ? "h-full max-w-none rounded-none border-0" : `max-h-[90%] max-w-5xl rounded-3xl border ${borderClass}`
+    `relative flex w-full min-h-0 flex-col overflow-hidden bg-white shadow-2xl ${
+      isQuickActionFullscreen(actionId)
+        ? "h-full max-w-none rounded-none border-0"
+        : `max-h-[min(90dvh,calc(100dvh-2rem))] max-w-5xl rounded-3xl border ${borderClass}`
     }`;
   const renderQuickActionFullscreenButton = (actionId: QuickActionSurfaceId, label: string) => {
     const fullscreen = isQuickActionFullscreen(actionId);
@@ -2904,12 +3330,13 @@ export default function TripPlanPage() {
 
         <div
           data-plan-tour="planner-tabs"
-          className="relative flex flex-col gap-2 overflow-visible rounded-t-3xl bg-slate-100/70 px-2 pt-3 md:flex-row md:items-end md:justify-between"
+          className="relative flex flex-col gap-2 overflow-visible rounded-t-3xl border border-b-0 border-slate-200/80 bg-gradient-to-b from-slate-200/90 to-slate-100/80 px-2 pt-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] md:flex-row md:items-end md:justify-between"
         >
           <div className="flex min-w-0 overflow-visible pr-3">
             {plannerTabs.map(({ id, label, Icon }, index) => {
               const active = activeTab === id;
-              const tabText = active ? "text-brand-cyan" : "text-gray-500 hover:text-gray-800";
+              const tabText = active ? "text-brand-cyan" : "text-gray-600 hover:text-gray-900";
+              const displayLabel = id === "participants" ? participantLabels.participantsAndStaff : label;
               return (
                 <button
                   key={id}
@@ -2917,24 +3344,28 @@ export default function TripPlanPage() {
                   data-plan-tour={`planner-tab-${id}`}
                   onClick={() => setActiveTab(id)}
                   style={{ zIndex: active ? 30 : 10 - index }}
-                  className={`relative -mb-[2px] -mr-5 inline-flex h-12 shrink-0 items-center justify-center px-9 text-sm font-black transition-all first:mr-0 ${tabText}`}
+                  className={`relative -mb-[2px] -mr-5 inline-flex h-12 shrink-0 items-center justify-center px-9 text-sm font-black outline-none transition-all first:mr-0 focus-visible:ring-2 focus-visible:ring-brand-cyan/30 focus-visible:ring-offset-1 ${tabText} ${
+                    active ? "" : "hover:[&_path]:fill-slate-100"
+                  }`}
                 >
                   <svg
                     aria-hidden="true"
-                    className={`absolute inset-0 h-full w-full overflow-visible ${active ? "" : "drop-shadow-[0_8px_16px_rgba(15,23,42,0.10)]"}`}
+                    className={`absolute inset-0 h-full w-full overflow-visible ${
+                      active ? "" : "drop-shadow-[0_2px_5px_rgba(15,23,42,0.12)]"
+                    }`}
                     preserveAspectRatio="none"
                     viewBox="0 0 220 48"
                   >
                     <path
                       d="M24 1 C14 1 9 6 7 16 L0 48 H220 L213 16 C211 6 206 1 196 1 Z"
-                      fill={active ? "#ffffff" : "rgba(255,255,255,0.68)"}
-                      stroke={active ? "#ffffff" : "rgba(255,255,255,0.8)"}
-                      strokeWidth="1"
+                      fill={active ? "#ffffff" : "#f1f5f9"}
+                      stroke={active ? "none" : "#cbd5e1"}
+                      strokeWidth={active ? "0" : "1"}
                     />
                   </svg>
                   <span className="relative z-10 inline-flex items-center gap-2">
                     <Icon size={16} />
-                    {label}
+                    {displayLabel}
                   </span>
                 </button>
               );
@@ -2946,7 +3377,10 @@ export default function TripPlanPage() {
                 <button
                   type="button"
                   data-plan-tour={`quick-action-${id}`}
-                  onClick={() => openQuickAction(id)}
+                  onClick={(event) => {
+                    openQuickAction(id);
+                    event.currentTarget.blur();
+                  }}
                   aria-label={label}
                   className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-600 shadow-sm transition-colors hover:border-cyan-200 hover:bg-cyan-50 hover:text-brand-cyan"
                 >
@@ -2960,7 +3394,7 @@ export default function TripPlanPage() {
         {activeTab === "schedule" ? (
         <div
           data-plan-tour="schedule-table"
-          className="relative z-20 -mt-px overflow-visible rounded-b-2xl border border-t-0 border-gray-200 bg-white shadow-[0_-14px_28px_rgba(15,23,42,0.16),0_20px_45px_rgba(15,23,42,0.10)]"
+          className="relative z-20 -mt-px overflow-visible rounded-b-2xl border border-t-0 border-gray-200 bg-white shadow-[0_20px_45px_rgba(15,23,42,0.10)]"
         >
         <div
           ref={tableScrollRef}
@@ -3000,10 +3434,10 @@ export default function TripPlanPage() {
               isColumnOpen("responsibilities") ||
               isColumnOpen("safety") ||
               isColumnOpen("equipment") ||
-              isColumnOpen("prints") ||
+              isPrintsColumnOpen() ||
               isColumnOpen("notes")
-                ? "min-w-[2060px]"
-                : "min-w-[1180px]"
+                ? "min-w-[2436px]"
+                : "min-w-[1160px]"
             }`}
           >
             <thead className="sticky top-0 z-30 border-b border-gray-200 bg-gradient-to-b from-slate-50 to-slate-100 shadow-sm">
@@ -3081,14 +3515,12 @@ export default function TripPlanPage() {
                 <th
                   data-plan-tour="col-prints"
                   data-plan-section="prints"
-                  className={`sticky top-0 z-30 bg-slate-100 p-2 text-center ${
-                    isColumnOpen("prints") ? "min-w-[440px] w-[440px]" : "min-w-[64px] w-[64px]"
-                  }`}
+                  className={`sticky top-0 z-30 bg-slate-100 p-2 text-center ${printsColumnWidthClass}`}
                 >
-                  <Tooltip label="פתח/סגור את כל עמודת הדפסות" side="bottom">
+                  <Tooltip label="פתח/סגור את עמודת הדפסות ועיצובים" side="bottom">
                     <button
                       type="button"
-                      onClick={() => toggleAllInColumn("prints")}
+                      onClick={toggleAllPrintsColumn}
                       className="inline-flex items-center gap-1 rounded-md px-2 py-1 hover:bg-white/70"
                     >
                       <Printer size={14} className="inline-block" />
@@ -3154,7 +3586,7 @@ export default function TripPlanPage() {
                       </button>
                     </div>
                   </td>
-                  <td colSpan={10} className="py-1" />
+                  <td colSpan={11} className="py-1" />
                 </tr>
               ) : null}
               {rowsSorted.map((row, idx) => (
@@ -3276,15 +3708,44 @@ export default function TripPlanPage() {
                     </div>
                   </td>
                   <td className="p-2 align-middle">
-                    <textarea
-                      value={row.event_text || ""}
-                      onChange={(e) =>
-                        setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, event_text: e.target.value } : r)))
-                      }
-                      onBlur={() => void saveRowById(row.id)}
-                      className={`w-36 min-h-[70px] p-2 resize-none text-sm font-bold ${fieldClass}`}
-                      placeholder="כותרת קצרה"
-                    />
+                    <div className="space-y-1">
+                      <textarea
+                        value={row.event_text || ""}
+                        onChange={(e) =>
+                          setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, event_text: e.target.value } : r)))
+                        }
+                        onBlur={() => void saveRowById(row.id)}
+                        className={`w-36 min-h-[70px] p-2 resize-none text-sm font-bold ${fieldClass}`}
+                        placeholder="כותרת קצרה"
+                      />
+                      {sustainabilityMotifsEnabled && hasSustainabilityEventText(row.event_text) ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSustainabilityBriefDialog({
+                              motifs: getMotifsForPlanRow(
+                                row.event_text,
+                                rows.map((planRow) => ({ eventText: planRow.event_text ?? null })),
+                                sustainabilityMotifsEnabled,
+                              ),
+                              activityLabel: row.event_text || "פעילות",
+                            })
+                          }
+                          className="inline-flex items-center gap-1.5 rounded-full px-0.5 py-0.5 text-[10px] font-black text-green-700 hover:opacity-80"
+                        >
+                          <SustainabilityIconBadge size={10} className="shadow-none" />
+                          קיימות
+                        </button>
+                      ) : null}
+                      <RegulationOccurrenceBadges
+                        planRowId={row.id}
+                        eventText={row.event_text}
+                        onNavigateToTask={(taskRowKey) => {
+                          setTaskFocusRowKey(taskRowKey);
+                          setActiveTab("tasks");
+                        }}
+                      />
+                    </div>
                   </td>
                   <td
                     data-plan-section="details"
@@ -3322,6 +3783,7 @@ export default function TripPlanPage() {
                           summaryCounts={computeRowDetailsSummaryCounts({
                             tasks: row.tasks,
                             equipment: row.equipment,
+                            designs: row.designs,
                             prints: row.prints,
                             staff_instructions: row.staff_instructions,
                             participant_instructions: row.participant_instructions,
@@ -3330,6 +3792,10 @@ export default function TripPlanPage() {
                           disabled={row.id.startsWith("temp-")}
                           schemaMissing={occurrenceSchemaMissing}
                           instructionsSchemaMissing={instructionsSchemaMissing}
+                          instructionAudienceLabels={instructionAudienceLabels}
+                          staffParticipantGuidelinesLabel={participantLabels.staffParticipantGuidelines}
+                          participantInstructionsButtonLabel={participantLabels.participantInstructionsButton}
+                          equipmentSourceSuggestions={equipmentSourceSuggestions}
                           onOccurrenceDetailsChange={(value) =>
                             setRows((prev) =>
                               prev.map((r) => (r.id === row.id ? { ...r, occurrence_details: value } : r)),
@@ -3549,7 +4015,7 @@ export default function TripPlanPage() {
                           value={resolveStaffAssigneeFromFields({
                             participantId: s.owner_participant_id,
                             roleKey: s.owner_role_key,
-                            displayName: s.owner || row.owner_name,
+                            displayName: s.owner,
                             roster: staffRoster,
                           })}
                           onChange={(assignee: StaffAssigneeValue) =>
@@ -3567,7 +4033,7 @@ export default function TripPlanPage() {
                                         }
                                       : item,
                                 );
-                                return syncRowOwnerFields({ ...r, safety }, assignee);
+                                return { ...r, safety };
                               }),
                             )
                           }
@@ -3912,97 +4378,37 @@ export default function TripPlanPage() {
                           })}
                         </div>
                         <div className="relative min-w-0">
-                          {(() => {
-                            const sourceKey = `${row.id}-${idx}`;
-                            const suggestions =
+                          <EquipmentSourceInput
+                            value={eq.source_details || ""}
+                            onChange={(value) => {
+                              setRows((prev) =>
+                                prev.map((r) =>
+                                  r.id === row.id
+                                    ? {
+                                        ...r,
+                                        equipment: (
+                                          r.equipment.length
+                                            ? r.equipment
+                                            : [{ item: "", quantity: "", quantity_unit: "", source_type: "", source_details: "" }]
+                                        ).map((x, i) => (i === idx ? { ...x, source_details: value } : x)),
+                                      }
+                                    : r,
+                                ),
+                              );
+                            }}
+                            sourceType={eq.source_type || ""}
+                            suggestions={
                               eq.source_type === "רכש"
                                 ? equipmentSourceSuggestions.purchase
                                 : eq.source_type === "קיים" || eq.source_type === "מקור"
                                   ? equipmentSourceSuggestions.existing
-                                  : equipmentSourceSuggestions.all;
-                            return (
-                              <>
-                                <input
-                                  type="text"
-                                  className={`h-9 min-w-0 w-full ${fieldClass}`}
-                                  placeholder={
-                                    (eq.source_type === "רכש"
-                                      ? "ספק"
-                                      : eq.source_type === "קיים" || eq.source_type === "מקור"
-                                        ? "מקור"
-                                        : "מקור / ספק")
-                                  }
-                                  value={eq.source_details || ""}
-                                  onFocus={() => setActiveSourceSuggestionKey(sourceKey)}
-                                  onChange={(e) => {
-                                    setActiveSourceSuggestionKey(sourceKey);
-                                    setRows((prev) =>
-                                      prev.map((r) =>
-                                        r.id === row.id
-                                          ? {
-                                              ...r,
-                                              equipment: (
-                                                r.equipment.length
-                                                  ? r.equipment
-                                                  : [{ item: "", quantity: "", quantity_unit: "", source_type: "", source_details: "" }]
-                                              ).map((x, i) => (i === idx ? { ...x, source_details: e.target.value } : x)),
-                                            }
-                                          : r,
-                                      ),
-                                    );
-                                  }}
-                                  onBlur={() => {
-                                    void saveRowById(row.id);
-                                    setTimeout(() => {
-                                      setActiveSourceSuggestionKey((current) => (current === sourceKey ? null : current));
-                                    }, 120);
-                                  }}
-                                />
-                                {activeSourceSuggestionKey === sourceKey && suggestions.length > 0 ? (
-                                  <div className="absolute right-0 top-full z-50 mt-1 max-h-44 min-w-full overflow-auto rounded-2xl border border-cyan-200 bg-cyan-50/95 p-1.5 shadow-2xl ring-2 ring-cyan-100">
-                                    {suggestions.map((value) => (
-                                      <button
-                                        key={value}
-                                        type="button"
-                                        onMouseDown={(e) => e.preventDefault()}
-                                        onClick={() => {
-                                          setRows((prev) =>
-                                            prev.map((r) =>
-                                              r.id === row.id
-                                                ? {
-                                                    ...r,
-                                                    equipment: (
-                                                      r.equipment.length
-                                                        ? r.equipment
-                                                        : [
-                                                            {
-                                                              item: "",
-                                                              quantity: "",
-                                                              quantity_unit: "",
-                                                              source_type: "",
-                                                              source_details: "",
-                                                            },
-                                                          ]
-                                                    ).map((x, i) => (i === idx ? { ...x, source_details: value } : x)),
-                                                  }
-                                                : r,
-                                            ),
-                                          );
-                                          setActiveSourceSuggestionKey(null);
-                                          setTimeout(() => {
-                                            void saveRowById(row.id);
-                                          }, 0);
-                                        }}
-                                        className="block h-8 w-full rounded-xl px-3 text-center text-xs font-bold text-gray-700 transition-colors hover:bg-white hover:text-brand-cyan"
-                                      >
-                                        {value}
-                                      </button>
-                                    ))}
-                                  </div>
-                                ) : null}
-                              </>
-                            );
-                          })()}
+                                  : equipmentSourceSuggestions.all
+                            }
+                            fieldClass={fieldClass}
+                            onBlur={() => {
+                              void saveRowById(row.id);
+                            }}
+                          />
                         </div>
                         <button
                           type="button"
@@ -4067,29 +4473,162 @@ export default function TripPlanPage() {
                   </td>
                   <td
                     data-plan-section="prints"
-                    className={`p-2 align-middle bg-cyan-50/40 ${
-                      isColumnOpen("prints") ? "min-w-[440px] w-[440px]" : "min-w-[64px] w-[64px]"
-                    }`}
+                    className={`p-2 align-middle bg-gradient-to-b from-fuchsia-50/30 to-cyan-50/40 ${printsColumnWidthClass}`}
                   >
                     {!expandedCols[row.id]?.prints ? (
                       <button
                         type="button"
                         onClick={() => toggleRowCol(row.id, "prints")}
-                        className={`relative h-9 w-9 rounded-lg border mx-auto block ${
+                        className={`relative mx-auto block h-9 w-9 rounded-lg border ${
                           isSectionDone(row, "prints")
                             ? "border-cyan-600 bg-cyan-600 text-white hover:bg-cyan-700"
                             : "border-cyan-200 bg-white text-cyan-700 hover:bg-cyan-50"
-                        }`}
-                        data-tooltip="פתח הדפסות"
-                        aria-label="פתח הדפסות"
+                        } ${(row.designs?.length || 0) > 0 ? "ring-2 ring-fuchsia-200" : ""}`}
+                        data-tooltip="פתח עיצוב והדפסה"
+                        aria-label="פתח עיצוב והדפסה"
                       >
                         <Printer size={14} className="mx-auto" />
+                        {(row.designs?.length || 0) > 0 ? (
+                          <span className="absolute -left-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-fuchsia-600 px-0.5 text-[9px] font-black text-white">
+                            {(row.designs || []).length}
+                          </span>
+                        ) : null}
                         {isSectionDone(row, "prints") ? (
-                          <CheckCircle2 size={11} className="absolute -left-1 -top-1 rounded-full bg-white text-cyan-600" />
+                          <CheckCircle2 size={11} className="absolute -right-1 -top-1 rounded-full bg-white text-cyan-600" />
                         ) : null}
                       </button>
                     ) : (
                       <>
+                        <div className="mb-3 rounded-xl border border-fuchsia-100 bg-fuchsia-50/40 p-2">
+                          <div className="mb-1 text-[10px] font-black text-fuchsia-700">עיצוב</div>
+                        {designsSchemaMissing ? (
+                          <p className="mb-2 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-800">
+                            יש להריץ את המיגרציה `20260622_add_trip_plan_row_designs.sql` כדי לשמור עיצובים.
+                          </p>
+                        ) : null}
+                        {(() => {
+                          const draft = getDesignDraft(row.id);
+                          const briefInputId = `design-brief-${row.id}`;
+                          const outputInputId = `design-output-${row.id}`;
+                          return (
+                            <div className="rounded-xl border border-fuchsia-100 bg-white/80 p-2">
+                              <input
+                                className={`mb-2 h-9 w-full px-2 ${fieldClass}`}
+                                placeholder="שם המסמך *"
+                                value={draft.document_name}
+                                onChange={(e) => updateDesignDraft(row.id, { document_name: e.target.value })}
+                              />
+                              <EquipmentSourceInput
+                                value={draft.designer_name}
+                                onChange={(value) => updateDesignDraft(row.id, { designer_name: value })}
+                                sourceType="רכש"
+                                suggestions={designerSuggestionNames}
+                                fieldClass={fieldClass}
+                                className="mb-2"
+                              />
+                              <div className="grid grid-cols-2 gap-1">
+                                <input
+                                  className={`h-9 px-2 ${fieldClass}`}
+                                  placeholder="הגדרות גודל"
+                                  value={draft.size_settings}
+                                  onChange={(e) => updateDesignDraft(row.id, { size_settings: e.target.value })}
+                                />
+                                <Select
+                                  value={draft.status}
+                                  onChange={(status) => updateDesignDraft(row.id, { status })}
+                                  options={DESIGN_STATUS_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+                                  placeholder="בחר סטטוס"
+                                  clearable={false}
+                                  accent="fuchsia"
+                                  size="sm"
+                                  textAlign="center"
+                                />
+                              </div>
+                              <div className="mt-2 flex gap-1">
+                                {(["text", "file"] as const).map((mode) => (
+                                  <button
+                                    key={mode}
+                                    type="button"
+                                    onClick={() => updateDesignDraft(row.id, { content_mode: mode })}
+                                    className={`h-7 flex-1 rounded-lg border text-[10px] font-bold ${
+                                      draft.content_mode === mode
+                                        ? "border-fuchsia-500 bg-fuchsia-500 text-white"
+                                        : "border-gray-200 bg-white text-gray-700"
+                                    }`}
+                                  >
+                                    {mode === "text" ? "טקסט" : "קובץ"}
+                                  </button>
+                                ))}
+                              </div>
+                              {draft.content_mode === "text" ? (
+                                <div className="mt-2">
+                                  <PlanDesignBriefField
+                                    size="sm"
+                                    documentText={draft.document_text}
+                                    designerInstructions={draft.designer_instructions}
+                                    onDocumentTextChange={(document_text) => updateDesignDraft(row.id, { document_text })}
+                                    onDesignerInstructionsChange={(designer_instructions) =>
+                                      updateDesignDraft(row.id, { designer_instructions })
+                                    }
+                                  />
+                                </div>
+                              ) : (
+                                <div className="mt-2 flex items-center gap-1">
+                                  <input
+                                    id={briefInputId}
+                                    type="file"
+                                    className="sr-only"
+                                    onChange={(e) => updateDesignDraft(row.id, { brief_file: e.target.files?.[0] || null })}
+                                  />
+                                  <label
+                                    htmlFor={briefInputId}
+                                    className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-lg border border-fuchsia-200 bg-fuchsia-50 px-2 text-[10px] font-bold text-fuchsia-700 hover:bg-fuchsia-100"
+                                  >
+                                    <Upload size={11} />
+                                    קובץ הנחיות
+                                  </label>
+                                  <span className="min-w-0 flex-1 truncate text-[10px] font-bold text-gray-600">
+                                    {draft.brief_file?.name || "לא נבחר"}
+                                  </span>
+                                </div>
+                              )}
+                              <div className="mt-2 flex items-center gap-1">
+                                <input
+                                  id={outputInputId}
+                                  type="file"
+                                  className="sr-only"
+                                  onChange={(e) => updateDesignDraft(row.id, { output_file: e.target.files?.[0] || null })}
+                                />
+                                <label
+                                  htmlFor={outputInputId}
+                                  className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 text-[10px] font-bold text-gray-700 hover:bg-gray-50"
+                                >
+                                  <Upload size={11} />
+                                  עיצוב מוכן
+                                </label>
+                                <span className="min-w-0 flex-1 truncate text-[10px] font-bold text-gray-600">
+                                  {draft.output_file?.name || "אופציונלי"}
+                                </span>
+                                {designUploadError && expandedCols[row.id]?.prints ? (
+                                  <p className="w-full rounded border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-bold text-red-700">
+                                    {designUploadError}
+                                  </p>
+                                ) : null}
+                                <button
+                                  type="button"
+                                  onClick={() => void addDesign(row.id)}
+                                  disabled={!draft.document_name.trim() || uploadingRowId === row.id || row.id.startsWith("temp-") || designsSchemaMissing}
+                                  className="h-8 rounded-lg bg-fuchsia-600 px-3 text-xs font-bold text-white disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-500"
+                                >
+                                  {uploadingRowId === row.id ? "שומר..." : "שמור"}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                        </div>
+                        <div className="rounded-xl border border-cyan-100 bg-cyan-50/40 p-2">
+                          <div className="mb-1 text-[10px] font-black text-cyan-700">הדפסה</div>
                     {(() => {
                       const draft = getPrintDraft(row.id);
                       const inputId = `print-file-${row.id}`;
@@ -4151,6 +4690,29 @@ export default function TripPlanPage() {
                               ) : null}
                             </div>
                           </div>
+                          {(row.designs?.length || 0) > 0 ? (
+                            <div className="mt-2">
+                              <label className="mb-1 block text-[10px] font-bold text-gray-600">קישור לעיצוב (אופציונלי)</label>
+                              <Select
+                                value={draft.design_id}
+                                onChange={(designId) => {
+                                  const linkedDesign = row.designs?.find((design) => design.id === designId);
+                                  updatePrintDraft(row.id, {
+                                    design_id: designId,
+                                    print_size: linkedDesign?.size_settings?.trim() || draft.print_size,
+                                  });
+                                }}
+                                options={(row.designs || []).map((design) => ({
+                                  value: design.id,
+                                  label: design.document_name,
+                                }))}
+                                placeholder="ללא קישור"
+                                accent="cyan"
+                                size="sm"
+                                textAlign="center"
+                              />
+                            </div>
+                          ) : null}
                           <div className="mt-2 flex items-center gap-1">
                             <input
                               id={inputId}
@@ -4185,28 +4747,74 @@ export default function TripPlanPage() {
                         </div>
                       );
                     })()}
-                    <div className="space-y-1 mt-1">
-                      {row.prints.map((p) => (
-                        <div key={p.id} className="text-[11px] border border-gray-100 rounded p-1">
-                          <div className="font-bold text-gray-700 truncate">{p.file_name || "קובץ"}</div>
-                          <div className="text-gray-500">
-                            כמות: {p.quantity ?? "—"} | גודל: {bytesLabel(p.file_size_bytes)}
+                    <div className="mt-2 space-y-2">
+                      {row.prints.map((printItem) => {
+                        const linkedDesign = printItem.design_id
+                          ? row.designs?.find((design) => design.id === printItem.design_id)
+                          : undefined;
+                        return (
+                          <div key={printItem.id} className="overflow-hidden rounded-xl border border-gray-200 text-[11px] shadow-sm">
+                            {linkedDesign ? (
+                              <div className="border-b border-fuchsia-100 bg-fuchsia-50/70 p-2">
+                                <div className="mb-1 text-[10px] font-black text-fuchsia-700">עיצוב</div>
+                                <div className="truncate font-bold text-gray-700">{linkedDesign.document_name}</div>
+                                <div className="text-gray-500">
+                                  מעצב: {linkedDesign.designer_name || "—"} | גודל: {linkedDesign.size_settings || "—"}
+                                </div>
+                                <div className="text-gray-500">סטטוס: {linkedDesign.status || "—"}</div>
+                              </div>
+                            ) : (
+                              <div className="border-b border-gray-100 bg-gray-50 px-2 py-1.5 text-[10px] font-bold text-gray-400">
+                                ללא עיצוב מקושר
+                              </div>
+                            )}
+                            <div className="bg-cyan-50/50 p-2">
+                              <div className="mb-1 text-[10px] font-black text-cyan-700">הדפסה</div>
+                              <div className="truncate font-bold text-gray-700">{printItem.file_name || "קובץ"}</div>
+                              <div className="text-gray-500">
+                                כמות: {printItem.quantity ?? "—"} | גודל קובץ: {bytesLabel(printItem.file_size_bytes)}
+                              </div>
+                              <div className="text-gray-500">
+                                גודל הדפסה: {printItem.print_size || "—"} | סוג דף: {printItem.page_type || "—"} | מקום:{" "}
+                                {printItem.print_location || "—"}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => void removePrintFile(row.id, printItem.id)}
+                                className="mt-1 inline-flex items-center gap-1 font-bold text-red-600"
+                              >
+                                <Trash2 size={11} />
+                                הסר הדפסה
+                              </button>
+                            </div>
                           </div>
-                          <div className="text-gray-500">
-                            גודל הדפסה: {p.print_size || "—"} | סוג דף: {p.page_type || "—"} | מקום: {p.print_location || "—"}
+                        );
+                      })}
+                      {(row.designs || [])
+                        .filter((design) => !row.prints.some((printItem) => printItem.design_id === design.id))
+                        .map((design) => (
+                          <div key={design.id} className="overflow-hidden rounded-xl border border-gray-200 text-[11px] shadow-sm">
+                            <div className="border-b border-fuchsia-100 bg-fuchsia-50/70 p-2">
+                              <div className="mb-1 text-[10px] font-black text-fuchsia-700">עיצוב</div>
+                              <div className="truncate font-bold text-gray-700">{design.document_name}</div>
+                              <div className="text-gray-500">
+                                מעצב: {design.designer_name || "—"} | גודל: {design.size_settings || "—"}
+                              </div>
+                              <div className="text-gray-500">סטטוס: {design.status || "—"}</div>
+                              <button
+                                type="button"
+                                onClick={() => void removeDesign(row.id, design.id)}
+                                className="mt-1 inline-flex items-center gap-1 font-bold text-red-600"
+                              >
+                                <Trash2 size={11} />
+                                הסר עיצוב
+                              </button>
+                            </div>
+                            <div className="bg-gray-50 px-2 py-2 text-[10px] font-bold text-gray-400">ללא הדפסה</div>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => void removePrintFile(row.id, p.id)}
-                            className="text-red-600 font-bold mt-1 inline-flex items-center gap-1"
-                          >
-                            <Trash2 size={11} />
-                            הסר
-                          </button>
-                        </div>
-                      ))}
+                        ))}
                     </div>
-                        <div className="mt-1 flex items-center gap-1">
+                        <div className="mt-2 flex items-center gap-1 border-t border-cyan-100 pt-2">
                           <button
                             type="button"
                             onClick={() => markSectionDone(row.id, "prints", !isSectionDone(row, "prints"))}
@@ -4221,10 +4829,11 @@ export default function TripPlanPage() {
                           <button
                             type="button"
                             onClick={() => toggleRowCol(row.id, "prints")}
-                            className="h-7 px-2 rounded border border-gray-200 text-[10px] font-bold hover:bg-white ms-auto"
+                            className="ms-auto h-7 rounded border border-gray-200 px-2 text-[10px] font-bold hover:bg-white"
                           >
                             סגור
                           </button>
+                        </div>
                         </div>
                       </>
                     )}
@@ -4433,7 +5042,7 @@ export default function TripPlanPage() {
                         </button>
                       </div>
                     </td>
-                    <td colSpan={10} className="py-1" />
+                    <td colSpan={11} className="py-1" />
                   </tr>
                 ) : null}
                 </React.Fragment>
@@ -4454,13 +5063,29 @@ export default function TripPlanPage() {
                       </button>
                     </div>
                   </td>
-                  <td colSpan={10} className="py-1" />
+                  <td colSpan={11} className="py-1" />
                 </tr>
               ) : null}
             </tbody>
           </table>
         </div>
         </div>
+        ) : activeTab === "tasks" ? (
+          <TripPlanTasksTab
+            active={activeTab === "tasks"}
+            tasks={tripPlanTasks}
+            mokedTevaTripCopyData={mokedTevaTripCopyData}
+            loading={documentsLoading}
+            error={documentsError}
+            uploadingDocumentKey={uploadingDocumentKey}
+            onRefresh={() => void loadDocumentsMeta()}
+            onUploadFile={(documentKey, file, context) => void uploadDocumentFile(documentKey, file, context)}
+            onOpenFile={(url) => void openDocumentFile(url)}
+            onDeleteFile={(documentKey, fileUrl) => void deleteDocumentFile(documentKey, fileUrl)}
+            onNoteChange={(documentKey, note) => updateDocumentOverride(documentKey, { note })}
+            focusRowKey={taskFocusRowKey}
+            onFocusRowHandled={() => setTaskFocusRowKey(null)}
+          />
         ) : activeTab === "participants" ? (
           <ParticipantsTab
             tripId={tripId}
@@ -4477,7 +5102,7 @@ export default function TripPlanPage() {
         <div className={quickActionShellClass("documents")}>
           <div className="absolute inset-0 bg-slate-500/25 backdrop-blur-sm" onClick={() => setActiveQuickAction(null)} />
           <div className={quickActionPanelClass("documents", "border-cyan-100")}>
-            <div className="flex flex-col gap-3 border-b border-cyan-100 bg-gradient-to-l from-cyan-50 to-white px-5 py-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex shrink-0 flex-col gap-3 border-b border-cyan-100 bg-gradient-to-l from-cyan-50 to-white px-5 py-4 md:flex-row md:items-center md:justify-between">
               <div>
                 <h2 className="flex items-center gap-2 text-2xl font-black text-gray-900">
                   <FileText size={24} className="text-brand-cyan" />
@@ -4517,20 +5142,21 @@ export default function TripPlanPage() {
             </div>
 
             <div className="min-h-0 flex-1 overflow-auto p-4 pt-0">
-              <table className="w-full min-w-[1240px] border-separate border-spacing-y-1 text-center text-sm">
+              <table className="w-full min-w-[1080px] border-separate border-spacing-y-0.5 text-center text-sm">
                 <thead className="text-gray-800 shadow-sm">
                   <tr>
-                    <th className="sticky top-0 z-30 w-56 rounded-r-2xl border-b border-gray-200 bg-gray-200 p-3 font-black shadow-sm">שם המסמך</th>
-                    <th className="sticky top-0 z-30 w-16 border-b border-gray-200 bg-gray-200 p-3 font-black shadow-sm">פירוט</th>
-                    <th className="sticky top-0 z-30 w-72 border-b border-gray-200 bg-gray-200 p-3 font-black shadow-sm">מסמך</th>
-                    <th className="sticky top-0 z-30 w-44 border-b border-gray-200 bg-gray-200 p-3 font-black shadow-sm">סטטוס</th>
-                    <th className="sticky top-0 z-30 w-44 border-b border-gray-200 bg-gray-200 p-3 font-black shadow-sm">מקור</th>
-                    <th className="sticky top-0 z-30 w-16 rounded-l-2xl border-b border-gray-200 bg-gray-200 p-3 font-black shadow-sm">הערה</th>
+                    <th className="sticky top-0 z-30 w-56 rounded-r-2xl border-b border-gray-200 bg-gray-200 p-2 font-black shadow-sm">שם המסמך</th>
+                    <th className="sticky top-0 z-30 w-16 border-b border-gray-200 bg-gray-200 p-2 font-black shadow-sm">פירוט</th>
+                    <th className="sticky top-0 z-30 w-72 border-b border-gray-200 bg-gray-200 p-2 font-black shadow-sm">מסמך</th>
+                    <th className="sticky top-0 z-30 w-44 border-b border-gray-200 bg-gray-200 p-2 font-black shadow-sm">סטטוס</th>
+                    <th className="sticky top-0 z-30 w-16 border-b border-gray-200 bg-gray-200 p-2 font-black shadow-sm">מקור</th>
+                    <th className="sticky top-0 z-30 w-16 rounded-l-2xl border-b border-gray-200 bg-gray-200 p-2 font-black shadow-sm">הערה</th>
                   </tr>
                 </thead>
                 <tbody>
                   {documentItems.map((document, index) => {
                     const detailsOpen = expandedDocumentDetails.has(document.key);
+                    const sourceOpen = expandedDocumentSources.has(document.key);
                     const noteOpen = expandedDocumentNotes.has(document.key);
                     const previous = documentItems[index - 1];
                     const showCategoryDivider = index === 0 || previous.category !== document.category;
@@ -4547,16 +5173,16 @@ export default function TripPlanPage() {
                       <React.Fragment key={document.key}>
                         {showCategoryDivider ? (
                           <tr>
-                            <td colSpan={6} className={`rounded-2xl border px-4 py-2 text-right text-xs font-black ${documentCategoryTone(document.category)}`}>
+                            <td colSpan={6} className={`rounded-2xl border px-4 py-1.5 text-right text-xs font-black ${documentCategoryTone(document.category)}`}>
                               {document.category}
                             </td>
                           </tr>
                         ) : null}
                         <tr id={`trip-document-row-${document.key}`}>
-                          <td className={`rounded-r-3xl border-r-2 p-3 align-middle ${rowCellClass}`}>
-                            <div className="font-black text-gray-800">{document.title}</div>
+                          <td className={`rounded-r-3xl border-r-2 px-3 py-2 align-middle ${rowCellClass}`}>
+                            <div className="text-sm font-black text-gray-800">{document.title}</div>
                           </td>
-                          <td className={`p-3 align-middle transition-[width] ${detailsOpen ? "w-[24rem] min-w-[24rem]" : "w-16 min-w-16"} ${rowCellClass}`}>
+                          <td className={`px-2 py-2 align-middle transition-[width] ${detailsOpen ? "w-[24rem] min-w-[24rem]" : "w-16 min-w-16"} ${rowCellClass}`}>
                             <button
                               type="button"
                               onClick={() =>
@@ -4567,12 +5193,12 @@ export default function TripPlanPage() {
                                   return next;
                                 })
                               }
-                              className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl border text-cyan-700 ${
+                              className={`inline-flex h-9 w-9 items-center justify-center rounded-2xl border text-cyan-700 ${
                                 detailsOpen ? "border-cyan-200 bg-cyan-50" : "border-gray-200 bg-white hover:bg-cyan-50"
                               }`}
                               aria-label={`פתח פירוט ${document.title}`}
                             >
-                              <Info size={16} />
+                              <Info size={15} />
                             </button>
                             {detailsOpen ? (
                               <div className="mt-2 whitespace-pre-wrap rounded-2xl border border-cyan-100 bg-white/70 p-3 text-center text-xs font-bold text-cyan-900">
@@ -4580,14 +5206,14 @@ export default function TripPlanPage() {
                               </div>
                             ) : null}
                           </td>
-                          <td className={`p-3 align-middle ${rowCellClass}`}>
-                            <div className="grid gap-2">
+                          <td className={`px-2 py-2 align-middle ${rowCellClass}`}>
+                            <div className="grid gap-1.5">
                               {internalDocument ? (
-                                <div className="flex items-center justify-center gap-2">
+                                <div className="flex items-center justify-center gap-1.5">
                                   <button
                                     type="button"
                                     onClick={() => openTripDocument(document.key, document.editUrl)}
-                                    className="inline-flex h-10 items-center justify-center rounded-2xl border border-cyan-100 bg-white px-4 text-xs font-black text-brand-cyan shadow-sm transition hover:-translate-y-0.5 hover:bg-cyan-50 hover:shadow-md"
+                                    className="inline-flex h-9 items-center justify-center rounded-2xl border border-cyan-100 bg-white px-3 text-xs font-black text-brand-cyan shadow-sm transition hover:bg-cyan-50"
                                   >
                                     מעבר למסמך
                                   </button>
@@ -4595,10 +5221,10 @@ export default function TripPlanPage() {
                                     <button
                                       type="button"
                                       onClick={() => router.push(`${document.editUrl}?print=1`)}
-                                      className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-emerald-100 bg-white text-emerald-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-emerald-50 hover:shadow-md"
+                                      className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-emerald-100 bg-white text-emerald-700 shadow-sm hover:bg-emerald-50"
                                       aria-label={`הורדת PDF עבור ${document.title}`}
                                     >
-                                      <Download size={16} />
+                                      <Download size={15} />
                                     </button>
                                   ) : null}
                                 </div>
@@ -4618,9 +5244,16 @@ export default function TripPlanPage() {
                                     <>
                                       {document.uploadedFiles.map((file, fileIndex) => (
                                         <div key={`${file.url}-${fileIndex}`} className="flex shrink-0 items-center justify-center gap-1.5 rounded-2xl border border-emerald-100 bg-white/80 p-1.5">
-                                          <span className="max-w-24 truncate text-xs font-black text-gray-700" title={file.name}>
-                                            {file.name}
-                                          </span>
+                                          <div className="max-w-32">
+                                            <span className="block truncate text-xs font-black text-gray-700" title={file.name}>
+                                              {file.name}
+                                            </span>
+                                            {document.key === "business-license-insurance" && formatUploadedFileAssociation(file) ? (
+                                              <span className="mt-0.5 block truncate text-[10px] font-bold text-gray-500" title={formatUploadedFileAssociation(file)}>
+                                                {formatUploadedFileAssociation(file)}
+                                              </span>
+                                            ) : null}
+                                          </div>
                                           {file.size ? <span className="text-[10px] font-bold text-gray-400">{bytesLabel(file.size)}</span> : null}
                                           <button
                                             type="button"
@@ -4696,29 +5329,52 @@ export default function TripPlanPage() {
                               ) : null}
                             </div>
                           </td>
-                          <td className={`p-3 align-middle ${rowCellClass}`}>
+                          <td className={`px-2 py-2 align-middle ${rowCellClass}`}>
                             <span
-                              className={`inline-flex h-9 min-w-24 items-center justify-center rounded-full border px-4 text-xs font-black ${documentStatusToneClasses(
+                              className={`inline-flex h-8 min-w-[5.5rem] items-center justify-center rounded-full border px-3 text-[11px] font-black ${documentStatusToneClasses(
                                 completed && document.status !== "לא נדרש" ? "מוכן PDF" : document.status,
                               )}`}
                             >
                               {documentModeLabel}
                             </span>
                           </td>
-                          <td className={`p-3 align-middle ${rowCellClass}`}>
-                            <div className="mx-auto flex max-w-48 flex-col items-center justify-center gap-1 rounded-2xl border border-gray-200 bg-white/85 px-3 py-2 text-center text-xs font-bold leading-5 text-gray-700 shadow-sm">
-                              <span>{document.dataSource}</span>
-                              {document.missingFields.length ? (
-                                <span className="max-w-full truncate text-[10px] font-black text-pink-700" title={`חסר: ${document.missingFields.join(", ")}`}>
-                                  חסר: {document.missingFields.slice(0, 2).join(", ")}
-                                  {document.missingFields.length > 2 ? "..." : ""}
-                                </span>
-                              ) : (
-                                <span className="text-[10px] font-black text-emerald-700">כל שדות החובה מלאים</span>
-                              )}
-                            </div>
+                          <td className={`px-2 py-2 align-middle transition-[width] ${sourceOpen ? "w-[24rem] min-w-[24rem]" : "w-16 min-w-16"} ${rowCellClass}`}>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExpandedDocumentSources((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(document.key)) next.delete(document.key);
+                                  else next.add(document.key);
+                                  return next;
+                                })
+                              }
+                              className={`inline-flex h-9 w-9 items-center justify-center rounded-2xl border ${
+                                document.missingFields.length
+                                  ? "border-pink-300 bg-pink-50 text-pink-700"
+                                  : sourceOpen
+                                    ? "border-violet-200 bg-violet-50 text-violet-700"
+                                    : "border-gray-200 bg-white text-gray-500 hover:bg-violet-50"
+                              }`}
+                              aria-label={`פתח מקור ${document.title}`}
+                              data-tooltip={document.dataSource}
+                            >
+                              <Database size={15} />
+                            </button>
+                            {sourceOpen ? (
+                              <div className="mt-2 rounded-2xl border border-violet-100 bg-white/70 p-3 text-center text-xs font-bold leading-5 text-gray-700">
+                                <p>{document.dataSource}</p>
+                                {document.missingFields.length ? (
+                                  <p className="mt-2 text-[10px] font-black text-pink-700">
+                                    חסר: {document.missingFields.join(", ")}
+                                  </p>
+                                ) : (
+                                  <p className="mt-2 text-[10px] font-black text-emerald-700">כל שדות החובה מלאים</p>
+                                )}
+                              </div>
+                            ) : null}
                           </td>
-                          <td className={`rounded-l-3xl border-l-2 p-3 align-middle transition-[width] ${noteOpen ? "w-[24rem] min-w-[24rem]" : "w-16 min-w-16"} ${rowCellClass}`}>
+                          <td className={`rounded-l-3xl border-l-2 px-2 py-2 align-middle transition-[width] ${noteOpen ? "w-[24rem] min-w-[24rem]" : "w-16 min-w-16"} ${rowCellClass}`}>
                             <button
                               type="button"
                               onClick={() =>
@@ -4729,12 +5385,12 @@ export default function TripPlanPage() {
                                   return next;
                                 })
                               }
-                              className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl border ${
+                              className={`inline-flex h-9 w-9 items-center justify-center rounded-2xl border ${
                                 document.note.trim() ? "border-amber-500 bg-amber-500 text-white shadow-sm shadow-amber-200" : "border-gray-200 bg-white text-gray-500 hover:bg-amber-50"
                               }`}
                               aria-label={`פתח הערה ${document.title}`}
                             >
-                              <StickyNote size={16} />
+                              <StickyNote size={15} />
                             </button>
                             {noteOpen ? (
                               <textarea
@@ -4761,7 +5417,7 @@ export default function TripPlanPage() {
         <div className={quickActionShellClass("emergency")}>
           <div className="absolute inset-0 bg-slate-500/25 backdrop-blur-sm" onClick={() => setActiveQuickAction(null)} />
           <div className={quickActionPanelClass("emergency", "border-red-100")}>
-            <div className="flex flex-col gap-3 border-b border-red-100 bg-gradient-to-l from-red-50 to-white px-5 py-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex shrink-0 flex-col gap-3 border-b border-red-100 bg-gradient-to-l from-red-50 to-white px-5 py-4 md:flex-row md:items-center md:justify-between">
               <div>
                 <h2 className="flex items-center gap-2 text-2xl font-black text-gray-900">
                   <AlertTriangle size={24} className="text-red-500" />
@@ -4838,7 +5494,7 @@ export default function TripPlanPage() {
         <div className={quickActionShellClass("contacts")}>
           <div className="absolute inset-0 bg-slate-500/25 backdrop-blur-sm" onClick={() => setActiveQuickAction(null)} />
           <div className={quickActionPanelClass("contacts", "border-cyan-100")}>
-            <div className="flex flex-col gap-3 border-b border-cyan-100 bg-gradient-to-l from-cyan-50 to-white px-5 py-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex shrink-0 flex-col gap-3 border-b border-cyan-100 bg-gradient-to-l from-cyan-50 to-white px-5 py-4 md:flex-row md:items-center md:justify-between">
               <div>
                 <h2 className="flex items-center gap-2 text-lg font-black text-gray-900">
                   <Phone size={20} />
@@ -4870,7 +5526,7 @@ export default function TripPlanPage() {
                 </button>
               </div>
             </div>
-            <div className="p-5">
+            <div className={`${quickActionScrollBodyClass} p-5`}>
               {contactsLoading ? (
                 <div className="flex h-52 items-center justify-center">
                   <Loader2 className="animate-spin text-brand-cyan" size={34} />
@@ -4881,7 +5537,7 @@ export default function TripPlanPage() {
                 <div className="overflow-hidden rounded-3xl border border-cyan-100 bg-white shadow-sm">
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-[980px] text-right text-sm">
-                      <thead className="bg-cyan-50 text-xs text-cyan-950">
+                      <thead className="sticky top-0 z-10 bg-cyan-50 text-xs text-cyan-950 shadow-sm">
                         <tr>
                           <th className="p-3 font-black">תפקיד</th>
                           <th className="p-3 font-black">שם פרטי</th>
@@ -4925,7 +5581,7 @@ export default function TripPlanPage() {
         <div className={quickActionShellClass("guidelines")}>
           <div className="absolute inset-0 bg-slate-500/25 backdrop-blur-sm" onClick={() => setActiveQuickAction(null)} />
           <div className={quickActionPanelClass("guidelines", "border-violet-100")}>
-            <div className="flex flex-col gap-3 border-b border-violet-100 bg-gradient-to-l from-violet-50 to-white px-5 py-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex shrink-0 flex-col gap-3 border-b border-violet-100 bg-gradient-to-l from-violet-50 to-white px-5 py-4 md:flex-row md:items-center md:justify-between">
               <div>
                 <h2 className="flex items-center gap-2 text-2xl font-black text-gray-900">
                   <ScrollText size={24} className="text-violet-600" />
@@ -4952,7 +5608,7 @@ export default function TripPlanPage() {
         <div className={quickActionShellClass("roles")}>
           <div className="absolute inset-0 bg-slate-500/25 backdrop-blur-sm" onClick={() => setActiveQuickAction(null)} />
           <div className={quickActionPanelClass("roles", "border-emerald-100")}>
-            <div className="flex flex-col gap-3 border-b border-emerald-100 bg-gradient-to-l from-emerald-50 to-white px-5 py-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex shrink-0 flex-col gap-3 border-b border-emerald-100 bg-gradient-to-l from-emerald-50 to-white px-5 py-4 md:flex-row md:items-center md:justify-between">
               <div>
                 <h2 className="flex items-center gap-2 text-lg font-black text-gray-900">
                   <Settings size={20} />
@@ -4980,7 +5636,7 @@ export default function TripPlanPage() {
                 </button>
               </div>
             </div>
-            <div className="border-b border-emerald-100 px-5 pt-4">
+            <div className="shrink-0 border-b border-emerald-100 px-5 pt-4">
               <div className="flex flex-wrap gap-1">
                 <button
                   type="button"
@@ -5006,7 +5662,7 @@ export default function TripPlanPage() {
                 </button>
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-5">
+            <div className={`${quickActionScrollBodyClass} p-5`}>
               {rolesQuickActionTab === "assignees" ? (
                 <AssigneeResponsibilitiesBoard boards={assigneeBoards} />
               ) : requiredStaffLoading ? (
@@ -5019,7 +5675,7 @@ export default function TripPlanPage() {
                 <div className="space-y-4">
                   {requiredStaffContext ? (
                     <div className="grid gap-3 md:grid-cols-4">
-                      <SummaryCard label="חניכים" value={requiredStaffContext.participantCount} tone="cyan" />
+                      <SummaryCard label={participantLabels.participants} value={requiredStaffContext.participantCount} tone="cyan" />
                       <SummaryCard label="סה״כ משתתפים לחישוב" value={requiredStaffContext.totalPeople} tone="cyan" />
                       <SummaryCard label="אוטובוסים נדרשים" value={requiredStaffContext.busCount} tone={requiredStaffContext.busCount ? "amber" : "cyan"} />
                       <SummaryCard label="לינה" value={requiredStaffContext.hasSleeping ? "כן" : "לא"} tone={requiredStaffContext.hasSleeping ? "amber" : "cyan"} />
@@ -5080,7 +5736,7 @@ export default function TripPlanPage() {
         <div className={quickActionShellClass("equipment")}>
           <div className="absolute inset-0 bg-slate-500/25 backdrop-blur-sm" onClick={() => setActiveQuickAction(null)} />
           <div className={quickActionPanelClass("equipment", "border-emerald-100")}>
-            <div className="flex flex-col gap-3 border-b border-emerald-100 bg-gradient-to-l from-emerald-50 to-white px-5 py-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex shrink-0 flex-col gap-3 border-b border-emerald-100 bg-gradient-to-l from-emerald-50 to-white px-5 py-4 md:flex-row md:items-center md:justify-between">
               <div>
                 <h2 className="flex items-center gap-2 text-2xl font-black text-gray-900">
                   <Backpack size={24} className="text-emerald-600" />
@@ -5179,11 +5835,363 @@ export default function TripPlanPage() {
           </div>
         </div>
       ) : null}
+      {activeQuickAction === "designs" ? (
+        <div className={quickActionShellClass("designs")}>
+          <div className="absolute inset-0 bg-slate-500/25 backdrop-blur-sm" onClick={() => setActiveQuickAction(null)} />
+          <div className={quickActionPanelClass("designs", "border-fuchsia-100")}>
+            <div className="flex shrink-0 flex-col gap-3 border-b border-fuchsia-100 bg-gradient-to-l from-fuchsia-50 to-white px-5 py-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="flex items-center gap-2 text-2xl font-black text-gray-900">
+                  <Palette size={24} className="text-fuchsia-600" />
+                  עיצובים
+                </h2>
+                <p className="mt-1 text-xs font-bold text-gray-500">פירוט מרוכז של כל פריטי העיצוב שהוזנו בעמודת העיצובים בלו״ז המפורט.</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button variant="outline" onClick={() => setShowDesignersDialog(true)}>
+                  <UserRound size={14} />
+                  מעצבים
+                </Button>
+                <Button variant="outline" onClick={() => void loadDesignersMeta()} disabled={designersLoading}>
+                  {designersLoading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                  רענן
+                </Button>
+                {renderQuickActionFullscreenButton("designs", "עיצובים")}
+                <button
+                  type="button"
+                  onClick={() => setActiveQuickAction(null)}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-500 shadow-sm hover:bg-gray-50 hover:text-gray-800"
+                  aria-label="סגור עיצובים"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            {designsSchemaMissing ? (
+              <div className="m-4 rounded-2xl border border-amber-100 bg-amber-50 p-3 text-sm font-bold text-amber-800">
+                יש להריץ את המיגרציה `20260622_add_trip_plan_row_designs.sql` כדי לשמור עיצובים.
+              </div>
+            ) : null}
+            {designersSchemaMissing ? (
+              <div className="mx-4 mt-4 rounded-2xl border border-amber-100 bg-amber-50 p-3 text-sm font-bold text-amber-800">
+                יש להריץ את המיגרציה `20260623_add_trip_plan_designers.sql` כדי לשמור פרטי מעצבים.
+              </div>
+            ) : null}
+            {designersError ? <div className="m-4 rounded-2xl border border-red-100 bg-red-50 p-3 text-sm font-bold text-red-700">{designersError}</div> : null}
+
+            <div className="grid gap-3 border-b border-gray-100 p-4 md:grid-cols-4">
+              <SummaryCard label="פריטי עיצוב" value={designSummary.total} icon={<Palette size={16} />} />
+              <SummaryCard label="מוכן להדפסה" value={designSummary.ready} icon={<CheckCircle2 size={16} />} />
+              <SummaryCard label="בטיפול" value={designSummary.inProgress} icon={<Loader2 size={16} />} />
+              <SummaryCard label="ללא הדפסה" value={designSummary.noPrint} tone="amber" />
+            </div>
+
+            <div className="flex flex-wrap gap-2 border-b border-gray-100 px-4 py-3">
+              {(
+                [
+                  { id: "all", label: "הכל" },
+                  { id: "no_print", label: "ללא הדפסה" },
+                  { id: "ready", label: "מוכן להדפסה" },
+                  { id: "in_progress", label: "בטיפול" },
+                ] as const
+              ).map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => setDesignFilter(option.id)}
+                  className={`rounded-full px-3 py-1 text-xs font-black ${
+                    designFilter === option.id
+                      ? "bg-fuchsia-600 text-white"
+                      : "border border-fuchsia-100 bg-white text-fuchsia-700 hover:bg-fuchsia-50"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="border-b border-fuchsia-50 bg-fuchsia-50/30 p-4">
+              <h3 className="mb-3 text-sm font-black text-fuchsia-900">הוספת עיצוב ושיוך לשלב בטיול</h3>
+              <div className="grid gap-3 rounded-2xl border border-fuchsia-100 bg-white p-4 lg:grid-cols-2">
+                <div className="lg:col-span-2">
+                  <label className="mb-1 block text-xs font-bold text-gray-700">שלב בטיול / התרחשות</label>
+                  <Select
+                    value={designHubDraft.rowId}
+                    onChange={(rowId) => setDesignHubDraft((prev) => ({ ...prev, rowId }))}
+                    options={designRowOptions.map((option) => ({ value: option.id, label: option.label }))}
+                    placeholder="בחר שלב בלו״ז"
+                    disabled={designsSchemaMissing}
+                    accent="fuchsia"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-gray-700">שם המסמך *</label>
+                  <input
+                    className={`h-10 w-full px-3 ${fieldClass}`}
+                    value={designHubDraft.document_name}
+                    onChange={(e) => setDesignHubDraft((prev) => ({ ...prev, document_name: e.target.value }))}
+                    disabled={designsSchemaMissing}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-gray-700">שם מעצב</label>
+                  <EquipmentSourceInput
+                    value={designHubDraft.designer_name}
+                    onChange={(value) => setDesignHubDraft((prev) => ({ ...prev, designer_name: value }))}
+                    sourceType="רכש"
+                    suggestions={designerSuggestionNames}
+                    fieldClass={fieldClass}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-gray-700">הגדרות גודל</label>
+                  <input
+                    className={`h-10 w-full px-3 ${fieldClass}`}
+                    value={designHubDraft.size_settings}
+                    onChange={(e) => setDesignHubDraft((prev) => ({ ...prev, size_settings: e.target.value }))}
+                    disabled={designsSchemaMissing}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-gray-700">סטטוס</label>
+                  <Select
+                    value={designHubDraft.status}
+                    onChange={(status) => setDesignHubDraft((prev) => ({ ...prev, status }))}
+                    options={DESIGN_STATUS_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+                    placeholder="בחר סטטוס"
+                    clearable={false}
+                    disabled={designsSchemaMissing}
+                    accent="fuchsia"
+                  />
+                </div>
+                <div className="lg:col-span-2">
+                  <label className="mb-1 block text-xs font-bold text-gray-700">הערות</label>
+                  <textarea
+                    className={`min-h-[56px] w-full resize-y p-3 ${fieldClass}`}
+                    value={designHubDraft.notes}
+                    onChange={(e) => setDesignHubDraft((prev) => ({ ...prev, notes: e.target.value }))}
+                    disabled={designsSchemaMissing}
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-xl border border-fuchsia-200 bg-fuchsia-50 px-4 text-xs font-black text-fuchsia-700 hover:bg-fuchsia-100">
+                    <Upload size={14} />
+                    קובץ הנחיות / בריף
+                    <input
+                      type="file"
+                      className="sr-only"
+                      onChange={(e) =>
+                        setDesignHubDraft((prev) => ({
+                          ...prev,
+                          brief_file: e.target.files?.[0] || null,
+                          content_mode: "file",
+                        }))
+                      }
+                      disabled={designsSchemaMissing}
+                    />
+                  </label>
+                  <span className="text-xs font-bold text-gray-600">{designHubDraft.brief_file?.name || "לא נבחר"}</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-xs font-black text-gray-700 hover:bg-gray-50">
+                    <Upload size={14} />
+                    קובץ עיצוב מוכן
+                    <input
+                      type="file"
+                      className="sr-only"
+                      onChange={(e) => setDesignHubDraft((prev) => ({ ...prev, output_file: e.target.files?.[0] || null }))}
+                      disabled={designsSchemaMissing}
+                    />
+                  </label>
+                  <span className="text-xs font-bold text-gray-600">{designHubDraft.output_file?.name || "אופציונלי"}</span>
+                </div>
+              </div>
+              {designHubError ? (
+                <p className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700">{designHubError}</p>
+              ) : null}
+              <div className="mt-3 flex justify-end">
+                <Button
+                  onClick={() => {
+                    if (!designHubDraft.rowId) {
+                      setDesignHubError("יש לבחור שלב בטיול לשיוך העיצוב");
+                      return;
+                    }
+                    const { rowId, ...draft } = designHubDraft;
+                    void addDesign(rowId, { draft });
+                  }}
+                  disabled={designHubUploading || designsSchemaMissing || !designHubDraft.document_name.trim() || !designHubDraft.rowId}
+                >
+                  {designHubUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                  שמור עיצוב ושייך לשלב
+                </Button>
+              </div>
+            </div>
+
+            <div className="p-4">
+              <table className="w-full min-w-[1320px] overflow-hidden rounded-2xl text-center text-sm">
+                <thead className="sticky top-0 z-10 bg-gray-200 text-gray-800 shadow-sm">
+                  <tr>
+                    <th className="w-64 p-3 font-black">התרחשות</th>
+                    <th className="p-3 font-black">שם מסמך</th>
+                    <th className="w-36 p-3 font-black">מעצב</th>
+                    <th className="w-28 p-3 font-black">גודל</th>
+                    <th className="w-44 p-3 font-black">סטטוס</th>
+                    <th className="w-24 p-3 font-black">מצב תוכן</th>
+                    <th className="p-3 font-black">קבצים</th>
+                    <th className="p-3 font-black">קישור להדפסה</th>
+                    <th className="p-3 font-black">הערות</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredDesignItems.map((item) => (
+                    <tr key={item.key} className="border-t border-fuchsia-50 bg-white hover:bg-fuchsia-50/30">
+                      <td className="p-3 align-middle">
+                        <div className="whitespace-pre-wrap text-center font-black text-gray-800">{item.occurrence}</div>
+                        {item.rowLabel ? <div className="mt-1 text-center text-[11px] font-bold text-gray-400">{item.rowLabel}</div> : null}
+                      </td>
+                      <td className="p-3 align-middle font-black text-gray-800">{item.documentName}</td>
+                      <td className="p-3 align-middle font-bold text-gray-700">{item.designerName || "-"}</td>
+                      <td className="p-3 align-middle font-bold text-gray-700">{item.sizeSettings || "-"}</td>
+                      <td className="p-3 align-middle">
+                        <StyledStatusSelect
+                          value={item.status}
+                          onChange={(next) => updateDesignStatus(item.rowId, item.key, next)}
+                          options={designStatusOptions}
+                          tone="fuchsia"
+                        />
+                      </td>
+                      <td className="p-3 align-middle">
+                        <span className="inline-flex min-h-9 items-center justify-center rounded-2xl bg-fuchsia-50 px-3 text-xs font-black text-fuchsia-700">
+                          {item.contentMode}
+                        </span>
+                      </td>
+                      <td className="p-3 align-middle">
+                        <div className="whitespace-pre-wrap rounded-2xl bg-slate-50 p-3 text-center text-xs font-bold text-slate-700">
+                          {item.filesLabel}
+                        </div>
+                      </td>
+                      <td className="p-3 align-middle">
+                        <span
+                          className={`inline-flex min-h-9 items-center justify-center rounded-2xl px-3 text-xs font-black ${
+                            item.printLink ? "bg-cyan-50 text-cyan-700" : "bg-gray-100 text-gray-600"
+                          }`}
+                        >
+                          {item.printLink || "ללא הדפסה"}
+                        </span>
+                      </td>
+                      <td className="p-3 align-middle">
+                        <div className="whitespace-pre-wrap rounded-2xl bg-slate-50 p-3 text-center text-xs font-bold text-slate-700">
+                          {item.notes || "-"}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {!filteredDesignItems.length ? (
+                    <tr>
+                      <td colSpan={9} className="p-10 text-center text-sm font-bold text-gray-400">
+                        אין עדיין פריטי עיצוב שהוזנו בלו״ז המפורט.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+            </div>
+          </div>
+
+          {showDesignersDialog ? (
+            <div className={quickActionSubDialogShellClass("designers")}>
+              <div className="absolute inset-0 bg-slate-500/25 backdrop-blur-sm" onClick={() => setShowDesignersDialog(false)} />
+              <div className={quickActionSubDialogPanelClass("designers", "border-fuchsia-100")}>
+                <div className="flex shrink-0 items-center justify-between border-b border-fuchsia-100 bg-fuchsia-50 px-5 py-4">
+                  <div>
+                    <h3 className="text-xl font-black text-fuchsia-900">מעצבים</h3>
+                    <p className="text-xs font-bold text-fuchsia-700">שמות המעצבים נמשכים אוטומטית משדה המעצב בעמודת העיצובים בלו״ז.</p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {renderQuickActionFullscreenButton("designers", "מעצבים")}
+                    <button
+                      type="button"
+                      onClick={() => setShowDesignersDialog(false)}
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-fuchsia-100 bg-white text-fuchsia-700 shadow-sm hover:bg-fuchsia-50"
+                      aria-label="סגור מעצבים"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+                </div>
+                <div className={`${quickActionScrollBodyClass} p-4`}>
+                  <table className="w-full min-w-[980px] text-center text-sm">
+                    <thead className="sticky top-0 z-10 bg-gray-200 text-gray-800 shadow-sm">
+                      <tr>
+                        <th className="p-3 font-black">שם</th>
+                        <th className="p-3 font-black">מס׳ עיצובים</th>
+                        <th className="p-3 font-black">טלפון</th>
+                        <th className="p-3 font-black">אימייל</th>
+                        <th className="p-3 font-black">כתובת</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {designerNamesFromDesigns.map((name) => {
+                        const designer = designersByName.get(name);
+                        const stats = designerStats.get(name) || { count: 0 };
+                        return (
+                          <tr key={name} className="border-t border-fuchsia-50">
+                            <td className="p-3 align-middle font-black text-gray-800">{name}</td>
+                            <td className="p-3 align-middle">
+                              <span className="inline-flex h-9 min-w-12 items-center justify-center rounded-2xl bg-fuchsia-50 px-3 text-xs font-black text-fuchsia-700">
+                                {stats.count}
+                              </span>
+                            </td>
+                            <td className="p-3 align-middle">
+                              <input
+                                value={designer?.phone || ""}
+                                onChange={(event) => updateDesigner(name, { phone: event.target.value })}
+                                disabled={designersSchemaMissing}
+                                className="h-10 w-full rounded-2xl border border-gray-200 px-3 text-center text-xs font-bold outline-none focus:border-fuchsia-300 focus:ring-2 focus:ring-fuchsia-100 disabled:bg-gray-50"
+                              />
+                            </td>
+                            <td className="p-3 align-middle">
+                              <input
+                                value={designer?.email || ""}
+                                onChange={(event) => updateDesigner(name, { email: event.target.value })}
+                                disabled={designersSchemaMissing}
+                                className="h-10 w-full rounded-2xl border border-gray-200 px-3 text-center text-xs font-bold outline-none focus:border-fuchsia-300 focus:ring-2 focus:ring-fuchsia-100 disabled:bg-gray-50"
+                              />
+                            </td>
+                            <td className="p-3 align-middle">
+                              <input
+                                value={designer?.address || ""}
+                                onChange={(event) => updateDesigner(name, { address: event.target.value })}
+                                disabled={designersSchemaMissing}
+                                className="h-10 w-full rounded-2xl border border-gray-200 px-3 text-center text-xs font-bold outline-none focus:border-fuchsia-300 focus:ring-2 focus:ring-fuchsia-100 disabled:bg-gray-50"
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {!designerNamesFromDesigns.length ? (
+                        <tr>
+                          <td colSpan={5} className="p-8 text-center text-sm font-bold text-gray-400">
+                            אין עדיין מעצבים שהוזנו בעמודת העיצובים.
+                          </td>
+                        </tr>
+                      ) : null}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       {activeQuickAction === "prints" ? (
         <div className={quickActionShellClass("prints")}>
           <div className="absolute inset-0 bg-slate-500/25 backdrop-blur-sm" onClick={() => setActiveQuickAction(null)} />
           <div className={quickActionPanelClass("prints", "border-cyan-100")}>
-            <div className="flex flex-col gap-3 border-b border-cyan-100 bg-gradient-to-l from-cyan-50 to-white px-5 py-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex shrink-0 flex-col gap-3 border-b border-cyan-100 bg-gradient-to-l from-cyan-50 to-white px-5 py-4 md:flex-row md:items-center md:justify-between">
               <div>
                 <h2 className="flex items-center gap-2 text-2xl font-black text-gray-900">
                   <Printer size={24} className="text-brand-cyan" />
@@ -5236,6 +6244,7 @@ export default function TripPlanPage() {
                     <th className="w-36 p-3 font-black">גודל הדפסה</th>
                     <th className="w-36 p-3 font-black">סוג דף</th>
                     <th className="p-3 font-black">מקום הדפסה</th>
+                    <th className="w-36 p-3 font-black">קישור לעיצוב</th>
                     <th className="w-44 p-3 font-black">סטטוס</th>
                     <th className="w-28 p-3 font-black">גודל קובץ</th>
                     <th className="p-3 font-black">הערות</th>
@@ -5260,6 +6269,15 @@ export default function TripPlanPage() {
                         </span>
                       </td>
                       <td className="p-3 align-middle">
+                        <span
+                          className={`inline-flex min-h-9 items-center justify-center rounded-2xl px-3 text-xs font-black ${
+                            item.linkedDesignName ? "bg-fuchsia-50 text-fuchsia-700" : "bg-gray-100 text-gray-600"
+                          }`}
+                        >
+                          {item.linkedDesignName || "ללא עיצוב"}
+                        </span>
+                      </td>
+                      <td className="p-3 align-middle">
                         <StyledStatusSelect
                           value={item.status}
                           onChange={(next) => updatePrintStatus(item.rowId, item.key, next)}
@@ -5276,7 +6294,7 @@ export default function TripPlanPage() {
                   ))}
                   {!printItems.length ? (
                     <tr>
-                      <td colSpan={10} className="p-10 text-center text-sm font-bold text-gray-400">
+                      <td colSpan={11} className="p-10 text-center text-sm font-bold text-gray-400">
                         אין עדיין קבצי הדפסה שהוזנו בלו״ז המפורט.
                       </td>
                     </tr>
@@ -5290,7 +6308,7 @@ export default function TripPlanPage() {
             <div className={quickActionSubDialogShellClass("printShops")}>
               <div className="absolute inset-0 bg-slate-500/25 backdrop-blur-sm" onClick={() => setShowPrintShopsDialog(false)} />
               <div className={quickActionSubDialogPanelClass("printShops", "border-cyan-100")}>
-                <div className="flex items-center justify-between border-b border-cyan-100 bg-cyan-50 px-5 py-4">
+                <div className="flex shrink-0 items-center justify-between border-b border-cyan-100 bg-cyan-50 px-5 py-4">
                   <div>
                     <h3 className="text-xl font-black text-cyan-900">בתי דפוס</h3>
                     <p className="text-xs font-bold text-cyan-700">שמות בתי הדפוס נמשכים אוטומטית משדה מקום הדפסה בטבלת הלו״ז.</p>
@@ -5307,7 +6325,7 @@ export default function TripPlanPage() {
                   </button>
                   </div>
                 </div>
-                <div className="overflow-auto p-4">
+                <div className={`${quickActionScrollBodyClass} p-4`}>
                   <table className="w-full min-w-[980px] text-center text-sm">
                     <thead className="sticky top-0 z-10 bg-gray-200 text-gray-800 shadow-sm">
                       <tr>
@@ -5376,7 +6394,7 @@ export default function TripPlanPage() {
         <div className={quickActionShellClass("risks")}>
           <div className="absolute inset-0 bg-slate-500/25 backdrop-blur-sm" onClick={() => setActiveQuickAction(null)} />
           <div className={quickActionPanelClass("risks", "border-red-100")}>
-            <div className="flex flex-col gap-3 border-b border-red-100 bg-gradient-to-l from-red-50 to-white px-5 py-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex shrink-0 flex-col gap-3 border-b border-red-100 bg-gradient-to-l from-red-50 to-white px-5 py-4 md:flex-row md:items-center md:justify-between">
               <div>
                 <h2 className="flex items-center gap-2 text-2xl font-black text-gray-900">
                   <ShieldAlert size={24} className="text-red-500" />
@@ -5481,7 +6499,7 @@ export default function TripPlanPage() {
         <div className={quickActionShellClass("refunds")}>
           <div className="absolute inset-0 bg-slate-500/25 backdrop-blur-sm" onClick={() => setActiveQuickAction(null)} />
           <div className={quickActionPanelClass("refunds", "border-cyan-100")}>
-            <div className="flex flex-col gap-3 border-b border-cyan-100 bg-gradient-to-l from-cyan-50 to-white px-5 py-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex shrink-0 flex-col gap-3 border-b border-cyan-100 bg-gradient-to-l from-cyan-50 to-white px-5 py-4 md:flex-row md:items-center md:justify-between">
               <div>
                 <h2 className="flex items-center gap-2 text-2xl font-black text-gray-900">
                   <ClipboardList size={24} className="text-brand-cyan" />
@@ -5534,10 +6552,9 @@ export default function TripPlanPage() {
                     inputMode="decimal"
                     className="h-10 rounded-2xl border border-gray-200 bg-white px-3 text-center text-xs font-bold outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
                   />
-                  <select
+                  <Select
                     value={invoiceDraft.equipmentId}
-                    onChange={(event) => {
-                      const equipmentId = event.target.value;
+                    onChange={(equipmentId) => {
                       const purchase = purchaseItemsByEquipmentId.get(equipmentId);
                       setInvoiceDraft((prev) => ({
                         ...prev,
@@ -5545,17 +6562,16 @@ export default function TripPlanPage() {
                         supplierName: prev.supplierName || purchase?.supplier || "",
                       }));
                     }}
-                    className="h-10 rounded-2xl border border-gray-200 bg-white px-3 text-xs font-bold text-gray-700 outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
-                  >
-                    <option value="">ללא שיוך לפריט רכש</option>
-                    {purchaseItems
+                    options={purchaseItems
                       .filter((item) => item.equipmentId)
-                      .map((item) => (
-                        <option key={item.equipmentId} value={item.equipmentId}>
-                          {[item.item || "פריט רכש", item.supplier, item.rowLabel].filter(Boolean).join(" · ")}
-                        </option>
-                      ))}
-                  </select>
+                      .map((item) => ({
+                        value: String(item.equipmentId),
+                        label: [item.item || "פריט רכש", item.supplier, item.rowLabel].filter(Boolean).join(" · "),
+                      }))}
+                    placeholder="ללא שיוך לפריט רכש"
+                    accent="cyan"
+                    buttonClassName="!rounded-2xl"
+                  />
                   <input
                     value={invoiceDraft.supplierName}
                     onChange={(event) => setInvoiceDraft((prev) => ({ ...prev, supplierName: event.target.value }))}
@@ -5633,27 +6649,25 @@ export default function TripPlanPage() {
                           />
                         </td>
                         <td className="p-3 align-middle">
-                          <select
+                          <Select
                             value={invoice.equipment_id || ""}
-                            onChange={(event) => {
-                              const equipmentId = event.target.value;
+                            onChange={(equipmentId) => {
                               const purchase = purchaseItemsByEquipmentId.get(equipmentId);
                               updateInvoice(invoice.id, {
                                 equipment_id: equipmentId || null,
                                 supplier_name: invoice.supplier_name || purchase?.supplier || "",
                               });
                             }}
-                            className="h-10 w-full rounded-2xl border border-gray-200 bg-white px-2 text-xs font-bold text-gray-700 outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100"
-                          >
-                            <option value="">ללא שיוך</option>
-                            {purchaseItems
+                            options={purchaseItems
                               .filter((item) => item.equipmentId)
-                              .map((item) => (
-                                <option key={item.equipmentId} value={item.equipmentId}>
-                                  {[item.item || "פריט רכש", item.supplier, item.rowLabel].filter(Boolean).join(" · ")}
-                                </option>
-                              ))}
-                          </select>
+                              .map((item) => ({
+                                value: String(item.equipmentId),
+                                label: [item.item || "פריט רכש", item.supplier, item.rowLabel].filter(Boolean).join(" · "),
+                              }))}
+                            placeholder="ללא שיוך"
+                            accent="cyan"
+                            buttonClassName="!rounded-2xl"
+                          />
                           {linkedPurchase ? <div className="mt-1 text-[11px] font-bold text-gray-400">{linkedPurchase.rowLabel}</div> : null}
                         </td>
                         <td className="p-3 align-middle">
@@ -5737,7 +6751,7 @@ export default function TripPlanPage() {
         <div className={quickActionShellClass("purchases")}>
           <div className="absolute inset-0 bg-slate-500/25 backdrop-blur-sm" onClick={() => setActiveQuickAction(null)} />
           <div className={quickActionPanelClass("purchases", "border-cyan-100")}>
-            <div className="flex flex-col gap-3 border-b border-cyan-100 bg-gradient-to-l from-cyan-50 to-white px-5 py-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex shrink-0 flex-col gap-3 border-b border-cyan-100 bg-gradient-to-l from-cyan-50 to-white px-5 py-4 md:flex-row md:items-center md:justify-between">
               <div>
                 <h2 className="flex items-center gap-2 text-2xl font-black text-gray-900">
                   <ShoppingCart size={24} className="text-brand-cyan" />
@@ -5772,6 +6786,11 @@ export default function TripPlanPage() {
               </div>
             ) : null}
             {purchaseMetaError ? <div className="m-4 rounded-2xl border border-red-100 bg-red-50 p-3 text-sm font-bold text-red-700">{purchaseMetaError}</div> : null}
+            {sustainabilityMotifsEnabled && purchaseSustainabilityMotifs.length > 0 ? (
+              <div className="border-b border-gray-100 p-4">
+                <SustainabilityMotifStrip motifs={purchaseSustainabilityMotifs} title="דגשי קיימות לרכש וציוד" />
+              </div>
+            ) : null}
 
             <div className="grid gap-3 border-b border-gray-100 p-4 md:grid-cols-5">
               <SummaryCard label="פריטי רכש" value={purchaseItems.length} icon={<ShoppingCart size={16} />} />
@@ -5870,7 +6889,7 @@ export default function TripPlanPage() {
             <div className={quickActionSubDialogShellClass("suppliers")}>
               <div className="absolute inset-0 bg-slate-500/25 backdrop-blur-sm" onClick={() => setShowSuppliersDialog(false)} />
               <div className={quickActionSubDialogPanelClass("suppliers", "border-purple-100")}>
-                <div className="flex items-center justify-between border-b border-purple-100 bg-purple-50 px-5 py-4">
+                <div className="flex shrink-0 items-center justify-between border-b border-purple-100 bg-purple-50 px-5 py-4">
                   <div>
                     <h3 className="text-xl font-black text-purple-900">ספקים</h3>
                     <p className="text-xs font-bold text-purple-700">שמות הספקים נמשכים אוטומטית משדה הספק בטבלת הלו״ז.</p>
@@ -5887,7 +6906,17 @@ export default function TripPlanPage() {
                   </button>
                   </div>
                 </div>
-                <div className="overflow-auto p-4">
+                {sustainabilityMotifsEnabled ? (
+                  <div className="shrink-0 border-b border-purple-50 px-4 pt-4">
+                    <SustainabilityMotifStrip
+                      motifs={getMotifsForSuppliersContext(sustainabilityMotifsEnabled)}
+                      title="קיימות בבחירת ספקים"
+                      compact={false}
+                      fullWidth
+                    />
+                  </div>
+                ) : null}
+                <div className={`${quickActionScrollBodyClass} p-4`}>
                   <table className="w-full min-w-[980px] text-center text-sm">
                     <thead className="sticky top-0 z-10 bg-gray-200 text-gray-800 shadow-sm">
                       <tr>
@@ -6031,6 +7060,13 @@ export default function TripPlanPage() {
           }}
         />
       ) : null}
+      {sustainabilityBriefDialog ? (
+        <SustainabilityBriefDialog
+          motifs={sustainabilityBriefDialog.motifs}
+          activityLabel={sustainabilityBriefDialog.activityLabel}
+          onClose={() => setSustainabilityBriefDialog(null)}
+        />
+      ) : null}
       <Modal
         isOpen={Boolean(confirmDeleteRowId)}
         onClose={() => setConfirmDeleteRowId(null)}
@@ -6161,6 +7197,11 @@ export default function TripPlanPage() {
       {printQuickDialogRowId ? (
         <PlanPrintQuickDialog
           draft={getPrintDraft(printQuickDialogRowId)}
+          rowDesigns={(rows.find((row) => row.id === printQuickDialogRowId)?.designs || []).map((design) => ({
+            id: design.id,
+            document_name: design.document_name,
+            size_settings: design.size_settings,
+          }))}
           uploading={uploadingRowId === printQuickDialogRowId}
           printLocationSuggestions={printLocationSuggestions}
           fieldClass={fieldClass}
@@ -6180,8 +7221,30 @@ export default function TripPlanPage() {
               print_size: "",
               page_type: "",
               print_location: "",
+              design_id: "",
             });
             setPrintDialogSavePrompt(false);
+          }}
+        />
+      ) : null}
+      {designQuickDialogRowId ? (
+        <PlanDesignQuickDialog
+          draft={getDesignDraft(designQuickDialogRowId)}
+          uploading={uploadingRowId === designQuickDialogRowId}
+          designerSuggestions={designerSuggestionNames}
+          fieldClass={fieldClass}
+          savePromptOpen={designDialogSavePrompt}
+          uploadError={designUploadError}
+          onDraftChange={(patch) => updateDesignDraft(designQuickDialogRowId, patch)}
+          onUpload={() => void addDesign(designQuickDialogRowId, { showFollowUpPrompt: true })}
+          onClose={() => {
+            setDesignQuickDialogRowId(null);
+            setDesignDialogSavePrompt(false);
+          }}
+          onFollowUp={(action, meta) => handleRowFollowUp(designQuickDialogRowId, action, meta)}
+          onAddAnotherDesign={() => {
+            updateDesignDraft(designQuickDialogRowId, emptyPlanDesignDraft());
+            setDesignDialogSavePrompt(false);
           }}
         />
       ) : null}

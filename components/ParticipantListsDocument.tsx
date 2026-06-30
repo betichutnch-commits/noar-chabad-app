@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { ArrowRight, UsersRound } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import MasterFormTemplate, { type MasterFormColumn } from "@/components/MasterFormTemplate";
+import { requiresStaffPoliceApproval } from "@/lib/staffGender";
 import { Button } from "@/components/ui/Button";
 
 type ParticipantType = "participant" | "staff";
@@ -264,7 +265,14 @@ const buildRows = (variant: DocumentVariant, payload: ParticipantsPayload): Docu
     if (variant === "staff-list") {
       const age = ageFromBirthDate(rawText(person, "birthDate"));
       row.role = rawText(person, "staffRole") || person.role;
-      row.policeApproval = age !== null && age < 18 ? "לא נדרש" : rawText(person, "policeApproval");
+      row.policeApproval = requiresStaffPoliceApproval({
+        type: "staff",
+        birthDate: rawText(person, "birthDate"),
+        gender: rawText(person, "gender"),
+        calculateAge: ageFromBirthDate,
+      })
+        ? rawText(person, "policeApproval")
+        : "לא נדרש";
     }
     return row;
   });

@@ -360,3 +360,34 @@ export function getRowRegulationHints(
       scheduleRow?.circularSectionId ?? activity?.circularSectionId ?? licenseRow?.circularSectionId ?? null,
   };
 }
+
+/** Occurrence column: per-row license and insurance (not trip-wide moked teva). */
+export function getOccurrenceRegulationHints(eventText?: string | null) {
+  const hints = getRowRegulationHints(null, eventText);
+  const needsInsurance = hints.needsLicense;
+  return {
+    needsLicense: hints.needsLicense,
+    needsInsurance,
+    licenseLabel: hints.needsLicense ? hints.licenseLabel || "נדרש רישוי" : undefined,
+    insuranceLabel: needsInsurance ? "נדרש ביטוח" : undefined,
+  };
+}
+
+export function tripNeedsMokedTevaCoordination(input: {
+  planRows: Array<{ eventText?: string | null; locationSensitive?: boolean | null }>;
+  tripDetails?: Record<string, unknown>;
+}): boolean {
+  const details = input.tripDetails || {};
+  if (details.requiresSensitiveCoordination || details.inSensitiveArea || details.sensitiveArea) return true;
+
+  for (const row of input.planRows) {
+    if (row.locationSensitive) return true;
+    const hints = getRowRegulationHints(null, row.eventText);
+    if (hints.needsMokedTeva) return true;
+  }
+  return false;
+}
+
+export function tripNeedsBusinessLicense(planRows: Array<{ eventText?: string | null }>): boolean {
+  return planRows.some((row) => getRowRegulationHints(null, row.eventText).needsLicense);
+}

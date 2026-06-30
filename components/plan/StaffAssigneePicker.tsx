@@ -82,7 +82,7 @@ export function StaffAssigneePicker({
     setCreateError("");
     try {
       const res = await fetch(`/api/trips/${tripId}/plan/participants`, {
-        method: "POST",
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
@@ -99,6 +99,13 @@ export function StaffAssigneePicker({
       });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(String(payload?.error || "יצירת איש צוות נכשלה"));
+      const createdId = typeof payload?.id === "string" ? payload.id : "";
+      if (createdId) {
+        pickValue({ participantId: createdId, roleKey: null, displayName: trimmed });
+        onPersonCreated?.();
+        setNewPersonName("");
+        return;
+      }
       const reload = await fetch(`/api/trips/${tripId}/plan/participants`, { credentials: "include", cache: "no-store" });
       const reloadPayload = await reload.json().catch(() => ({}));
       const staff = Array.isArray(reloadPayload?.staff) ? reloadPayload.staff : [];
@@ -201,7 +208,7 @@ function StaffAssigneeMenu({
         ללא אחראי
       </button>
 
-      {mode === "planning" ? (
+      {mode === "planning" && planningRoles.length ? (
         <>
           <p className="px-2 py-1 text-[10px] font-black text-gray-400">תפקידים (תכנון)</p>
           {planningRoles.map((role) => {
@@ -221,53 +228,52 @@ function StaffAssigneeMenu({
             );
           })}
         </>
-      ) : (
+      ) : null}
+
+      {rosterRoles.length ? (
         <>
-          {rosterRoles.length ? (
-            <>
-              <p className="px-2 py-1 text-[10px] font-black text-amber-700">תפקידים פתוחים</p>
-              {rosterRoles.map((entry) => {
-                const option = staffAssigneeFromRosterEntry(entry);
-                const active = staffAssigneeMatches(value, option);
-                return (
-                  <button
-                    key={entry.id}
-                    type="button"
-                    onClick={() => onPick(option)}
-                    className={`flex w-full rounded-lg px-2 py-1.5 text-right text-[11px] font-bold hover:bg-amber-50 ${
-                      active ? "bg-amber-100 text-amber-900" : "text-amber-900"
-                    }`}
-                  >
-                    {entry.roleLabels[0] || entry.displayName}
-                  </button>
-                );
-              })}
-            </>
-          ) : null}
-          {rosterPeople.length ? (
-            <>
-              <p className="px-2 py-1 text-[10px] font-black text-gray-400">אנשי צוות</p>
-              {rosterPeople.map((entry) => {
-                const option = staffAssigneeFromRosterEntry(entry);
-                const active = staffAssigneeMatches(value, option);
-                return (
-                  <button
-                    key={entry.id}
-                    type="button"
-                    onClick={() => onPick(option)}
-                    className={`flex w-full items-center gap-1 rounded-lg px-2 py-1.5 text-right text-[11px] font-bold hover:bg-violet-50 ${
-                      active ? "bg-violet-100 text-violet-900" : "text-gray-800"
-                    }`}
-                  >
-                    <UserRound size={12} className="shrink-0" />
-                    <span className="truncate">{entry.displayName}</span>
-                  </button>
-                );
-              })}
-            </>
-          ) : null}
+          <p className="px-2 py-1 text-[10px] font-black text-amber-700">תפקידים פתוחים</p>
+          {rosterRoles.map((entry) => {
+            const option = staffAssigneeFromRosterEntry(entry);
+            const active = staffAssigneeMatches(value, option);
+            return (
+              <button
+                key={entry.id}
+                type="button"
+                onClick={() => onPick(option)}
+                className={`flex w-full rounded-lg px-2 py-1.5 text-right text-[11px] font-bold hover:bg-amber-50 ${
+                  active ? "bg-amber-100 text-amber-900" : "text-amber-900"
+                }`}
+              >
+                {entry.roleLabels[0] || entry.displayName}
+              </button>
+            );
+          })}
         </>
-      )}
+      ) : null}
+
+      {rosterPeople.length ? (
+        <>
+          <p className="px-2 py-1 text-[10px] font-black text-gray-400">אנשי צוות</p>
+          {rosterPeople.map((entry) => {
+            const option = staffAssigneeFromRosterEntry(entry);
+            const active = staffAssigneeMatches(value, option);
+            return (
+              <button
+                key={entry.id}
+                type="button"
+                onClick={() => onPick(option)}
+                className={`flex w-full items-center gap-1 rounded-lg px-2 py-1.5 text-right text-[11px] font-bold hover:bg-violet-50 ${
+                  active ? "bg-violet-100 text-violet-900" : "text-gray-800"
+                }`}
+              >
+                <UserRound size={12} className="shrink-0" />
+                <span className="truncate">{entry.displayName}</span>
+              </button>
+            );
+          })}
+        </>
+      ) : null}
 
       {tripId ? (
         <div className="mt-1 border-t border-gray-100 px-1 pt-2">

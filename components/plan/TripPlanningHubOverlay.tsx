@@ -17,7 +17,9 @@ import { TripDetailsDrawer } from "@/components/plan/TripDetailsDrawer";
 import { useUser } from "@/hooks/useUser";
 import { formatHebrewDateRange } from "@/lib/dateUtils";
 import type { CoordinatorPlanningBrief, PlanningRequirementItem, PlanningRequirementTone } from "@/lib/coordinatorPlanningBrief";
+import { isSustainabilityRequirementId } from "@/lib/sustainability";
 import type { TripRecord } from "@/lib/types";
+import { SustainabilityIconBadge } from "@/components/sustainability/SustainabilityIcon";
 
 type PlanningBriefResponse = {
   ok: boolean;
@@ -35,11 +37,17 @@ const toneAccent: Record<PlanningRequirementTone, string> = {
 };
 
 function RequirementRow({ item, index }: { item: PlanningRequirementItem; index: number }) {
+  const isSustainability = isSustainabilityRequirementId(item.id);
+
   return (
     <li className={`flex gap-3 border-r-4 pr-3 py-2.5 ${toneAccent[item.tone]}`}>
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-brand-cyan bg-white text-[10px] font-black text-brand-cyan">
-        {index + 1}
-      </span>
+      {isSustainability ? (
+        <SustainabilityIconBadge size={12} />
+      ) : (
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-brand-cyan bg-white text-[10px] font-black text-brand-cyan">
+          {index + 1}
+        </span>
+      )}
       <div className="min-w-0 text-right">
         <p className="font-black text-sm text-brand-dark">{item.label}</p>
         {item.detail ? <p className="mt-0.5 text-xs leading-relaxed text-text-secondary">{item.detail}</p> : null}

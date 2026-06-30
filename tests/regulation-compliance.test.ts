@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { evaluateTripCompliance, getRowRegulationHints, findLicensedScheduleRow } from "@/lib/regulation/compliance";
+import {
+  evaluateTripCompliance,
+  getRowRegulationHints,
+  getOccurrenceRegulationHints,
+  tripNeedsMokedTevaCoordination,
+  tripNeedsBusinessLicense,
+  findLicensedScheduleRow,
+} from "@/lib/regulation/compliance";
 
 describe("evaluateTripCompliance", () => {
   it("flags water activity medical requirement when medic not assigned", () => {
@@ -120,6 +127,34 @@ describe("getRowRegulationHints", () => {
   it("does not flag museum for license", () => {
     const hints = getRowRegulationHints("attraction", "מוזיאון");
     expect(hints.needsLicense).toBe(false);
+  });
+});
+
+describe("occurrence and trip regulation helpers", () => {
+  it("getOccurrenceRegulationHints exposes license and insurance", () => {
+    const hints = getOccurrenceRegulationHints("פארק מים");
+    expect(hints.needsLicense).toBe(true);
+    expect(hints.needsInsurance).toBe(true);
+    expect(hints.licenseLabel).toBe("נדרש רישוי");
+    expect(hints.insuranceLabel).toBe("נדרש ביטוח");
+  });
+
+  it("tripNeedsMokedTevaCoordination is trip-wide", () => {
+    expect(
+      tripNeedsMokedTevaCoordination({
+        planRows: [{ eventText: "קיאקים/רפטינג", locationSensitive: false }],
+      }),
+    ).toBe(true);
+    expect(
+      tripNeedsMokedTevaCoordination({
+        planRows: [{ eventText: "מוזיאון", locationSensitive: false }],
+      }),
+    ).toBe(false);
+  });
+
+  it("tripNeedsBusinessLicense when any row needs license", () => {
+    expect(tripNeedsBusinessLicense([{ eventText: "שייט" }, { eventText: "מוזיאון" }])).toBe(true);
+    expect(tripNeedsBusinessLicense([{ eventText: "מוזיאון" }])).toBe(false);
   });
 });
 

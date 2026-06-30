@@ -3,6 +3,26 @@ import type { User } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
 import { canEditTripPlan } from "@/lib/tripPlan";
 import { REQUIRED_STAFF_RAW } from "@/lib/tripRequiredRoles";
+import { validateStaffRoleMerge } from "@/lib/staffRoleMerge";
+import {
+  buildSplitPlaceholderRow,
+  buildUpdatedStaffAfterSplit,
+  canSplitStaffRole,
+  pairStaffRoles,
+  removeStaffRolePair,
+} from "@/lib/staffRoleSplit";
+import {
+  buildRegistrationHintsMap,
+  buildRegistrationSnapshotFromProfile,
+  buildStaffGenderHintsFromRegistration,
+  mergeRegistrationIntoRaw,
+  normalizeImportedParticipantRaw,
+  readRegistrationFieldsFromRaw,
+  resolveParticipantIdentity,
+  type RegistrationSnapshot,
+} from "@/lib/participantRegistrationFill";
+import { normalizeIdentityNumber, type StaffGender } from "@/lib/staffGender";
+import { createSupabaseServiceRoleClient } from "@/lib/supabaseService";
 
 type RouteContext = { params: Promise<{ id: string }> };
 type ParticipantType = "participant" | "staff";
@@ -119,6 +139,7 @@ type Body =
   | { action: "removeAssignmentMember"; memberId?: string; assignmentSetId?: string; participantId?: string }
   | { action: "assignRequiredRole"; placeholderId?: string; participantId?: string }
   | { action: "assignRolesToParticipant"; participantId?: string; placeholderIds?: string[] }
+  | { action: "splitStaffRole"; participantId?: string; roleLabel?: string }
   | { action: "addStaffRoleSlot"; roleKey?: string; roleLabel?: string };
 
 const fieldCandidates = {
@@ -131,6 +152,7 @@ const fieldCandidates = {
   medicalNotes: ["רגישויות רפואיות", "רגישות רפואית", "Medical", "Medical Notes", "Allergies"],
   role: ["תפקיד", "Role", "Staff Role"],
   notes: ["הערות", "Notes"],
+  gender: ["מגדר", "Gender", "gender", "מין", "Sex"],
 };
 
 async function canEdit(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>, user: User, tripId: string) {
@@ -139,7 +161,7 @@ async function canEdit(supabase: Awaited<ReturnType<typeof createSupabaseServerC
     .select("role, department, is_tech_admin")
     .eq("id", user.id)
     .single();
-  const { data: trip } = await supabase.from("trips").select("id, user_id, name").eq("id", tripId).single();
+  const { data: trip } = await supabase.from("trips").select("id, user_id, name, department").eq("id", tripId).single();
   if (!trip) return { ok: false, code: 404 as const, trip: null };
   const ok = canEditTripPlan({ user, profile: profile || null, tripUserId: String(trip.user_id) });
   return { ok, code: ok ? 200 : (403 as const), trip };
@@ -248,9 +270,86 @@ async function fetchAirtableTable(tableName: string, type: ParticipantType, trip
         medicalNotes: pickField(record.fields, fieldCandidates.medicalNotes),
         role: pickField(record.fields, fieldCandidates.role),
         notes: pickField(record.fields, fieldCandidates.notes),
-        raw: record.fields,
+        raw: normalizeImportedParticipantRaw({
+          ...record.fields,
+          gender: pickField(record.fields, fieldCandidates.gender) || record.fields.gender,
+        }),
       }),
     ),
+  };
+}
+
+async function fetchRegistrationSnapshotsByIdentities(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  identities: string[],
+) {
+  const unique = Array.from(new Set(identities.map((identity) => normalizeIdentityNumber(identity)).filter(Boolean)));
+  const snapshots = new Map<string, RegistrationSnapshot>();
+  if (!unique.length) return snapshots;
+
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, official_name, last_name, identity_number, phone, email, birth_date, department")
+    .in("identity_number", unique);
+
+  const admin = createSupabaseServiceRoleClient();
+  for (const profile of profiles || []) {
+    const identity = normalizeIdentityNumber(profile.identity_number);
+    if (!identity) continue;
+    let metadata: Record<string, unknown> = {};
+    if (admin && profile.id) {
+      const { data } = await admin.auth.admin.getUserById(String(profile.id));
+      metadata = (data?.user?.user_metadata || {}) as Record<string, unknown>;
+    }
+    snapshots.set(identity, buildRegistrationSnapshotFromProfile(profile, metadata));
+  }
+
+  return snapshots;
+}
+
+async function enrichParticipantsFromRegistration(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  rows: LocalParticipant[],
+) {
+  const identities = rows
+    .map((row) => resolveParticipantIdentity((row.raw_data || {}) as Record<string, unknown>, row.notes))
+    .filter(Boolean);
+  const registrationSnapshots = await fetchRegistrationSnapshotsByIdentities(supabase, identities);
+  const hints = buildRegistrationHintsMap(registrationSnapshots);
+  const genderHints = buildStaffGenderHintsFromRegistration(registrationSnapshots);
+
+  const enrichedRows = rows.map((row) => {
+    const raw = { ...((row.raw_data || {}) as Record<string, unknown>) };
+    const normalizedRaw = mergeRegistrationIntoRaw(raw, readRegistrationFieldsFromRaw(raw));
+    const identity = resolveParticipantIdentity(normalizedRaw, row.notes);
+    const registration = identity ? registrationSnapshots.get(identity) : undefined;
+    const nextRaw = registration ? mergeRegistrationIntoRaw(normalizedRaw, registration) : normalizedRaw;
+    if (JSON.stringify(nextRaw) === JSON.stringify(row.raw_data || {})) return row;
+    return { ...row, raw_data: nextRaw };
+  });
+
+  return { rows: enrichedRows, hints, genderHints };
+}
+
+async function applyRegistrationFillOnSave(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  row: ReturnType<typeof participantPayloadToRow>,
+) {
+  const raw = mergeRegistrationIntoRaw({}, readRegistrationFieldsFromRaw((row.raw_data || {}) as Record<string, unknown>));
+  const identity = resolveParticipantIdentity(raw, row.notes);
+  if (!identity) {
+    return { ...row, raw_data: raw };
+  }
+
+  const registrationSnapshots = await fetchRegistrationSnapshotsByIdentities(supabase, [identity]);
+  const registration = registrationSnapshots.get(identity);
+  if (!registration) {
+    return { ...row, raw_data: raw };
+  }
+
+  return {
+    ...row,
+    raw_data: mergeRegistrationIntoRaw(raw, registration),
   };
 }
 
@@ -321,6 +420,11 @@ async function mergeStaffPlaceholdersIntoParticipant(
     return { ok: false as const, error: "חלק מתפקידי החובה לא נמצאו", status: 404 as const };
   }
 
+  const mergeValidation = validateStaffRoleMerge(target, placeholders);
+  if (!mergeValidation.ok) {
+    return { ok: false as const, error: mergeValidation.message, status: 400 as const };
+  }
+
   const targetRaw = (target.raw_data || {}) as Record<string, unknown>;
   let nextRoleKeys = rawArray(targetRaw, REQUIRED_STAFF_RAW.roleKeys);
   let nextRoleLabels = rawArray(targetRaw, REQUIRED_STAFF_RAW.roleLabels);
@@ -363,6 +467,66 @@ async function mergeStaffPlaceholdersIntoParticipant(
 
   const remove = await supabase.from("trip_plan_participants").delete().in("id", uniquePlaceholderIds).eq("trip_id", tripId);
   if (remove.error) return { ok: false as const, error: remove.error.message, status: 500 as const };
+  return { ok: true as const };
+}
+
+async function splitStaffRoleFromParticipant(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  tripId: string,
+  participantId: string,
+  roleLabel: string,
+) {
+  const trimmedLabel = String(roleLabel || "").trim();
+  if (!trimmedLabel) return { ok: false as const, error: "לא נבחר תפקיד להפרדה", status: 400 as const };
+
+  const { data: target, error: readError } = await supabase
+    .from("trip_plan_participants")
+    .select("id, full_name, role, raw_data, participant_type")
+    .eq("trip_id", tripId)
+    .eq("id", participantId)
+    .maybeSingle();
+  if (readError) return { ok: false as const, error: readError.message, status: 500 as const };
+  if (!target || target.participant_type !== "staff") {
+    return { ok: false as const, error: "איש הצוות לא נמצא", status: 404 as const };
+  }
+
+  const targetRaw = (target.raw_data || {}) as Record<string, unknown>;
+  if (targetRaw[REQUIRED_STAFF_RAW.placeholder]) {
+    return { ok: false as const, error: "לא ניתן להפריד תפקיד מתקן חסר", status: 400 as const };
+  }
+
+  const roleKeys = rawArray(targetRaw, REQUIRED_STAFF_RAW.roleKeys);
+  const roleLabels = rawArray(targetRaw, REQUIRED_STAFF_RAW.roleLabels);
+  if (!canSplitStaffRole(roleLabels)) {
+    return { ok: false as const, error: "לא ניתן להפריד — לאיש הצוות משויך תפקיד אחד בלבד", status: 400 as const };
+  }
+
+  const pairs = pairStaffRoles(roleKeys, roleLabels);
+  const splitResult = removeStaffRolePair(pairs, trimmedLabel);
+  if (!splitResult) return { ok: false as const, error: "התפקיד לא נמצא אצל איש הצוות", status: 404 as const };
+
+  const placeholderRow = buildSplitPlaceholderRow({
+    tripId,
+    roleKey: splitResult.removed.roleKey,
+    roleLabel: splitResult.removed.roleLabel,
+    requiredStaffSource: String(targetRaw[REQUIRED_STAFF_RAW.source] || ""),
+    notes: "הופרד מתפקיד משורת צוות",
+  });
+  const insert = await supabase.from("trip_plan_participants").insert(placeholderRow);
+  if (insert.error) return { ok: false as const, error: insert.error.message, status: 500 as const };
+
+  const nextStaff = buildUpdatedStaffAfterSplit({ raw: targetRaw, remaining: splitResult.remaining });
+  const update = await supabase
+    .from("trip_plan_participants")
+    .update({
+      role: nextStaff.role,
+      raw_data: nextStaff.raw_data,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", participantId)
+    .eq("trip_id", tripId);
+  if (update.error) return { ok: false as const, error: update.error.message, status: 500 as const };
+
   return { ok: true as const };
 }
 
@@ -436,12 +600,20 @@ async function readLocalData(supabase: Awaited<ReturnType<typeof createSupabaseS
     };
   }
 
-  const people = ((localSchemaMissing ? [] : participantsRes.data || []) as LocalParticipant[]).map(normalizeParticipant);
+  const people = (localSchemaMissing ? [] : participantsRes.data || []) as LocalParticipant[];
+  const registrationEnrichment = localSchemaMissing
+    ? { rows: people, hints: {} as Record<string, RegistrationSnapshot>, genderHints: {} as Record<string, StaffGender> }
+    : await enrichParticipantsFromRegistration(supabase, people);
+
   return {
     error: null,
     localSchemaMissing,
-    participants: people.filter((person) => person.type === "participant"),
-    staff: people.filter((person) => person.type === "staff"),
+    participants: registrationEnrichment.rows
+      .filter((person) => person.participant_type === "participant")
+      .map(normalizeParticipant),
+    staff: registrationEnrichment.rows.filter((person) => person.participant_type === "staff").map(normalizeParticipant),
+    registrationByIdentity: registrationEnrichment.hints,
+    staffGenderByIdentity: registrationEnrichment.genderHints,
     buses: localSchemaMissing ? [] : busesRes.data || [],
     groups: localSchemaMissing ? [] : groupsRes.data || [],
     assignmentSets: localSchemaMissing
@@ -465,6 +637,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
   if (data.error) return NextResponse.json({ error: data.error }, { status: 500 });
   return NextResponse.json({
     ok: true,
+    tripDepartment: access.trip?.department || null,
     airtable: {
       configured: Boolean(process.env.AIRTABLE_API_KEY && process.env.AIRTABLE_BASE_ID),
       error: null,
@@ -534,17 +707,45 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   if (!access.ok || !access.trip) return NextResponse.json({ error: access.code === 404 ? "Trip not found" : "Forbidden" }, { status: access.code });
 
   if (body.action === "createParticipant") {
-    const row = participantPayloadToRow(id, body);
+    let row = participantPayloadToRow(id, body);
     if (!row.full_name) return NextResponse.json({ error: "שם מלא הוא שדה חובה" }, { status: 400 });
-    const { error } = await supabase.from("trip_plan_participants").insert(row);
+    row = await applyRegistrationFillOnSave(supabase, row);
+    const { data: createdRow, error } = await supabase.from("trip_plan_participants").insert(row).select("id").single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, id: createdRow?.id || null });
   }
 
   if (body.action === "updateParticipant") {
     if (!body.id) return NextResponse.json({ error: "Missing participant id" }, { status: 400 });
-    const row = participantPayloadToRow(id, body);
+    const { data: existing, error: existingError } = await supabase
+      .from("trip_plan_participants")
+      .select("source, source_record_id, raw_data")
+      .eq("id", body.id)
+      .eq("trip_id", id)
+      .maybeSingle();
+    if (existingError) return NextResponse.json({ error: existingError.message }, { status: 500 });
+    let row = participantPayloadToRow(id, body);
+    if (existing) {
+      row.source = existing.source || row.source;
+      row.source_record_id = body.sourceRecordId ?? existing.source_record_id ?? row.source_record_id;
+      const existingRaw = (existing.raw_data || {}) as Record<string, unknown>;
+      const nextRaw = (row.raw_data || {}) as Record<string, unknown>;
+      row.raw_data = {
+        ...existingRaw,
+        ...nextRaw,
+        ...(existingRaw[REQUIRED_STAFF_RAW.protected]
+          ? {
+              [REQUIRED_STAFF_RAW.protected]: existingRaw[REQUIRED_STAFF_RAW.protected],
+              [REQUIRED_STAFF_RAW.roleKeys]: nextRaw[REQUIRED_STAFF_RAW.roleKeys] ?? existingRaw[REQUIRED_STAFF_RAW.roleKeys],
+              [REQUIRED_STAFF_RAW.roleLabels]: nextRaw[REQUIRED_STAFF_RAW.roleLabels] ?? existingRaw[REQUIRED_STAFF_RAW.roleLabels],
+              [REQUIRED_STAFF_RAW.placeholder]: nextRaw[REQUIRED_STAFF_RAW.placeholder] ?? existingRaw[REQUIRED_STAFF_RAW.placeholder],
+              [REQUIRED_STAFF_RAW.source]: existingRaw[REQUIRED_STAFF_RAW.source] ?? nextRaw[REQUIRED_STAFF_RAW.source],
+            }
+          : {}),
+      };
+    }
     if (!row.full_name) return NextResponse.json({ error: "שם מלא הוא שדה חובה" }, { status: 400 });
+    row = await applyRegistrationFillOnSave(supabase, row);
     const { error } = await supabase.from("trip_plan_participants").update(row).eq("id", body.id).eq("trip_id", id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });
@@ -594,6 +795,15 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     return NextResponse.json({ ok: true });
   }
 
+  if (body.action === "splitStaffRole") {
+    if (!body.participantId || !body.roleLabel) {
+      return NextResponse.json({ error: "Missing staff role split details" }, { status: 400 });
+    }
+    const split = await splitStaffRoleFromParticipant(supabase, id, String(body.participantId), String(body.roleLabel));
+    if (!split.ok) return NextResponse.json({ error: split.error }, { status: split.status });
+    return NextResponse.json({ ok: true });
+  }
+
   if (body.action === "addStaffRoleSlot") {
     const roleKey = String(body.roleKey || "").trim() || `custom_${Date.now()}`;
     const roleLabel = String(body.roleLabel || "").trim();
@@ -619,7 +829,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
         [REQUIRED_STAFF_RAW.source]: "coordinator_extra_role",
         staffRole: roleLabel,
         firstName: "תקן חסר:",
-        lastName: roleLabel,
+        lastName: "",
       },
       updated_at: new Date().toISOString(),
     });

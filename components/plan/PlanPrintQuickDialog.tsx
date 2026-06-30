@@ -4,6 +4,7 @@ import React from "react";
 import { Upload } from "lucide-react";
 import { PlanDialogSavePrompt } from "@/components/plan/PlanDialogSavePrompt";
 import { PlanQuickDialog } from "@/components/plan/PlanQuickDialog";
+import { Select } from "@/components/ui/Select";
 import type { PlanRowFollowUpActionId, PlanRowFollowUpMeta } from "@/lib/planRowFollowUp";
 
 export type PlanPrintDraft = {
@@ -12,10 +13,18 @@ export type PlanPrintDraft = {
   print_size: string;
   page_type: string;
   print_location: string;
+  design_id: string;
+};
+
+type RowDesignOption = {
+  id: string;
+  document_name: string;
+  size_settings?: string | null;
 };
 
 type PlanPrintQuickDialogProps = {
   draft: PlanPrintDraft;
+  rowDesigns?: RowDesignOption[];
   uploading?: boolean;
   printLocationSuggestions: string[];
   fieldClass: string;
@@ -30,6 +39,7 @@ type PlanPrintQuickDialogProps = {
 
 export function PlanPrintQuickDialog({
   draft,
+  rowDesigns = [],
   uploading = false,
   printLocationSuggestions,
   fieldClass,
@@ -119,6 +129,28 @@ export function PlanPrintQuickDialog({
           ) : null}
         </div>
       </div>
+      {rowDesigns.length > 0 ? (
+        <div className="mt-3">
+          <label className="mb-1 block text-xs font-bold text-gray-700">קישור לעיצוב (אופציונלי)</label>
+          <Select
+            value={draft.design_id}
+            onChange={(designId) => {
+              const linkedDesign = rowDesigns.find((design) => design.id === designId);
+              onDraftChange({
+                design_id: designId,
+                print_size: linkedDesign?.size_settings?.trim() || draft.print_size,
+              });
+            }}
+            options={rowDesigns.map((design) => ({
+              value: design.id,
+              label: design.document_name,
+            }))}
+            placeholder="ללא קישור"
+            accent="cyan"
+            size="sm"
+          />
+        </div>
+      ) : null}
       {uploadError ? (
         <p className="mt-2 rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] font-bold text-red-700">{uploadError}</p>
       ) : null}

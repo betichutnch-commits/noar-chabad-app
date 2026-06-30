@@ -8,6 +8,7 @@ import {
   Bus,
   CalendarDays,
   CheckCircle2,
+  CircleUser,
   ClipboardCheck,
   CreditCard,
   Download,
@@ -26,12 +27,74 @@ import {
   ShieldCheck,
   Trash2,
   Upload,
+  Unlink,
   Users,
   UserRoundCheck,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { REQUIRED_STAFF_RAW } from "@/lib/tripRequiredRoles";
+import { DragScrollArea } from "@/components/ui/DragScrollArea";
+import { Select } from "@/components/ui/Select";
+import { DEFAULT_REQUIRED_ROLE_RULES, REQUIRED_STAFF_RAW } from "@/lib/tripRequiredRoles";
+import { canAddPlaceholderToMerge, staffRoleKeyLabel, validateStaffRoleMerge } from "@/lib/staffRoleMerge";
+import { getTripParticipantLabels, type TripParticipantLabels } from "@/lib/tripParticipantLabels";
+import { canSplitStaffRole, roleLabelSlotIndex } from "@/lib/staffRoleSplit";
+import {
+  applyRegistrationSnapshotToDraft,
+  mergeRegistrationSnapshot,
+  readParticipantRawField,
+  readRegistrationFieldsFromRaw,
+  resolveParticipantIdentity,
+  STAFF_REGISTRATION_DRAFT_FIELDS,
+  PARTICIPANT_REGISTRATION_DRAFT_FIELDS,
+  type RegistrationSnapshot,
+} from "@/lib/participantRegistrationFill";
+import {
+  formatStaffRoleLabelForGender,
+  normalizeIdentityNumber,
+  normalizeStaffGender,
+  requiresStaffPoliceApproval,
+  resolveStaffGender,
+  staffGenderLabel,
+  staffGenderShortLabel,
+  type StaffGender,
+} from "@/lib/staffGender";
+
+const STAFF_SLOT_PLACEHOLDER_FIRST_NAME = "תקן חסר:";
+
+const isRequiredStaffPlaceholderFullName = (name: string) => /^תקן\s+חסר/i.test(name.trim());
+
+const isStaffSlotPlaceholderFirstName = (value: string) => {
+  const trimmed = value.trim();
+  return !trimmed || trimmed === STAFF_SLOT_PLACEHOLDER_FIRST_NAME || trimmed.startsWith("תקן חסר") || trimmed === "תקן";
+};
+
+const staffPlaceholderRoleLabels = (
+  raw: Record<string, unknown> | null | undefined,
+  staffRole = "",
+  personRole = "",
+) => {
+  const labels = requiredRoleLabels(raw);
+  const role = staffRole.trim() || String(personRole || "").trim();
+  return Array.from(new Set([...labels, role].filter(Boolean)));
+};
+
+const isStaffSlotPlaceholderNamePart = (
+  value: string,
+  raw: Record<string, unknown> | null | undefined,
+  staffRole = "",
+  personRole = "",
+) => {
+  const trimmed = value.trim();
+  if (!trimmed) return true;
+  if (isStaffSlotPlaceholderFirstName(trimmed)) return true;
+  if (/^חסר:/i.test(trimmed)) return true;
+  const candidates = staffPlaceholderRoleLabels(raw, staffRole, personRole);
+  if (candidates.includes(trimmed)) return true;
+  return candidates.some((label) => trimmed.endsWith(label) || trimmed.includes(label));
+};
+
+const normalizeStaffSlotPlaceholderFirstName = (value: string) => (isStaffSlotPlaceholderFirstName(value) ? "" : value.trim());
 
 type ParticipantType = "participant" | "staff";
 type ParticipantSource = "manual" | "excel" | "airtable";
@@ -99,6 +162,9 @@ type Payload = {
   groups: Array<{ id: string; name: string; target_size: number; notes?: string | null }>;
   assignmentSets: AssignmentSet[];
   localSchemaMissing?: boolean;
+  registrationByIdentity?: Record<string, RegistrationSnapshot>;
+  staffGenderByIdentity?: Record<string, StaffGender>;
+  tripDepartment?: string | null;
 };
 type Props = {
   tripId: string;
@@ -111,6 +177,7 @@ type ParticipantDraft = {
   id: string;
   savedId?: string;
   source?: ParticipantSource;
+  sourceRecordId?: string | null;
   type: ParticipantType;
   staffRole: string;
   firstName: string;
@@ -119,10 +186,13 @@ type ParticipantDraft = {
   birthDate: string;
   grade: string;
   branch: string;
+  gender: string;
   fatherName: string;
   fatherPhone: string;
   motherName: string;
   motherPhone: string;
+  personalPhone: string;
+  personalEmail: string;
   fatherEmail: string;
   medicalNotes: string;
   paymentStatus: string;
@@ -131,22 +201,28 @@ type ParticipantDraft = {
   raw?: Record<string, unknown> | null;
 };
 
-type DraftField = keyof Omit<ParticipantDraft, "id" | "savedId" | "source" | "type" | "raw">;
+type DraftField = keyof Omit<ParticipantDraft, "id" | "savedId" | "source" | "sourceRecordId" | "type" | "raw">;
 
 const openParticipantFields: DraftField[] = ["firstName", "lastName", "grade", "branch"];
 const openStaffFields: DraftField[] = ["staffRole", "firstName", "lastName", "branch"];
+const staffExcludedFields: DraftField[] = ["grade", "fatherEmail"];
+const staffOnlyFields: DraftField[] = ["personalPhone", "personalEmail", "gender"];
+const staffParentFields: DraftField[] = ["fatherName", "fatherPhone", "motherName", "motherPhone", "parentApproval"];
 
 const participantFieldMeta: Record<
   DraftField,
-  { label: string; Icon: React.ComponentType<{ size?: number; className?: string }>; kind?: "phone" | "email" }
+  { label: string; Icon: React.ComponentType<{ size?: number; className?: string }>; kind?: "phone" | "email" | "gender" }
 > = {
   staffRole: { label: "תפקיד", Icon: UserRoundCheck },
   firstName: { label: "שם פרטי", Icon: Users },
   lastName: { label: "שם משפחה", Icon: Users },
   identity: { label: "ת.ז.", Icon: IdCard },
   birthDate: { label: "ת. לידה", Icon: CalendarDays },
+  gender: { label: "מגדר", Icon: CircleUser, kind: "gender" },
   grade: { label: "כיתה", Icon: School },
   branch: { label: "סניף", Icon: BadgeInfo },
+  personalPhone: { label: "טלפון אישי", Icon: PhoneCall, kind: "phone" },
+  personalEmail: { label: "דוא\"ל אישי", Icon: Mail, kind: "email" },
   fatherName: { label: "שם אבא", Icon: Users },
   fatherPhone: { label: "טל' אבא", Icon: PhoneCall, kind: "phone" },
   motherName: { label: "שם אמא", Icon: Users },
@@ -171,12 +247,58 @@ const rawStringArray = (raw: Record<string, unknown> | null | undefined, key: st
 const isRequiredStaffPlaceholder = (person: Participant) => Boolean(person.raw?.[REQUIRED_STAFF_RAW.placeholder]);
 const isRequiredStaffProtected = (row: ParticipantDraft) => Boolean(row.raw?.[REQUIRED_STAFF_RAW.protected]);
 const requiredRoleLabels = (raw: Record<string, unknown> | null | undefined) => rawStringArray(raw, REQUIRED_STAFF_RAW.roleLabels);
-const staffSortScore = (person: Participant) => {
-  const labels = requiredRoleLabels(person.raw);
-  if (labels.some((label) => label.includes("אחראי טיול"))) return 0;
-  if (labels.length && !isRequiredStaffPlaceholder(person)) return 1;
-  if (isRequiredStaffPlaceholder(person)) return 2;
-  return 3;
+
+const isStaffSlotPlaceholderLastName = (value: string, row: ParticipantDraft) =>
+  isStaffSlotPlaceholderNamePart(value, row.raw, row.staffRole);
+
+const normalizeStaffSlotPlaceholderLastName = (value: string, person: Participant) => {
+  const staffRole = rawText(person.raw, "staffRole") || person.role || "";
+  return isStaffSlotPlaceholderNamePart(value, person.raw, staffRole, person.role) ? "" : value.trim();
+};
+
+const STAFF_ROLE_LABEL_ORDER: Array<[string, number]> = [
+  ["אחראי טיול", 0],
+  ["אחראי נוסף", 5],
+  ["מלווה אוטובוס", 10],
+  ["צוות בוגר", 20],
+  ["מלווה רפואי", 30],
+  ["חובש", 30],
+  ["מאבטח", 40],
+  ["נשק", 40],
+];
+
+const staffRoleOrderIndex = (person: Participant): number => {
+  const keys = rawStringArray(person.raw, REQUIRED_STAFF_RAW.roleKeys);
+  if (keys.length) {
+    const orders = keys.map((key) => DEFAULT_REQUIRED_ROLE_RULES.find((rule) => rule.role_key === key)?.order_index ?? 500);
+    return Math.min(...orders);
+  }
+  const label = [requiredRoleLabels(person.raw)[0], person.role, person.name].filter(Boolean).join(" ");
+  for (const [token, order] of STAFF_ROLE_LABEL_ORDER) {
+    if (label.includes(token)) return order;
+  }
+  return isRequiredStaffPlaceholder(person) ? 700 : 800;
+};
+
+const staffRoleSlotIndex = (person: Participant): number => {
+  const label = requiredRoleLabels(person.raw)[0] || person.role || person.name || "";
+  const fromLabel = roleLabelSlotIndex(label);
+  if (fromLabel > 0) return fromLabel;
+  const sourceId = String(person.sourceRecordId || "");
+  if (sourceId.startsWith("split-role:")) return 9999;
+  const sourceMatch = sourceId.match(/:(\d+)$/);
+  if (sourceMatch) return Number(sourceMatch[1]);
+  return 0;
+};
+
+const compareStaffMembers = (a: Participant, b: Participant): number => {
+  const orderDiff = staffRoleOrderIndex(a) - staffRoleOrderIndex(b);
+  if (orderDiff !== 0) return orderDiff;
+  const slotDiff = staffRoleSlotIndex(a) - staffRoleSlotIndex(b);
+  if (slotDiff !== 0) return slotDiff;
+  const placeholderDiff = Number(isRequiredStaffPlaceholder(a)) - Number(isRequiredStaffPlaceholder(b));
+  if (placeholderDiff !== 0) return placeholderDiff;
+  return a.name.localeCompare(b.name, "he");
 };
 
 const splitParticipantName = (name: string) => {
@@ -184,32 +306,142 @@ const splitParticipantName = (name: string) => {
   return { firstName: parts[0] || "", lastName: parts.slice(1).join(" ") };
 };
 
-const draftFromParticipant = (person: Participant): ParticipantDraft => {
-  const split = splitParticipantName(person.name);
+const resolveStaffPersonalPhone = (person: Participant) => {
+  const raw = person.raw || {};
+  return (
+    readParticipantRawField(raw, "personalPhone") ||
+    readParticipantRawField(raw, "motherPhone") ||
+    person.phone ||
+    person.contactPhone ||
+    ""
+  );
+};
+
+const resolveStaffPersonalEmail = (person: Participant) => {
+  const raw = person.raw || {};
+  return readParticipantRawField(raw, "personalEmail") || readParticipantRawField(raw, "fatherEmail") || "";
+};
+
+const STAFF_GENDER_OPTIONS: Array<{ value: StaffGender; label: string }> = [
+  { value: "male", label: "זכר" },
+  { value: "female", label: "נקבה" },
+];
+
+const buildDraftFromRaw = (person: Participant): ParticipantDraft => {
+  const raw = person.raw || {};
+  const isStaff = person.type === "staff";
+  const identity = resolveParticipantIdentity(raw, person.notes);
+  const placeholderStaff = isStaff && isRequiredStaffPlaceholder(person);
+  const nameFallback =
+    placeholderStaff && isRequiredStaffPlaceholderFullName(person.name)
+      ? { firstName: "", lastName: "" }
+      : splitParticipantName(person.name);
   return {
     id: person.id,
     savedId: person.id,
     source: person.source,
+    sourceRecordId: person.sourceRecordId,
     type: person.type,
-    staffRole: rawText(person.raw, "staffRole") || person.role,
-    firstName: rawText(person.raw, "firstName") || split.firstName,
-    lastName: rawText(person.raw, "lastName") || split.lastName,
-    identity: rawText(person.raw, "identity"),
-    birthDate: rawText(person.raw, "birthDate"),
-    grade: rawText(person.raw, "grade"),
-    branch: rawText(person.raw, "branch"),
-    fatherName: rawText(person.raw, "fatherName"),
-    fatherPhone: rawText(person.raw, "fatherPhone") || person.contactPhone,
-    motherName: rawText(person.raw, "motherName"),
-    motherPhone: rawText(person.raw, "motherPhone") || person.phone,
-    fatherEmail: rawText(person.raw, "fatherEmail"),
-    medicalNotes: person.medicalNotes || rawText(person.raw, "medicalNotes"),
-    paymentStatus: person.paymentStatus || rawText(person.raw, "paymentStatus"),
-    parentApproval: person.parentApproval || rawText(person.raw, "parentApproval"),
-    policeApproval: rawText(person.raw, "policeApproval"),
-    raw: person.raw || {},
+    staffRole: rawText(raw, "staffRole") || person.role,
+    firstName:
+      placeholderStaff
+        ? normalizeStaffSlotPlaceholderFirstName(readParticipantRawField(raw, "firstName") || nameFallback.firstName)
+        : readParticipantRawField(raw, "firstName") || nameFallback.firstName,
+    lastName:
+      placeholderStaff
+        ? normalizeStaffSlotPlaceholderLastName(readParticipantRawField(raw, "lastName") || nameFallback.lastName, person)
+        : readParticipantRawField(raw, "lastName") || nameFallback.lastName,
+    identity,
+    birthDate: readParticipantRawField(raw, "birthDate"),
+    grade: readParticipantRawField(raw, "grade"),
+    branch: readParticipantRawField(raw, "branch"),
+    gender: isStaff ? normalizeStaffGender(readParticipantRawField(raw, "gender")) : "",
+    personalPhone: isStaff ? resolveStaffPersonalPhone(person) : "",
+    fatherName: readParticipantRawField(raw, "fatherName"),
+    fatherPhone: readParticipantRawField(raw, "fatherPhone") || person.contactPhone,
+    motherName: readParticipantRawField(raw, "motherName"),
+    motherPhone: isStaff ? readParticipantRawField(raw, "motherPhone") : readParticipantRawField(raw, "motherPhone") || person.phone,
+    personalEmail: isStaff ? resolveStaffPersonalEmail(person) : "",
+    fatherEmail: isStaff ? "" : readParticipantRawField(raw, "fatherEmail"),
+    medicalNotes: person.medicalNotes || readParticipantRawField(raw, "medicalNotes"),
+    paymentStatus: person.paymentStatus || readParticipantRawField(raw, "paymentStatus"),
+    parentApproval: person.parentApproval || readParticipantRawField(raw, "parentApproval"),
+    policeApproval: readParticipantRawField(raw, "policeApproval"),
+    raw,
   };
 };
+
+const draftFromParticipant = (
+  person: Participant,
+  registrationByIdentity: Record<string, RegistrationSnapshot> = {},
+): ParticipantDraft => {
+  const baseDraft = buildDraftFromRaw(person);
+  const identity = resolveParticipantIdentity(baseDraft.raw, person.notes, baseDraft.identity);
+  const registration = identity ? registrationByIdentity[identity] : undefined;
+  const rawRegistration = readRegistrationFieldsFromRaw(baseDraft.raw);
+  const mergedRegistration = registration ? mergeRegistrationSnapshot(rawRegistration, registration) : rawRegistration;
+  const fields = baseDraft.type === "staff" ? STAFF_REGISTRATION_DRAFT_FIELDS : PARTICIPANT_REGISTRATION_DRAFT_FIELDS;
+  return applyRegistrationSnapshotToDraft(baseDraft, mergedRegistration, fields);
+};
+
+const genderedStaffRoleDisplay = (label: string, gender: StaffGender) =>
+  formatStaffRoleLabelForGender(label, gender);
+
+const canonicalStaffRoleLabel = (label: string) => formatStaffRoleLabelForGender(label, "male");
+
+function StaffRoleBadges({
+  roleLabels,
+  rowGender,
+  placeholderRequired,
+  saving,
+  savedId,
+  onSplitStaffRole,
+}: {
+  roleLabels: string[];
+  rowGender: StaffGender;
+  placeholderRequired: boolean;
+  saving: boolean;
+  savedId?: string;
+  onSplitStaffRole?: (participantId: string, roleLabel: string) => Promise<void>;
+}) {
+  if (!roleLabels.length) return null;
+
+  return (
+    <div className="flex max-w-[148px] flex-wrap justify-center gap-0.5">
+      {roleLabels.map((label) => {
+        const displayLabel = genderedStaffRoleDisplay(label, rowGender);
+        const splittable =
+          !placeholderRequired && canSplitStaffRole(roleLabels) && Boolean(savedId && onSplitStaffRole);
+        if (splittable) {
+          return (
+            <button
+              key={label}
+              type="button"
+              data-no-drag-scroll
+              disabled={saving}
+              title={`הפרד "${displayLabel}" לתקן חסר נפרד`}
+              onClick={() => {
+                if (savedId && onSplitStaffRole) void onSplitStaffRole(savedId, label);
+              }}
+              className="inline-flex items-center gap-0.5 rounded-full border border-emerald-200 bg-emerald-100 px-1.5 py-0.5 text-[10px] font-black text-emerald-800 transition-colors hover:border-amber-300 hover:bg-amber-100 hover:text-amber-900 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {displayLabel}
+              <Unlink size={10} className="shrink-0 opacity-80" aria-hidden />
+            </button>
+          );
+        }
+        return (
+          <span
+            key={label}
+            className={`rounded-full px-1.5 py-0.5 text-[10px] font-black ${placeholderRequired ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}
+          >
+            {displayLabel}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
 
 const emptyParticipantDraft = (type: ParticipantType = "participant"): ParticipantDraft => ({
   id: `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -222,10 +454,13 @@ const emptyParticipantDraft = (type: ParticipantType = "participant"): Participa
   birthDate: "",
   grade: "",
   branch: "",
+  gender: "",
   fatherName: "",
   fatherPhone: "",
   motherName: "",
   motherPhone: "",
+  personalPhone: "",
+  personalEmail: "",
   fatherEmail: "",
   medicalNotes: "",
   paymentStatus: "",
@@ -261,11 +496,17 @@ const calculateAge = (value: string) => {
   return age >= 0 && age < 130 ? age : null;
 };
 
-const requiresPoliceApproval = (row: ParticipantDraft) => {
+const requiresPoliceApproval = (row: ParticipantDraft) =>
+  requiresStaffPoliceApproval({ type: row.type, birthDate: row.birthDate, gender: row.gender, calculateAge });
+
+const isStaffAdult = (row: ParticipantDraft) => {
   if (row.type !== "staff") return false;
   const age = calculateAge(row.birthDate);
   return age !== null && age >= 18;
 };
+
+const isOptionalStaffParentField = (row: ParticipantDraft, field: DraftField) =>
+  isStaffAdult(row) && staffParentFields.includes(field);
 
 const formatBirthDateInput = (value: string) => {
   const digits = value.replace(/\D/g, "").slice(0, 8);
@@ -307,10 +548,10 @@ const assignmentKindMeta: Record<AssignmentKind, { label: string; itemPrefix: st
   other: { label: "אחר", itemPrefix: "קבוצה מס׳", Icon: ClipboardCheck },
 };
 
-const audienceLabel = (audience: AssignmentAudience) => {
-  if (audience === "participants") return "חניכים";
+const audienceLabel = (audience: AssignmentAudience, labels: TripParticipantLabels) => {
+  if (audience === "participants") return labels.audienceParticipants;
   if (audience === "staff") return "צוות";
-  return "חניכים וצוות";
+  return labels.audienceBoth;
 };
 
 const emptyBusDraft = (): BusDraft => ({
@@ -347,22 +588,34 @@ const isDraftFieldInvalid = (row: ParticipantDraft, field: DraftField) => {
 };
 
 const draftToPayload = (row: ParticipantDraft) => {
-  const name = [row.firstName, row.lastName].map((part) => part.trim()).filter(Boolean).join(" ");
+  const isStaffSlotPlaceholder = row.type === "staff" && Boolean(row.raw?.[REQUIRED_STAFF_RAW.placeholder]);
+  const staffRoleForStorage =
+    row.type === "staff" ? canonicalStaffRoleLabel(row.staffRole.trim()) : row.staffRole.trim();
+  const roleLabel = requiredRoleLabels(row.raw)[0] || staffRoleForStorage;
+  const storedFirstName = row.firstName.trim() || (isStaffSlotPlaceholder ? STAFF_SLOT_PLACEHOLDER_FIRST_NAME : "");
+  const name = isStaffSlotPlaceholder ? `תקן חסר: ${roleLabel}` : [storedFirstName, row.lastName.trim()].filter(Boolean).join(" ");
+  const staffPersonalPhone = row.personalPhone.trim() || row.motherPhone.trim();
+  const staffPersonalEmail = row.personalEmail.trim() || row.fatherEmail.trim();
   const raw = {
     ...(row.raw || {}),
     ...Object.fromEntries((Object.keys(participantFieldMeta) as DraftField[]).map((field) => [field, row[field].trim()])),
+    ...(isStaffSlotPlaceholder && !row.firstName.trim() ? { firstName: STAFF_SLOT_PLACEHOLDER_FIRST_NAME, lastName: "" } : {}),
+    ...(row.type === "staff" && staffPersonalPhone ? { personalPhone: staffPersonalPhone } : {}),
+    ...(row.type === "staff" && staffPersonalEmail ? { personalEmail: staffPersonalEmail, fatherEmail: "" } : {}),
+    ...(row.type === "staff" && staffRoleForStorage ? { staffRole: staffRoleForStorage } : {}),
   };
   return {
     type: row.type,
     source: row.source || "manual",
+    sourceRecordId: row.sourceRecordId ?? null,
     name,
-    phone: row.motherPhone || row.fatherPhone || null,
+    phone: row.type === "staff" ? staffPersonalPhone || null : row.motherPhone || row.fatherPhone || null,
     contactPhone: row.fatherPhone || row.motherPhone || null,
     registrationStatus: row.parentApproval || null,
     paymentStatus: row.paymentStatus || null,
     parentApproval: row.parentApproval || null,
     medicalNotes: row.medicalNotes || null,
-    role: row.type === "staff" ? row.staffRole || null : row.branch || null,
+    role: row.type === "staff" ? staffRoleForStorage || null : row.branch || null,
     notes: row.identity ? `ת.ז. ${row.identity}` : null,
     raw,
   };
@@ -380,6 +633,7 @@ export function ParticipantsTab({ tripId, active, mode, tourPeopleSection }: Pro
   const [excelUploadType, setExcelUploadType] = useState<ParticipantType>("participant");
   const [peopleSectionTab, setPeopleSectionTab] = useState<PeopleSectionTab>("participants");
   const [extraRoleLabel, setExtraRoleLabel] = useState("");
+  const [showAddRolePanel, setShowAddRolePanel] = useState(false);
   const [mergeTargetStaffId, setMergeTargetStaffId] = useState("");
   const [mergePlaceholderIds, setMergePlaceholderIds] = useState<string[]>([]);
   useEffect(() => {
@@ -394,10 +648,10 @@ export function ParticipantsTab({ tripId, active, mode, tourPeopleSection }: Pro
     try {
       const res = await fetch(`/api/trips/${tripId}/plan/participants`, { credentials: "include" });
       const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(String(payload?.error || "טעינת פרטי חניכים וצוות נכשלה"));
+      if (!res.ok) throw new Error(String(payload?.error || getTripParticipantLabels(payload?.tripDepartment).loadError));
       setData(payload as Payload);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "טעינת פרטי חניכים וצוות נכשלה");
+      setError(err instanceof Error ? err.message : getTripParticipantLabels(data?.tripDepartment).loadError);
     } finally {
       setLoading(false);
     }
@@ -409,6 +663,11 @@ export function ParticipantsTab({ tripId, active, mode, tourPeopleSection }: Pro
     const timer = window.setInterval(() => void load(), 180_000);
     return () => window.clearInterval(timer);
   }, [active, load]);
+
+  const participantLabels = useMemo(
+    () => getTripParticipantLabels(data?.tripDepartment),
+    [data?.tripDepartment],
+  );
 
   const allPeople = useMemo(() => [...(data?.participants || []), ...(data?.staff || [])], [data]);
   const assignablePeople = useMemo(() => allPeople.filter((person) => !isRequiredStaffPlaceholder(person)), [allPeople]);
@@ -430,7 +689,7 @@ export function ParticipantsTab({ tripId, active, mode, tourPeopleSection }: Pro
   }, [allPeople, filter, search]);
   const filteredParticipants = useMemo(() => filteredPeople.filter((person) => person.type === "participant"), [filteredPeople]);
   const filteredStaff = useMemo(
-    () => filteredPeople.filter((person) => person.type === "staff").sort((a, b) => staffSortScore(a) - staffSortScore(b)),
+    () => filteredPeople.filter((person) => person.type === "staff").sort(compareStaffMembers),
     [filteredPeople],
   );
 
@@ -479,7 +738,7 @@ export function ParticipantsTab({ tripId, active, mode, tourPeopleSection }: Pro
   }, [assignablePeople.length, data?.assignmentSets, data?.buses]);
   const activeUploadType: ParticipantType = peopleSectionTab === "staff" ? "staff" : "participant";
   const activeTemplateKind = activeUploadType === "staff" ? "staff" : "participants";
-  const activePeopleLabel = activeUploadType === "staff" ? "צוות" : "חניכים";
+  const activePeopleLabel = activeUploadType === "staff" ? "צוות" : participantLabels.participants;
 
   const saveBusDraft = async (row: BusDraft) => {
     const invalidPhone = (!isValidPhone(row.driverPhone) && "טל' הנהג") || (!isValidPhone(row.leaderPhone) && "טל' אחראית הסעה");
@@ -573,13 +832,30 @@ export function ParticipantsTab({ tripId, active, mode, tourPeopleSection }: Pro
     });
     if (ok) {
       setExtraRoleLabel("");
+      setShowAddRolePanel(false);
       setError("");
     }
   };
 
+  const openRolePlaceholders = useMemo(
+    () => (data?.staff || []).filter((person) => isRequiredStaffPlaceholder(person)).sort(compareStaffMembers),
+    [data?.staff],
+  );
+  const staffedPeople = useMemo(
+    () => (data?.staff || []).filter((person) => !isRequiredStaffPlaceholder(person)),
+    [data?.staff],
+  );
+
   const mergeRolesToParticipant = async () => {
     if (!mergeTargetStaffId || mergePlaceholderIds.length === 0) {
       setError("בחרו איש צוות ולפחות תפקיד אחד למיזוג");
+      return;
+    }
+    const mergeTarget = staffedPeople.find((person) => person.id === mergeTargetStaffId);
+    const selectedPlaceholders = openRolePlaceholders.filter((person) => mergePlaceholderIds.includes(person.id));
+    const validation = validateStaffRoleMerge(mergeTarget, selectedPlaceholders);
+    if (!validation.ok) {
+      setError(validation.message);
       return;
     }
     const ok = await mutate({
@@ -594,14 +870,44 @@ export function ParticipantsTab({ tripId, active, mode, tourPeopleSection }: Pro
     }
   };
 
-  const openRolePlaceholders = useMemo(
-    () => (data?.staff || []).filter((person) => isRequiredStaffPlaceholder(person)),
-    [data?.staff],
-  );
-  const staffedPeople = useMemo(
-    () => (data?.staff || []).filter((person) => !isRequiredStaffPlaceholder(person)),
-    [data?.staff],
-  );
+  const splitStaffRole = async (participantId: string, roleLabel: string) => {
+    const ok = await mutate({
+      action: "splitStaffRole",
+      participantId,
+      roleLabel,
+    });
+    if (ok) setError("");
+  };
+
+  const pruneMergePlaceholderSelection = (targetId: string, selectedIds: string[]) => {
+    const target = staffedPeople.find((person) => person.id === targetId);
+    const kept: string[] = [];
+    for (const id of selectedIds) {
+      const person = openRolePlaceholders.find((item) => item.id === id);
+      if (!person) continue;
+      const others = kept
+        .map((keptId) => openRolePlaceholders.find((item) => item.id === keptId))
+        .filter(Boolean) as Participant[];
+      if (canAddPlaceholderToMerge(target, others, person)) kept.push(id);
+    }
+    return kept;
+  };
+
+  const toggleMergePlaceholder = (person: Participant, checked: boolean) => {
+    if (checked) {
+      setMergePlaceholderIds((prev) => prev.filter((id) => id !== person.id));
+      return;
+    }
+    const target = staffedPeople.find((item) => item.id === mergeTargetStaffId);
+    const selected = openRolePlaceholders.filter((item) => mergePlaceholderIds.includes(item.id));
+    if (!canAddPlaceholderToMerge(target, selected, person)) {
+      const roleKey = rawStringArray(person.raw, REQUIRED_STAFF_RAW.roleKeys)[0];
+      setError(`לא ניתן לבחור שני תפקידים מאותה קטגוריה (${staffRoleKeyLabel(roleKey || "unknown")}).`);
+      return;
+    }
+    setMergePlaceholderIds((prev) => [...prev, person.id]);
+    setError("");
+  };
 
   const uploadExcel = async (file: File | null) => {
     if (!file) return;
@@ -684,11 +990,11 @@ export function ParticipantsTab({ tripId, active, mode, tourPeopleSection }: Pro
     <div className="space-y-4">
       <div
         data-plan-tour={mode === "transport" ? "transport-header" : "participants-header"}
-        className="relative z-20 -mt-px rounded-b-3xl border border-t-0 border-cyan-100 bg-white p-4 shadow-[0_-14px_28px_rgba(15,23,42,0.16),0_20px_45px_rgba(15,23,42,0.10)]"
+        className="relative z-20 -mt-px rounded-b-3xl border border-t-0 border-cyan-100 bg-white p-4 shadow-[0_20px_45px_rgba(15,23,42,0.10)]"
       >
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-lg font-black text-gray-800">{mode === "transport" ? "ניהול הסעות וקבוצות" : "פרטי חניכים וצוות"}</h2>
+            <h2 className="text-lg font-black text-gray-800">{mode === "transport" ? "ניהול הסעות וקבוצות" : participantLabels.participantsAndStaff}</h2>
             <p className="text-xs font-bold text-gray-500">
               {data?.airtable.refreshedAt ? `רוענן לאחרונה: ${new Date(data.airtable.refreshedAt).toLocaleTimeString("he-IL")}` : "מאגר משתתפים מקומי"}
             </p>
@@ -768,7 +1074,7 @@ export function ParticipantsTab({ tripId, active, mode, tourPeopleSection }: Pro
               active={peopleSectionTab === "participants"}
               tone="cyan"
               icon={<Users size={16} />}
-              label="חניכים"
+              label={participantLabels.participants}
               count={filteredParticipants.length}
               onClick={() => setPeopleSectionTab("participants")}
             />
@@ -808,7 +1114,7 @@ export function ParticipantsTab({ tripId, active, mode, tourPeopleSection }: Pro
               </>
             ) : (
               <>
-                <SummaryCard label="חניכים" value={activePeopleSummary.total} icon={<Users size={16} />} />
+                <SummaryCard label={participantLabels.participants} value={activePeopleSummary.total} icon={<Users size={16} />} />
                 <SummaryCard label="מוצגים בסינון" value={activePeopleSummary.filtered} tone="cyan" />
                 <SummaryCard label="לא שילמו / חסר תשלום" value={activePeopleSummary.missingPayment} tone="amber" />
                 <SummaryCard label="חסר אישור הורים" value={activePeopleSummary.missingApproval} tone="red" />
@@ -840,12 +1146,23 @@ export function ParticipantsTab({ tripId, active, mode, tourPeopleSection }: Pro
                   className="h-10 w-full rounded-2xl border border-gray-200 pr-9 pl-3 text-sm font-bold outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100"
                 />
               </div>
-              <select value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)} className="h-10 rounded-2xl border border-gray-200 bg-white px-3 text-sm font-bold text-gray-700 outline-none focus:border-pink-400">
-                <option value="all">כולם</option>
-                <option value="missingPayment">חסר תשלום</option>
-                <option value="missingApproval">חסר אישור</option>
-                <option value="medical">יש רגישות רפואית</option>
-              </select>
+              <Select
+                value={filter}
+                onChange={(value) => {
+                  if (value) setFilter(value);
+                }}
+                placeholder="כולם"
+                clearable={false}
+                accent="pink"
+                className="w-full shrink-0 md:w-52"
+                buttonClassName="!rounded-2xl"
+                options={[
+                  { value: "all", label: "כולם" },
+                  { value: "missingPayment", label: "חסר תשלום" },
+                  { value: "missingApproval", label: "חסר אישור" },
+                  { value: "medical", label: "יש רגישות רפואית" },
+                ]}
+              />
             </div>
           ) : null}
 
@@ -863,7 +1180,7 @@ export function ParticipantsTab({ tripId, active, mode, tourPeopleSection }: Pro
               {peopleSectionTab === "participants" ? (
                 <EditableParticipantsTable
                   key={filteredParticipants.map((person) => person.id).join("|") || "empty"}
-                  title="חניכים"
+                  title={participantLabels.participants}
                   type="participant"
                   tone="cyan"
                   people={filteredParticipants}
@@ -873,78 +1190,113 @@ export function ParticipantsTab({ tripId, active, mode, tourPeopleSection }: Pro
                   onSave={saveParticipantDraft}
                   onDelete={deleteParticipantDraft}
                   onAssignRequiredRole={assignRequiredRole}
+                  registrationByIdentity={data?.registrationByIdentity || {}}
+                  participantLabels={participantLabels}
                 />
               ) : null}
               {peopleSectionTab === "staff" ? (
-                <div className="mb-3 grid gap-3 rounded-2xl border border-amber-100 bg-amber-50/40 p-3 lg:grid-cols-2">
-                  <div>
-                    <p className="mb-2 text-xs font-black text-amber-900">הוספת תפקיד לטיול</p>
-                    <div className="flex gap-2">
+                <div className="mb-3 rounded-2xl border border-amber-100 bg-amber-50/40 p-3">
+                  <p className="text-xs font-black text-amber-900">מיזוג כמה תפקידים לאדם אחד</p>
+
+                  {showAddRolePanel ? (
+                    <div className="mt-2 flex gap-2 rounded-xl border border-amber-200/80 bg-white p-2">
                       <input
                         value={extraRoleLabel}
                         onChange={(event) => setExtraRoleLabel(event.target.value)}
                         placeholder="למשל מלווה הסעה נוסף"
-                        className="h-9 min-w-0 flex-1 rounded-xl border border-amber-200 bg-white px-3 text-xs font-bold outline-none focus:border-amber-400"
+                        className="h-8 min-w-0 flex-1 rounded-lg border border-amber-200 bg-white px-3 text-xs font-bold outline-none focus:border-amber-400"
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" && extraRoleLabel.trim() && !mutating) {
+                            void addStaffRoleSlot();
+                          }
+                        }}
                       />
                       <button
                         type="button"
                         disabled={mutating || !extraRoleLabel.trim()}
                         onClick={() => void addStaffRoleSlot()}
-                        className="h-9 shrink-0 rounded-xl bg-amber-500 px-3 text-xs font-black text-white disabled:opacity-50"
+                        className="h-8 shrink-0 rounded-lg bg-amber-500 px-3 text-xs font-black text-white disabled:opacity-50"
                       >
-                        הוסף תפקיד
+                        הוסף
                       </button>
                     </div>
-                  </div>
-                  <div>
-                    <p className="mb-2 text-xs font-black text-amber-900">מיזוג כמה תפקידים לאדם אחד</p>
-                    <select
+                  ) : null}
+
+                  <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <Select
                       value={mergeTargetStaffId}
-                      onChange={(event) => setMergeTargetStaffId(event.target.value)}
-                      className="mb-2 h-9 w-full rounded-xl border border-amber-200 bg-white px-3 text-xs font-bold outline-none"
+                      onChange={(nextTargetId) => {
+                        setMergeTargetStaffId(nextTargetId);
+                        setMergePlaceholderIds((prev) => pruneMergePlaceholderSelection(nextTargetId, prev));
+                      }}
+                      placeholder="בחרו איש צוות..."
+                      accent="amber"
+                      disabled={mutating}
+                      className="min-w-0 flex-1"
+                      buttonClassName="!h-9 !rounded-xl !text-xs"
+                      options={staffedPeople.map((person) => ({ value: person.id, label: person.name }))}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAddRolePanel((open) => {
+                          if (open) setExtraRoleLabel("");
+                          return !open;
+                        });
+                      }}
+                      className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border border-amber-300 bg-white px-3 text-xs font-black text-amber-800 transition-colors hover:bg-amber-100"
                     >
-                      <option value="">בחרו איש צוות...</option>
-                      {staffedPeople.map((person) => (
-                        <option key={person.id} value={person.id}>
-                          {person.name}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="mb-2 flex max-h-24 flex-wrap gap-1 overflow-auto">
+                      <Plus size={14} />
+                      {showAddRolePanel ? "סגור" : "הוסף תפקיד"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={mutating || !mergeTargetStaffId || mergePlaceholderIds.length === 0}
+                      onClick={() => void mergeRolesToParticipant()}
+                      className="h-9 shrink-0 rounded-xl bg-violet-600 px-4 text-xs font-black text-white disabled:opacity-50"
+                    >
+                      מזג {mergePlaceholderIds.length > 0 ? `${mergePlaceholderIds.length} תפקידים` : "תפקידים נבחרים"}
+                    </button>
+                  </div>
+
+                  {openRolePlaceholders.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
                       {openRolePlaceholders.map((person) => {
                         const labels = requiredRoleLabels(person.raw);
                         const checked = mergePlaceholderIds.includes(person.id);
+                        const mergeTarget = staffedPeople.find((item) => item.id === mergeTargetStaffId);
+                        const selectedOthers = openRolePlaceholders.filter(
+                          (item) => mergePlaceholderIds.includes(item.id) && item.id !== person.id,
+                        );
+                        const mergeBlocked =
+                          !checked && !canAddPlaceholderToMerge(mergeTarget, selectedOthers, person);
                         return (
                           <label
                             key={person.id}
-                            className={`inline-flex cursor-pointer items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-bold ${
-                              checked ? "border-amber-500 bg-amber-500 text-white" : "border-amber-200 bg-white text-amber-900"
+                            title={mergeBlocked ? "לא ניתן למזג שני תפקידים מאותה קטגוריה" : undefined}
+                            className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-bold transition-colors ${
+                              checked
+                                ? "cursor-pointer border-amber-500 bg-amber-500 text-white"
+                                : mergeBlocked
+                                  ? "cursor-not-allowed border-amber-100 bg-amber-50/60 text-amber-400"
+                                  : "cursor-pointer border-amber-200 bg-white text-amber-900 hover:border-amber-300"
                             }`}
                           >
                             <input
                               type="checkbox"
                               className="sr-only"
                               checked={checked}
-                              onChange={() =>
-                                setMergePlaceholderIds((prev) =>
-                                  checked ? prev.filter((id) => id !== person.id) : [...prev, person.id],
-                                )
-                              }
+                              disabled={mergeBlocked}
+                              onChange={() => toggleMergePlaceholder(person, checked)}
                             />
                             {labels[0] || person.role || person.name}
                           </label>
                         );
                       })}
                     </div>
-                    <button
-                      type="button"
-                      disabled={mutating || !mergeTargetStaffId || mergePlaceholderIds.length === 0}
-                      onClick={() => void mergeRolesToParticipant()}
-                      className="h-9 rounded-xl bg-violet-600 px-3 text-xs font-black text-white disabled:opacity-50"
-                    >
-                      מזג תפקידים נבחרים
-                    </button>
-                  </div>
+                  ) : (
+                    <p className="mt-2 text-[11px] font-bold text-amber-700/70">אין תקנים פנויים למיזוג</p>
+                  )}
                 </div>
               ) : null}
               {peopleSectionTab === "staff" ? (
@@ -960,6 +1312,8 @@ export function ParticipantsTab({ tripId, active, mode, tourPeopleSection }: Pro
                   onSave={saveParticipantDraft}
                   onDelete={deleteParticipantDraft}
                   onAssignRequiredRole={assignRequiredRole}
+                  onSplitStaffRole={splitStaffRole}
+                  registrationByIdentity={data?.registrationByIdentity || {}}
                 />
               ) : null}
               {peopleSectionTab === "assignments" ? (
@@ -968,6 +1322,7 @@ export function ParticipantsTab({ tripId, active, mode, tourPeopleSection }: Pro
                   buses={data?.buses || []}
                   assignmentSets={data?.assignmentSets || []}
                   saving={mutating}
+                  participantLabels={participantLabels}
                   onCreateSet={createAssignmentSet}
                   onRenameSet={renameAssignmentSet}
                   onDeleteSet={deleteAssignmentSet}
@@ -999,7 +1354,7 @@ export function ParticipantsTab({ tripId, active, mode, tourPeopleSection }: Pro
             </div>
             <h3 className="mt-4 text-xl font-black text-gray-800">מה מעלים מאקסל?</h3>
             <p className="mt-2 text-sm font-bold leading-relaxed text-gray-500">
-              בחר האם הקובץ שייך לחניכים או לצוות. הבחירה הזו תקבע לאיזו טבלה הנתונים ייכנסו.
+              {participantLabels.excelChoiceHint}
             </p>
             <div className="mt-5 grid grid-cols-2 gap-2">
               <button
@@ -1012,7 +1367,7 @@ export function ParticipantsTab({ tripId, active, mode, tourPeopleSection }: Pro
                 }`}
               >
                 <Users size={18} className="mx-auto" />
-                <span className="mt-1 block text-sm font-black">חניכים</span>
+                <span className="mt-1 block text-sm font-black">{participantLabels.participants}</span>
               </button>
               <button
                 type="button"
@@ -1032,7 +1387,7 @@ export function ParticipantsTab({ tripId, active, mode, tourPeopleSection }: Pro
               className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 text-sm font-black text-emerald-700 transition-colors hover:bg-emerald-100"
             >
               <Download size={16} />
-              הורד תבנית {excelUploadType === "staff" ? "צוות" : "חניכים"}
+              הורד תבנית {excelUploadType === "staff" ? "צוות" : participantLabels.participants}
             </a>
             <label className="mt-3 flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-purple-200 bg-purple-50/50 px-4 py-5 text-purple-700 transition-colors hover:bg-purple-50">
               <Upload size={22} />
@@ -1177,6 +1532,9 @@ function EditableParticipantsTable({
   onSave,
   onDelete,
   onAssignRequiredRole,
+  onSplitStaffRole,
+  registrationByIdentity = {},
+  participantLabels,
 }: {
   title: string;
   type: ParticipantType;
@@ -1188,11 +1546,47 @@ function EditableParticipantsTable({
   onSave: (row: ParticipantDraft) => Promise<boolean>;
   onDelete: (row: ParticipantDraft) => Promise<boolean>;
   onAssignRequiredRole?: (placeholderId: string, participantId: string) => Promise<boolean>;
+  onSplitStaffRole?: (participantId: string, roleLabel: string) => Promise<void>;
+  registrationByIdentity?: Record<string, RegistrationSnapshot>;
+  participantLabels?: TripParticipantLabels;
 }) {
+  const registrationDraftFields = type === "staff" ? STAFF_REGISTRATION_DRAFT_FIELDS : PARTICIPANT_REGISTRATION_DRAFT_FIELDS;
   const [rows, setRows] = useState<ParticipantDraft[]>(() => {
-    const existing = people.map(draftFromParticipant);
+    const existing = people.map((person) => draftFromParticipant(person, registrationByIdentity));
     return existing.length ? existing : [emptyParticipantDraft(type)];
   });
+  const peopleSignature = useMemo(
+    () =>
+      people
+        .map((person) =>
+          [
+            person.id,
+            person.name,
+            person.phone,
+            person.contactPhone,
+            person.role,
+            person.sourceRecordId || "",
+            JSON.stringify(person.raw || {}),
+          ].join(":"),
+        )
+        .join("|"),
+    [people],
+  );
+  useEffect(() => {
+    const nextRows = people.map((person) => draftFromParticipant(person, registrationByIdentity));
+    setRows((prev) => {
+      const unsavedRows = prev.filter((row) => !row.savedId);
+      if (!nextRows.length) return unsavedRows.length ? unsavedRows : [emptyParticipantDraft(type)];
+      const merged = nextRows.map((row) => {
+        const editing = prev.find((item) => item.savedId === row.savedId);
+        if (!editing) return row;
+        const hasLocalEdits = (Object.keys(participantFieldMeta) as DraftField[]).some((field) => editing[field] !== row[field]);
+        return hasLocalEdits ? { ...row, ...editing, raw: { ...(row.raw || {}), ...(editing.raw || {}) } } : row;
+      });
+      const extraUnsaved = unsavedRows.filter((row) => !merged.some((item) => item.id === row.id));
+      return [...merged, ...extraUnsaved];
+    });
+  }, [peopleSignature, type, people, registrationByIdentity]);
   const [expandedFields, setExpandedFields] = useState<Set<DraftField>>(new Set());
   const [pendingDelete, setPendingDelete] = useState<ParticipantDraft | null>(null);
   const [requiredRoleTargets, setRequiredRoleTargets] = useState<Record<string, string>>({});
@@ -1210,11 +1604,33 @@ function EditableParticipantsTable({
     }, 900);
   };
 
+  const applyRegistrationHints = (row: ParticipantDraft, identityValue: string) => {
+    const identity = normalizeIdentityNumber(identityValue);
+    const registration = identity ? registrationByIdentity[identity] : undefined;
+    if (!registration) return row;
+    return applyRegistrationSnapshotToDraft(row, registration, registrationDraftFields);
+  };
+
   const updateRow = (rowId: string, field: DraftField, value: string) => {
     const nextValue = field === "birthDate" ? formatBirthDateInput(value) : value;
     const current = rows.find((row) => row.id === rowId);
-    if (current) scheduleAutosave({ ...current, [field]: nextValue });
-    setRows((prev) => prev.map((row) => (row.id === rowId ? { ...row, [field]: nextValue } : row)));
+    if (current) {
+      let nextRow: ParticipantDraft = { ...current, [field]: nextValue };
+      if (field === "identity") {
+        nextRow = applyRegistrationHints(nextRow, nextValue);
+      }
+      scheduleAutosave(nextRow);
+    }
+    setRows((prev) =>
+      prev.map((row) => {
+        if (row.id !== rowId) return row;
+        let nextRow: ParticipantDraft = { ...row, [field]: nextValue };
+        if (field === "identity") {
+          nextRow = applyRegistrationHints(nextRow, nextValue);
+        }
+        return nextRow;
+      }),
+    );
   };
 
   const addRow = () => setRows((prev) => [...prev, emptyParticipantDraft(type)]);
@@ -1229,11 +1645,11 @@ function EditableParticipantsTable({
     if (ok) setRows((prev) => prev.filter((item) => item.id !== row.id));
     setPendingDelete(null);
   };
-  const inputClass = "h-10 w-full rounded-xl border border-gray-200 bg-white px-2 text-center text-sm font-bold outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100";
+  const inputClass = "h-8 w-full rounded-lg border border-gray-200 bg-white px-1.5 text-center text-xs font-bold outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100";
   const toneClasses = editableTableToneClasses(tone);
   const allFields = (Object.keys(participantFieldMeta) as DraftField[]).filter((field) => {
-    if (type === "staff") return field !== "grade";
-    return field !== "policeApproval" && field !== "staffRole";
+    if (type === "staff") return !staffExcludedFields.includes(field);
+    return !staffOnlyFields.includes(field) && field !== "policeApproval" && field !== "staffRole";
   });
   const visibleAssignmentSets = assignmentSets.filter((set) => set.audience === "both" || (type === "participant" && set.audience === "participants") || (type === "staff" && set.audience === "staff"));
   const assignableStaffRows = rows.filter((row) => type === "staff" && row.savedId && !row.raw?.[REQUIRED_STAFF_RAW.placeholder]);
@@ -1253,13 +1669,30 @@ function EditableParticipantsTable({
     });
   };
 
+  const headerIconButtonClass =
+    "group relative inline-flex h-8 w-8 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:border-gray-300 hover:text-gray-700";
+  const headerOpenColumnClass =
+    "inline-flex items-center justify-center gap-1 rounded-lg bg-gray-200 px-1.5 py-0.5 text-[11px] text-gray-700";
+  const optionalParentHeaderHint = (label: string) => `${label} (לא חובה מעל גיל 18)`;
+  const optionalParentEmptyCellClass = "border-gray-100 bg-gray-50 text-gray-300";
+  const optionalParentEmptyInputClass =
+    "border-gray-100 bg-gray-50 text-gray-500 placeholder:text-gray-400 focus:border-gray-200 focus:ring-gray-100";
+  const staffFieldFilledClass = (filled: boolean, slotPlaceholder: boolean, invalid: boolean) =>
+    type === "staff" && filled && !slotPlaceholder && !invalid
+      ? "border-amber-200 bg-amber-50/60 text-gray-800 focus:border-amber-300 focus:ring-amber-100"
+      : "";
+
   return (
     <div className={`overflow-hidden rounded-3xl border ${toneClasses.border} bg-white shadow-sm`}>
       <div className={`border-b ${toneClasses.border} ${toneClasses.headerBg} px-4 py-3`}>
         <h3 className={`font-black ${toneClasses.headerText}`}>{title}</h3>
-        <p className={`text-xs font-bold ${toneClasses.helperText}`}>אפשר להזין ישירות בטבלה. העמודות עם האייקונים נפתחות בלחיצה; אייקון מלא מסמן שהשדה מלא, ואדום מסמן טלפון/אימייל לא תקינים.</p>
+        <p className={`text-xs font-bold ${toneClasses.helperText}`}>
+          אפשר להזין ישירות בטבלה. העמודות עם האייקונים נפתחות בלחיצה; כתום מסמן שדה מלא, אפור ריק מסמן שדה לא חובה (הורים מעל גיל 18), ואדום מסמן טלפון/אימייל לא תקינים. ניתן לגרור את הטבלה עם העכבר לגלילה.
+          {type === "staff" ? " תגי התפקיד בעמודה הראשונה; לחיצה עם סמל הפרדה מחזירה תפקיד לתקן חסר." : ""}
+          {type === "staff" ? " לצוות מעל גיל 18, שדות הורים ריקים מסומנים באפור ואינם חובה. אישור משטרה נדרש לגברים מעל גיל 18." : ""}
+        </p>
       </div>
-      <div className="max-h-[60vh] overflow-auto">
+      <DragScrollArea className="max-h-[min(82vh,calc(100dvh-10rem))] overflow-auto">
         <table className="min-w-[1320px] w-full text-center text-xs">
           <thead className="sticky top-0 z-20 bg-gray-200 text-gray-800 shadow-sm">
             <tr>
@@ -1267,17 +1700,20 @@ function EditableParticipantsTable({
                 const meta = participantFieldMeta[field];
                 const alwaysOpenFields = type === "staff" ? openStaffFields : openParticipantFields;
                 const open = alwaysOpenFields.includes(field) || expandedFields.has(field);
+                const optionalStaffParentHeader = type === "staff" && staffParentFields.includes(field);
                 return (
-                  <th key={field} className={`${open ? "min-w-[130px] p-2" : "w-14 p-1"} text-center font-black`}>
+                  <th key={field} className={`${open ? (field === "staffRole" && type === "staff" ? "min-w-[148px]" : "min-w-[118px]") + " px-1 py-0.5" : "w-12 p-0.5"} text-center font-black`}>
                     {open ? (
-                      <button type="button" onClick={() => toggleField(field)} className="inline-flex items-center justify-center gap-1 rounded-xl bg-gray-200 px-2 py-1">
-                        <meta.Icon size={14} />
+                      <button type="button" onClick={() => toggleField(field)} className={headerOpenColumnClass}>
+                        <meta.Icon size={12} />
                         {meta.label}
                       </button>
                     ) : (
-                      <button type="button" onClick={() => toggleField(field)} className={`group relative inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-400 shadow-sm ${toneClasses.buttonHover}`}>
-                        <meta.Icon size={16} />
-                        <span className={headerTooltipClass}>{meta.label}</span>
+                      <button type="button" onClick={() => toggleField(field)} className={headerIconButtonClass}>
+                        <meta.Icon size={14} />
+                        <span className={headerTooltipClass}>
+                          {optionalStaffParentHeader ? optionalParentHeaderHint(meta.label) : meta.label}
+                        </span>
                       </button>
                     )}
                   </th>
@@ -1287,21 +1723,22 @@ function EditableParticipantsTable({
                 const meta = assignmentKindMeta[set.kind];
                 const label = set.title || meta.label;
                 return (
-                  <th key={set.id} className="w-16 p-1 text-center font-black">
-                    <span className="group relative inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-500 shadow-sm">
-                      <meta.Icon size={16} />
+                  <th key={set.id} className="w-12 p-0.5 text-center font-black">
+                    <span className="group relative inline-flex h-8 w-8 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 shadow-sm">
+                      <meta.Icon size={14} />
                       <span className={headerTooltipClass}>{label}</span>
                     </span>
                   </th>
                 );
               })}
-              <th className="w-24 p-2 text-center font-black">סטטוס</th>
-              <th className="w-16 p-2 text-center font-black">מחיקה</th>
+              <th className="w-14 px-0.5 py-0.5 text-center font-black">סטטוס</th>
+              <th className="w-12 px-1 py-0.5 text-center font-black">מחיקה</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => {
               const roleLabels = requiredRoleLabels(row.raw);
+              const rowGender = normalizeStaffGender(row.gender);
               const protectedRequired = isRequiredStaffProtected(row);
               const placeholderRequired = Boolean(row.raw?.[REQUIRED_STAFF_RAW.placeholder]);
               return (
@@ -1312,37 +1749,108 @@ function EditableParticipantsTable({
                   const open = alwaysOpenFields.includes(field) || expandedFields.has(field);
                   const value = row[field];
                   const invalid = isDraftFieldInvalid(row, field);
-                  const filled = Boolean(value.trim());
+                  const slotPlaceholderNameField =
+                    placeholderRequired &&
+                    ((field === "firstName" && isStaffSlotPlaceholderFirstName(value)) ||
+                      (field === "lastName" && isStaffSlotPlaceholderLastName(value, row)));
+                  const displayValue =
+                    field === "staffRole" && type === "staff"
+                      ? genderedStaffRoleDisplay(slotPlaceholderNameField ? "" : value, rowGender)
+                      : slotPlaceholderNameField
+                        ? ""
+                        : value;
+                  const filled = slotPlaceholderNameField ? false : Boolean(value.trim());
                   const age = field === "birthDate" ? calculateAge(value) : null;
+                  const gender = field === "gender" ? normalizeStaffGender(value) : normalizeStaffGender(row.gender);
                   const disabledPoliceApproval = field === "policeApproval" && !requiresPoliceApproval(row);
-                  const tooltip = invalid ? `${meta.label}: ערך לא תקין` : field === "birthDate" && age !== null ? `${meta.label}: גיל ${age}` : filled ? `${meta.label}: מלא` : meta.label;
+                  const policeApprovalSkipReason =
+                    field === "policeApproval" && disabledPoliceApproval
+                      ? normalizeStaffGender(row.gender) === "female"
+                        ? "לא נדרש (נקבה)"
+                        : calculateAge(row.birthDate) !== null && calculateAge(row.birthDate)! < 18
+                          ? "לא נדרש (מתחת לגיל 18)"
+                          : "לא נדרש"
+                      : "";
+                  const optionalParentField = isOptionalStaffParentField(row, field);
+                  const inputPlaceholder = slotPlaceholderNameField
+                    ? "תקן חסר"
+                    : optionalParentField && !filled
+                      ? `${meta.label} (לא חובה)`
+                      : meta.label;
+                  const tooltip = invalid
+                    ? `${meta.label}: ערך לא תקין`
+                    : field === "birthDate" && age !== null
+                      ? `${meta.label}: גיל ${age}`
+                      : field === "gender" && gender
+                        ? `${meta.label}: ${staffGenderLabel(gender)}`
+                      : optionalParentField
+                        ? `${meta.label}: ${filled ? "מלא, לא חובה" : "לא חובה"} (מעל גיל 18)`
+                        : filled
+                          ? `${meta.label}: מלא`
+                          : meta.label;
                   return (
-                    <td key={field} className={`${open ? "p-2" : "p-1"} align-middle text-center`}>
+                    <td key={field} className={`${open ? "px-1.5 py-0.5" : "p-0.5"} align-middle text-center`}>
                       {disabledPoliceApproval ? (
-                        <span className="inline-flex h-10 items-center justify-center rounded-2xl bg-gray-50 px-3 text-[11px] font-bold text-gray-400">
+                        <span className="inline-flex h-8 items-center justify-center rounded-lg bg-gray-50 px-2 text-[10px] font-bold text-gray-400" title={policeApprovalSkipReason}>
                           לא נדרש
                         </span>
                       ) : open ? (
+                        field === "staffRole" && type === "staff" && roleLabels.length > 0 ? (
+                          <StaffRoleBadges
+                            roleLabels={roleLabels}
+                            rowGender={rowGender}
+                            placeholderRequired={placeholderRequired}
+                            saving={saving}
+                            savedId={row.savedId}
+                            onSplitStaffRole={onSplitStaffRole}
+                          />
+                        ) : meta.kind === "gender" ? (
+                          <Select
+                            value={normalizeStaffGender(value)}
+                            onChange={(next) => updateRow(row.id, field, next)}
+                            placeholder="מגדר"
+                            options={STAFF_GENDER_OPTIONS}
+                            accent={tone === "amber" ? "amber" : "cyan"}
+                            buttonClassName="!h-8 !text-xs"
+                          />
+                        ) : (
                         <input
-                          className={`${inputClass} ${invalid ? "border-red-300 bg-red-50 text-red-700 focus:border-red-400 focus:ring-red-100" : ""}`}
-                          value={value}
-                          placeholder={meta.label}
+                          className={`${inputClass} ${invalid ? "border-red-300 bg-red-50 text-red-700 focus:border-red-400 focus:ring-red-100" : slotPlaceholderNameField ? "border-amber-100 bg-amber-50/50 text-gray-700 placeholder:text-gray-400 placeholder:font-bold focus:border-amber-200 focus:ring-amber-100" : staffFieldFilledClass(filled, slotPlaceholderNameField, invalid) || (optionalParentField && !filled ? optionalParentEmptyInputClass : "")}`}
+                          value={displayValue}
+                          placeholder={inputPlaceholder}
                           inputMode={field === "birthDate" ? "numeric" : meta.kind === "phone" ? "tel" : meta.kind === "email" ? "email" : "text"}
-                          onChange={(e) => updateRow(row.id, field, e.target.value)}
+                          onChange={(e) =>
+                            updateRow(
+                              row.id,
+                              field,
+                              field === "staffRole" && type === "staff"
+                                ? canonicalStaffRoleLabel(e.target.value)
+                                : e.target.value,
+                            )
+                          }
                         />
+                        )
                       ) : (
                         <button
                           type="button"
                           onClick={() => toggleField(field)}
-                          className={`group relative inline-flex h-10 w-10 items-center justify-center rounded-2xl border shadow-sm transition-colors ${
+                          className={`group relative inline-flex h-8 w-8 items-center justify-center rounded-xl border shadow-sm transition-colors ${
                             invalid
                               ? "border-red-200 bg-red-100 text-red-700"
                               : filled
                                 ? toneClasses.filledIcon
-                                : "border-gray-200 bg-white text-gray-400"
+                                : optionalParentField
+                                  ? optionalParentEmptyCellClass
+                                  : "border-gray-200 bg-white text-gray-400"
                           }`}
                         >
-                          {field === "birthDate" && age !== null ? <span className="text-xs font-black leading-none">{age}</span> : <meta.Icon size={16} />}
+                          {field === "birthDate" && age !== null ? (
+                            <span className="text-xs font-black leading-none">{age}</span>
+                          ) : field === "gender" && gender ? (
+                            <span className="text-xs font-black leading-none">{staffGenderShortLabel(gender)}</span>
+                          ) : (
+                            <meta.Icon size={14} />
+                          )}
                           <span className={tooltipClass}>{tooltip}</span>
                         </button>
                       )}
@@ -1353,47 +1861,38 @@ function EditableParticipantsTable({
                   const itemName = assignmentMembershipByPerson.get(row.savedId || row.id)?.get(set.id) || "";
                   const meta = assignmentKindMeta[set.kind];
                   return (
-                    <td key={set.id} className="p-1 align-middle text-center">
+                    <td key={set.id} className="p-0.5 align-middle text-center">
                       <span
-                        className={`group relative inline-flex h-10 w-10 items-center justify-center rounded-2xl border shadow-sm ${
+                        className={`group relative inline-flex h-8 w-8 items-center justify-center rounded-xl border shadow-sm ${
                           itemName ? "border-emerald-200 bg-emerald-500 text-white" : "border-gray-200 bg-white text-gray-400"
                         }`}
                       >
-                        <meta.Icon size={16} />
+                        <meta.Icon size={14} />
                         <span className={tooltipClass}>{itemName || set.title}</span>
                       </span>
                     </td>
                   );
                 })}
-                <td className="p-2 align-middle text-center">
-                  <div className="flex flex-col items-center gap-1">
-                    {roleLabels.length ? (
-                      <div className="flex max-w-48 flex-wrap justify-center gap-1">
-                        {roleLabels.map((label) => (
-                          <span key={label} className={`rounded-full px-2 py-0.5 text-[10px] font-black ${placeholderRequired ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>
-                            {label}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-                    <span className={`inline-flex h-9 items-center justify-center gap-1 rounded-xl border px-3 text-[11px] font-black ${placeholderRequired ? "border-amber-100 bg-amber-50 text-amber-700" : canAutosave(row) ? "border-cyan-100 bg-cyan-50 text-cyan-700" : "border-amber-100 bg-amber-50 text-amber-700"}`}>
-                      {saving ? <Loader2 size={14} className="animate-spin" /> : canAutosave(row) && !placeholderRequired ? <CheckCircle2 size={14} /> : null}
-                      {placeholderRequired ? "תקן חובה חסר" : canAutosave(row) ? "נשמר אוטומטית" : "ממתין לפרטים"}
-                    </span>
+                <td className="px-0.5 py-0.5 align-middle text-center">
+                  <div className="flex flex-col items-center gap-0.5">
                     {placeholderRequired && row.savedId && onAssignRequiredRole ? (
                       <div className="flex items-center gap-1">
-                        <select
+                        <Select
                           value={requiredRoleTargets[row.savedId] || ""}
-                          onChange={(event) => setRequiredRoleTargets((prev) => ({ ...prev, [row.savedId || row.id]: event.target.value }))}
-                          className="h-8 max-w-36 rounded-xl border border-amber-200 bg-white px-2 text-[11px] font-bold text-gray-700 outline-none"
-                        >
-                          <option value="">מזג לאיש צוות...</option>
-                          {assignableStaffRows.map((staffRow) => (
-                            <option key={staffRow.savedId || staffRow.id} value={staffRow.savedId || ""}>
-                              {[staffRow.firstName, staffRow.lastName].filter(Boolean).join(" ") || staffRow.staffRole}
-                            </option>
-                          ))}
-                        </select>
+                          onChange={(targetId) =>
+                            setRequiredRoleTargets((prev) => ({ ...prev, [row.savedId || row.id]: targetId }))
+                          }
+                          placeholder="מזג לאיש צוות..."
+                          accent="amber"
+                          disabled={saving}
+                          className="max-w-36"
+                          buttonClassName="!h-7 !rounded-lg !px-1.5 !text-[10px]"
+                          menuClassName="min-w-[10rem]"
+                          options={assignableStaffRows.map((staffRow) => ({
+                            value: staffRow.savedId || staffRow.id,
+                            label: [staffRow.firstName, staffRow.lastName].filter(Boolean).join(" ") || staffRow.staffRole,
+                          }))}
+                        />
                         <button
                           type="button"
                           disabled={saving || !requiredRoleTargets[row.savedId]}
@@ -1401,48 +1900,61 @@ function EditableParticipantsTable({
                             const targetId = requiredRoleTargets[row.savedId || ""];
                             if (targetId && row.savedId) void onAssignRequiredRole(row.savedId, targetId);
                           }}
-                          className="h-8 rounded-xl bg-amber-500 px-2 text-[11px] font-black text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                          className="h-7 rounded-lg bg-amber-500 px-2 text-[10px] font-black text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           מיזוג
                         </button>
                       </div>
-                    ) : null}
+                    ) : (
+                      <span
+                        title={canAutosave(row) ? "נשמר אוטומטית" : "ממתין לפרטים"}
+                        className={`inline-flex h-7 w-7 cursor-default items-center justify-center rounded-lg border ${canAutosave(row) ? "border-cyan-100 bg-cyan-50 text-cyan-700" : "border-amber-100 bg-amber-50 text-amber-700"}`}
+                      >
+                        {saving ? (
+                          <Loader2 size={12} className="animate-spin" />
+                        ) : canAutosave(row) ? (
+                          <CheckCircle2 size={12} />
+                        ) : (
+                          <AlertTriangle size={12} />
+                        )}
+                      </span>
+                    )}
                   </div>
                 </td>
-                <td className="p-2 align-middle text-center">
+                <td className="p-0.5 align-middle text-center">
                   <button
                     type="button"
                     onClick={() => setPendingDelete(row)}
                     disabled={saving || protectedRequired}
-                    className={`inline-flex h-9 w-9 items-center justify-center rounded-xl border shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                    className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                       protectedRequired ? "border-gray-100 bg-gray-50 text-gray-300" : "border-red-100 bg-red-50 text-red-600 hover:bg-red-100"
                     }`}
                     aria-label={protectedRequired ? "תקן חובה מוגן ממחיקה" : "מחק שורה"}
                   >
-                    <Trash2 size={15} />
+                    <Trash2 size={14} />
                   </button>
                 </td>
               </tr>
             )})}
             <tr className={`border-t ${toneClasses.border} ${toneClasses.addRowBg}`}>
-              <td colSpan={allFields.length + visibleAssignmentSets.length + 2} className="p-3 align-middle text-center">
+              <td colSpan={allFields.length + visibleAssignmentSets.length + 2} className="p-2 align-middle text-center">
                 <button
                   type="button"
                   onClick={addRow}
                   disabled={saving}
-                  className={`inline-flex h-10 w-10 items-center justify-center rounded-full border ${toneClasses.addButton} shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60`}
-                  aria-label="הוסף שורת חניך"
+                  className={`inline-flex h-8 w-8 items-center justify-center rounded-full border ${toneClasses.addButton} shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60`}
+                  aria-label={type === "participant" ? participantLabels?.addParticipantRow || "הוסף שורת חניך" : "הוסף שורת צוות"}
                 >
-                  <Plus size={18} />
+                  <Plus size={16} />
                 </button>
               </td>
             </tr>
           </tbody>
         </table>
-      </div>
+      </DragScrollArea>
       {pendingDelete ? (
         <DeleteConfirmDialog
-          title={`מחיקת ${type === "staff" ? "איש צוות" : "חניך"}`}
+          title={type === "staff" ? "מחיקת איש צוות" : participantLabels?.deleteParticipantTitle || "מחיקת חניך"}
           message="האם למחוק את השורה הזו? הפעולה תמחק את הנתונים מהטבלה."
           deleting={saving}
           onCancel={() => setPendingDelete(null)}
@@ -1466,11 +1978,13 @@ function AssignmentsPanel({
   onDeleteItem,
   onAssignMembers,
   onRemoveMember,
+  participantLabels,
 }: {
   people: Participant[];
   buses: PlanBus[];
   assignmentSets: AssignmentSet[];
   saving: boolean;
+  participantLabels: TripParticipantLabels;
   onCreateSet: (kind: AssignmentKind, audience: AssignmentAudience, customKindLabel: string) => Promise<unknown>;
   onRenameSet: (setId: string, title: string) => Promise<unknown>;
   onDeleteSet: (setId: string) => Promise<unknown>;
@@ -1536,7 +2050,7 @@ function AssignmentsPanel({
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <h3 className="font-black text-purple-900">שיבוצים</h3>
-            <p className="text-xs font-bold text-purple-700">אפשר לפתוח לשוניות שיבוץ לקבוצות, אוטובוסים, חדרים או סוג אחר. כל לשונית מוסיפה עמודה לטבלאות החניכים והצוות.</p>
+            <p className="text-xs font-bold text-purple-700">אפשר לפתוח לשוניות שיבוץ לקבוצות, אוטובוסים, חדרים או סוג אחר. {participantLabels.assignTablesHint}</p>
           </div>
           <button
             type="button"
@@ -1619,7 +2133,7 @@ function AssignmentsPanel({
                     className="h-10 rounded-2xl border border-purple-100 bg-white px-3 text-center text-sm font-black text-purple-900 outline-none focus:border-purple-300 focus:ring-2 focus:ring-purple-100"
                     aria-label="שם לשונית שיבוץ"
                   />
-                  <span className="rounded-full bg-white px-3 py-2 text-xs font-black text-purple-700">מיועד ל: {audienceLabel(activeSet.audience)}</span>
+                  <span className="rounded-full bg-white px-3 py-2 text-xs font-black text-purple-700">מיועד ל: {audienceLabel(activeSet.audience, participantLabels)}</span>
                   <button
                     type="button"
                     onClick={() => setPendingDelete({ type: "set", id: activeSet.id, title: activeSet.title })}
@@ -1664,7 +2178,11 @@ function AssignmentsPanel({
                               </td>
                               <td className="p-2 align-middle font-bold text-gray-800">{draft.firstName || person.name}</td>
                               <td className="p-2 align-middle font-bold text-gray-800">{draft.lastName}</td>
-                              <td className="p-2 align-middle font-bold text-gray-600">{person.type === "staff" ? draft.staffRole || draft.branch : draft.branch}</td>
+                              <td className="p-2 align-middle font-bold text-gray-600">
+                                {person.type === "staff"
+                                  ? genderedStaffRoleDisplay(draft.staffRole || draft.branch, normalizeStaffGender(draft.gender)) || draft.branch
+                                  : draft.branch}
+                              </td>
                               <td className="p-2 align-middle font-bold text-gray-600">{person.type === "participant" ? draft.grade : ""}</td>
                               <td className="p-2 align-middle">
                                 <span className={`rounded-full px-3 py-1 text-[11px] font-black ${currentItem ? "bg-emerald-50 text-emerald-700" : "bg-gray-50 text-gray-400"}`}>
@@ -1683,18 +2201,19 @@ function AssignmentsPanel({
                   <h4 className="text-sm font-black text-purple-900">סגירת מסומנים</h4>
                   <p className="mt-1 text-xs font-bold text-gray-500">שם ריק יקבל ברירת מחדל כמו {defaultItemLabel}.</p>
                   {activeSet.kind === "buses" ? (
-                    <select
+                    <Select
                       value={draftBusId}
-                      onChange={(event) => setDraftBusId(event.target.value)}
-                      className="mt-3 h-10 w-full rounded-2xl border border-gray-200 bg-white px-3 text-center text-sm font-bold outline-none focus:border-purple-300 focus:ring-2 focus:ring-purple-100"
-                    >
-                      <option value="">בחר אוטובוס</option>
-                      {buses.map((bus) => (
-                        <option key={bus.id} value={bus.id}>
-                          {bus.bus_number || bus.name} {bus.capacity ? `(${bus.capacity} מקומות)` : ""}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={setDraftBusId}
+                      placeholder="בחר אוטובוס"
+                      accent="purple"
+                      disabled={saving}
+                      className="mt-3"
+                      buttonClassName="!rounded-2xl"
+                      options={buses.map((bus) => ({
+                        value: bus.id,
+                        label: `${bus.bus_number || bus.name}${bus.capacity ? ` (${bus.capacity} מקומות)` : ""}`,
+                      }))}
+                    />
                   ) : null}
                   <input
                     value={draftName}
@@ -1785,6 +2304,7 @@ function AssignmentsPanel({
       {showCreateSet ? (
         <CreateAssignmentSetDialog
           saving={saving}
+          participantLabels={participantLabels}
           onCancel={() => setShowCreateSet(false)}
           onCreate={async (kind, audience, customKindLabel) => {
             await onCreateSet(kind, audience, customKindLabel);
@@ -1818,10 +2338,12 @@ function AssignmentsPanel({
 
 function CreateAssignmentSetDialog({
   saving,
+  participantLabels,
   onCancel,
   onCreate,
 }: {
   saving: boolean;
+  participantLabels: TripParticipantLabels;
   onCancel: () => void;
   onCreate: (kind: AssignmentKind, audience: AssignmentAudience, customKindLabel: string) => Promise<void>;
 }) {
@@ -1872,7 +2394,7 @@ function CreateAssignmentSetDialog({
               onClick={() => setAudience(option)}
               className={`rounded-2xl border p-3 text-sm font-black transition-all ${audience === option ? "border-cyan-200 bg-cyan-50 text-cyan-700 shadow-sm" : "border-gray-100 bg-gray-50 text-gray-500 hover:bg-gray-100"}`}
             >
-              {audienceLabel(option)}
+              {audienceLabel(option, participantLabels)}
             </button>
           ))}
         </div>

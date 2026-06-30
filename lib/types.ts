@@ -103,6 +103,26 @@ export interface TripPlanPrintRecord {
   print_location?: string | null;
   file_size_bytes?: number | null;
   notes?: string | null;
+  status?: string | null;
+  design_id?: string | null;
+}
+
+export interface TripPlanDesignRecord {
+  id: string;
+  row_id: string;
+  order_index: number;
+  document_name: string;
+  designer_name?: string | null;
+  size_settings?: string | null;
+  notes?: string | null;
+  content_mode: "text" | "file";
+  document_text?: string | null;
+  designer_instructions?: string | null;
+  brief_file_path?: string | null;
+  brief_file_name?: string | null;
+  output_file_path?: string | null;
+  output_file_name?: string | null;
+  status?: string | null;
 }
 
 export interface ContactMessage {

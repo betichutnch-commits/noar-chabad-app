@@ -3,7 +3,7 @@ import { REQUIRED_STAFF_RAW } from "@/lib/tripRequiredRoles";
 export type StaffParticipantLike = {
   id: string;
   name?: string;
-  full_name?: string;
+  full_name?: string | null;
   role?: string | null;
   raw?: Record<string, unknown> | null;
   raw_data?: Record<string, unknown> | null;

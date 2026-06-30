@@ -5,7 +5,7 @@ import { ManagerHeader } from '@/components/layout/ManagerHeader'
 import { PushAdminTestPanel } from '@/components/PushAdminTestPanel'
 import { useUser } from '@/hooks/useUser'
 import { isTechAdminUser } from '@/lib/auth'
-import { AlertTriangle, ClipboardList, ScrollText, Settings, UsersRound } from 'lucide-react'
+import { AlertTriangle, ClipboardList, Leaf, ScrollText, Settings, UsersRound } from 'lucide-react'
 
 const settingsCards = [
   {
@@ -28,6 +28,13 @@ const settingsCards = [
     description: 'הגדרת תפקידי חובה, נוסחאות כמות, מיזוג תפקידים ושיבוצי אוטובוסים, קבוצות וחדרים.',
     Icon: UsersRound,
     tone: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+  },
+  {
+    href: '/manager/settings/sustainability',
+    title: 'קיימות ואיכות סביבה',
+    description: 'הצגה או הסתרה של כל דגשי הקיימות לאורך תהליך התכנון — לכל המשתמשים במערכת.',
+    Icon: Leaf,
+    tone: 'bg-green-50 text-green-700 border-green-100',
   },
   {
     href: '/manager/settings/regulation',

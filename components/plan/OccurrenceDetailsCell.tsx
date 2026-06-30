@@ -11,8 +11,8 @@ import {
   type InstructionAudience,
 } from "@/lib/planRowGuidelines";
 import { QuantityUnitPicker } from "@/components/plan/QuantityUnitPicker";
+import { EquipmentSourceInput } from "@/components/plan/EquipmentSourceInput";
 import { formatRowDetailsSummaryLine, type RowDetailsSummaryCounts } from "@/lib/planRowDetailsSummary";
-import { getRowRegulationHints } from "@/lib/regulation/compliance";
 
 export type EquipmentDraft = {
   item: string;
@@ -50,9 +50,12 @@ type OccurrenceDetailsCellProps = {
   onFollowUpAction: (action: PlanRowFollowUpActionId, meta?: PlanRowFollowUpMeta) => void;
   followUpRequest?: PlanRowFollowUpActionId | null;
   onFollowUpConsumed?: () => void;
-  /** תווית התרחשות בלו״ז (event_text) — לתגיות רגולציה */
+  /** תווית התרחשות בלו״ז (event_text) — לתגיות קיימות ורגולציה */
   eventText?: string | null;
-  planCategoryKey?: string | null;
+  instructionAudienceLabels?: Record<InstructionAudience, string>;
+  staffParticipantGuidelinesLabel?: string;
+  participantInstructionsButtonLabel?: string;
+  equipmentSourceSuggestions?: { purchase: string[]; existing: string[]; all: string[] };
 };
 
 type ContextMenuState = { x: number; y: number } | null;
@@ -75,7 +78,10 @@ export function OccurrenceDetailsCell({
   followUpRequest = null,
   onFollowUpConsumed,
   eventText = null,
-  planCategoryKey = null,
+  instructionAudienceLabels = INSTRUCTION_AUDIENCE_LABELS,
+  staffParticipantGuidelinesLabel = "הנחיות לצוות / חניכים",
+  participantInstructionsButtonLabel = "הנחיות לחניכים",
+  equipmentSourceSuggestions = { purchase: [], existing: [], all: [] },
 }: OccurrenceDetailsCellProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
@@ -88,7 +94,6 @@ export function OccurrenceDetailsCell({
   const [guidelinesSavePrompt, setGuidelinesSavePrompt] = useState(false);
 
   const summaryLine = formatRowDetailsSummaryLine(summaryCounts);
-  const regulationHints = getRowRegulationHints(planCategoryKey, eventText);
 
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
@@ -249,20 +254,6 @@ export function OccurrenceDetailsCell({
             {summaryLine}
           </p>
         ) : null}
-        {regulationHints.needsLicense || regulationHints.needsMokedTeva ? (
-          <div className="mt-1 flex flex-wrap gap-1">
-            {regulationHints.needsLicense ? (
-              <span className="rounded-full border border-purple-200 bg-purple-50 px-2 py-0.5 text-[10px] font-black text-purple-800">
-                {regulationHints.licenseLabel || "נדרש רישוי"}
-              </span>
-            ) : null}
-            {regulationHints.needsMokedTeva ? (
-              <span className="rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-[10px] font-black text-orange-800">
-                {regulationHints.coordinationLabel || "תיאום מוקד טבע"}
-              </span>
-            ) : null}
-          </div>
-        ) : null}
         {(hasStaffInstructions || hasParticipantInstructions) && (
           <div className="mt-2 flex flex-wrap gap-1">
             {hasStaffInstructions ? (
@@ -280,7 +271,7 @@ export function OccurrenceDetailsCell({
                 onClick={() => openGuidelinesDialog("participants")}
                 className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-800 hover:bg-indigo-100"
               >
-                הנחיות לחניכים
+                {participantInstructionsButtonLabel}
               </button>
             ) : null}
           </div>
@@ -294,7 +285,7 @@ export function OccurrenceDetailsCell({
           }}
           className="absolute left-1 top-1 flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm hover:bg-gray-50 disabled:opacity-50"
           aria-label="תפריט עדכון"
-          data-tooltip="מקש ימני: אחריות, ציוד, רכש, הדפסות, הנחיות"
+          data-tooltip="מקש ימני: אחריות, ציוד, רכש, עיצוב והדפסה, הנחיות"
         >
           <Plus size={12} />
         </button>
@@ -351,7 +342,7 @@ export function OccurrenceDetailsCell({
                 onClick={() => openGuidelinesDialog()}
               >
                 <ClipboardList size={14} className="text-sky-600" />
-                הנחיות לצוות / חניכים
+                {staffParticipantGuidelinesLabel}
               </button>
             </div>,
             document.body,
@@ -410,10 +401,19 @@ export function OccurrenceDetailsCell({
             ))}
           </div>
           <label className="mb-1 block text-xs font-bold text-gray-700">מקור / ספק</label>
-          <input
+          <EquipmentSourceInput
             value={equipmentDraft.source_details}
-            onChange={(e) => setEquipmentDraft((prev) => ({ ...prev, source_details: e.target.value }))}
-            className={`mb-3 w-full h-9 px-2 ${fieldClass}`}
+            onChange={(value) => setEquipmentDraft((prev) => ({ ...prev, source_details: value }))}
+            sourceType={equipmentDraft.source_type}
+            suggestions={
+              equipmentDraft.source_type === "רכש"
+                ? equipmentSourceSuggestions.purchase
+                : equipmentDraft.source_type === "קיים" || equipmentDraft.source_type === "מקור"
+                  ? equipmentSourceSuggestions.existing
+                  : equipmentSourceSuggestions.all
+            }
+            fieldClass={fieldClass}
+            className="mb-3"
           />
           {equipmentSavePrompt ? (
             <PlanDialogSavePrompt onAction={handleEquipmentFollowUp} onClose={closeEquipmentDialog} />
@@ -440,7 +440,7 @@ export function OccurrenceDetailsCell({
       ) : null}
 
       {guidelinesOpen ? (
-        <PlanQuickDialog title="הנחיות לצוות / חניכים" onClose={closeGuidelinesDialog}>
+        <PlanQuickDialog title={staffParticipantGuidelinesLabel} onClose={closeGuidelinesDialog}>
           <div className="mb-3 flex gap-1">
             {(["staff", "participants"] as InstructionAudience[]).map((audience) => (
               <button
@@ -458,18 +458,18 @@ export function OccurrenceDetailsCell({
                     : "border-gray-200 bg-white text-gray-700"
                 }`}
               >
-                {INSTRUCTION_AUDIENCE_LABELS[audience]}
+                {instructionAudienceLabels[audience]}
               </button>
             ))}
           </div>
           <label className="mb-2 block text-xs font-bold text-gray-700">
-            הנחיות ל{INSTRUCTION_AUDIENCE_LABELS[instructionAudience]}
+            הנחיות ל{instructionAudienceLabels[instructionAudience]}
           </label>
           <textarea
             value={instructionText}
             onChange={(e) => setInstructionText(e.target.value)}
             className={`mb-3 w-full min-h-[120px] resize-y p-2 ${fieldClass}`}
-            placeholder={`כתוב הנחיות ל${INSTRUCTION_AUDIENCE_LABELS[instructionAudience]}...`}
+            placeholder={`כתוב הנחיות ל${instructionAudienceLabels[instructionAudience]}...`}
             autoFocus
           />
           {guidelinesSavePrompt ? (

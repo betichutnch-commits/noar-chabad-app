@@ -115,6 +115,15 @@ export const formatFullGregorianDate = (dateString: string) => {
     return `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()}`;
 };
 
+export const getPlanDayGregorianLabel = (tripStartDate: string | null | undefined, dayIndex?: number | null) => {
+    if (!tripStartDate || !dayIndex) return "";
+    const start = new Date(tripStartDate);
+    if (Number.isNaN(start.getTime())) return "";
+    const target = new Date(start);
+    target.setDate(start.getDate() + dayIndex - 1);
+    return target.toLocaleDateString("he-IL");
+};
+
 export const formatHebrewYear = (dateString: string) => {
      if (!dateString) return '';
     try {

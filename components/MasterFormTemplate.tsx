@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { Select } from "@/components/ui/Select";
 
 type PrimitiveValue = string | number | boolean | null | undefined;
 
@@ -164,19 +165,26 @@ export function MasterFormTemplate<TData extends Record<string, unknown>>({
     }
 
     if (column.type === "select") {
+      const selectValue = stringifyValue(value as PrimitiveValue);
+      const selectOptions = (column.options || []).map((option) => ({
+        value: option.value,
+        label: option.label,
+      }));
+
       return (
         <>
-          <select
-            value={stringifyValue(value as PrimitiveValue)}
-            onChange={(event) => onCellChange?.(rowIndex, column.key, event.target.value)}
-            className={`${sharedClassName} cursor-pointer appearance-none`}
-          >
-            {(column.options || []).map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          <Select
+            value={selectValue}
+            onChange={(nextValue) => onCellChange?.(rowIndex, column.key, nextValue)}
+            options={selectOptions}
+            placeholder={column.placeholder || "בחר"}
+            accent="cyan"
+            size="sm"
+            textAlign="center"
+            clearable={selectOptions.some((option) => option.value === "")}
+            className="print:hidden"
+            buttonClassName="!h-auto !rounded-none !border-0 !bg-transparent !py-1 !px-2 !shadow-none focus:!ring-0"
+          />
           <div className="hidden print:block">{renderViewValue(column, row, rowIndex)}</div>
         </>
       );

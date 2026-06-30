@@ -42,13 +42,18 @@ type UploadedDocumentFile = {
   type: string;
   size: number;
   uploadedAt: string;
+  planRowId?: string;
+  scheduleLabel?: string;
+  occurrenceLabel?: string;
+  businessName?: string;
+  uploadKind?: "license" | "insurance";
 };
 
 const getUploadedFiles = (formData: unknown, legacyPdfUrl?: string | null): UploadedDocumentFile[] => {
   const data = formData && typeof formData === "object" ? (formData as Record<string, unknown>) : {};
   const rawFiles = Array.isArray(data.uploadedFiles) ? data.uploadedFiles : [];
   const files = rawFiles
-    .map((file) => {
+    .map((file): UploadedDocumentFile | null => {
       if (!file || typeof file !== "object") return null;
       const record = file as Record<string, unknown>;
       const url = String(record.url || "").trim();
@@ -59,6 +64,11 @@ const getUploadedFiles = (formData: unknown, legacyPdfUrl?: string | null): Uplo
         type: String(record.type || ""),
         size: Number(record.size || 0),
         uploadedAt: String(record.uploadedAt || ""),
+        planRowId: String(record.planRowId || "").trim() || undefined,
+        scheduleLabel: String(record.scheduleLabel || "").trim() || undefined,
+        occurrenceLabel: String(record.occurrenceLabel || "").trim() || undefined,
+        businessName: String(record.businessName || "").trim() || undefined,
+        uploadKind: record.uploadKind === "insurance" ? "insurance" : record.uploadKind === "license" ? "license" : undefined,
       };
     })
     .filter((file): file is UploadedDocumentFile => Boolean(file));
@@ -256,6 +266,16 @@ export async function POST(request: Request, { params }: RouteContext) {
     type: file.type,
     size: file.size,
     uploadedAt: new Date().toISOString(),
+    planRowId: String(formData.get("planRowId") || "").trim() || undefined,
+    scheduleLabel: String(formData.get("scheduleLabel") || "").trim() || undefined,
+    occurrenceLabel: String(formData.get("occurrenceLabel") || "").trim() || undefined,
+    businessName: String(formData.get("businessName") || "").trim() || undefined,
+    uploadKind:
+      String(formData.get("uploadKind") || "").trim() === "insurance"
+        ? "insurance"
+        : String(formData.get("uploadKind") || "").trim() === "license"
+          ? "license"
+          : undefined,
   };
   const existingFormData = existingQuery.data?.form_data && typeof existingQuery.data.form_data === "object" ? (existingQuery.data.form_data as Record<string, unknown>) : {};
   const uploadedFiles = [...getUploadedFiles(existingQuery.data?.form_data, existingQuery.data?.pdf_url), uploadedFile];

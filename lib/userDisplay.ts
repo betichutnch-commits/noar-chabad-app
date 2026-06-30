@@ -58,6 +58,21 @@ export const resolveDisplayNameFromProfile = (
   return fallback;
 };
 
+export function profileContactNameFields(
+  profile: Record<string, unknown> | null | undefined,
+  meta?: Record<string, unknown> | null | undefined,
+): { firstName: string; lastName: string } {
+  const nickname = textValue(profile?.nickname) || textValue(meta?.nickname) || textValue(meta?.nick_name);
+  const officialName =
+    textValue(profile?.official_name) || textValue(meta?.official_name) || textValue(meta?.first_name);
+  const lastName = textValue(profile?.last_name) || textValue(meta?.last_name);
+
+  return {
+    firstName: nickname || officialName,
+    lastName,
+  };
+}
+
 export const resolveDisplayName = ({
   meta,
   profile,

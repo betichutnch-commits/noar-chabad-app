@@ -8,7 +8,18 @@ import {
 import { normalizePlanRowTasks, type PlanRowTask } from "@/lib/planRowTasks";
 import type { TripDocumentDefinition } from "@/lib/tripDocumentsCatalog";
 
-export type UploadedDocumentFile = { url: string; name: string; type: string; size: number; uploadedAt: string };
+export type UploadedDocumentFile = {
+  url: string;
+  name: string;
+  type: string;
+  size: number;
+  uploadedAt: string;
+  planRowId?: string;
+  scheduleLabel?: string;
+  occurrenceLabel?: string;
+  businessName?: string;
+  uploadKind?: "license" | "insurance";
+};
 
 export type TripAutofillMeta = {
   name?: string | null;
@@ -157,6 +168,11 @@ export const getUploadedDocumentFiles = (formData: unknown, legacyPdfUrl?: strin
         type: textValue(record.type),
         size: Number(record.size || 0),
         uploadedAt: textValue(record.uploadedAt),
+        planRowId: textValue(record.planRowId) || undefined,
+        scheduleLabel: textValue(record.scheduleLabel) || undefined,
+        occurrenceLabel: textValue(record.occurrenceLabel) || undefined,
+        businessName: textValue(record.businessName) || undefined,
+        uploadKind: record.uploadKind === "insurance" ? "insurance" : record.uploadKind === "license" ? "license" : undefined,
       };
     })
     .filter((file): file is UploadedDocumentFile => Boolean(file));

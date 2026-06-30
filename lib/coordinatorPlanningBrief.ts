@@ -7,6 +7,7 @@ import {
   type TripAutofillMeta,
 } from "@/lib/tripDocumentAutofill";
 import type { RequiredStaffPlanRow } from "@/lib/tripRequiredRoles";
+import { getMotifsForTrip } from "@/lib/sustainability";
 
 export type PlanningRequirementTone = "amber" | "cyan" | "emerald" | "violet" | "slate";
 
@@ -58,6 +59,7 @@ export function buildCoordinatorPlanningBrief(input: {
   requiredStaffRows: RequiredStaffPlanRow[];
   documentOverrides: DocumentOverride[];
   planRows: AutofillPlanRow[];
+  sustainabilityMotifsEnabled?: boolean;
 }): CoordinatorPlanningBrief {
   const requirements: PlanningRequirementItem[] = [];
   const activeStaff = input.requiredStaffRows.filter(
@@ -157,6 +159,28 @@ export function buildCoordinatorPlanningBrief(input: {
       detail: "יש להשלים את לוח הזמנים וההיערכות במסך התכנון המפורט.",
       tone: "amber",
     });
+  }
+
+  if (input.sustainabilityMotifsEnabled !== false) {
+    const timeline = Array.isArray(input.tripDetails.timeline)
+      ? (input.tripDetails.timeline as Array<Record<string, unknown>>)
+      : [];
+    const timelineRows = timeline.map((item) => ({
+      category: String(item.category || ""),
+      finalSubCategory: String(item.finalSubCategory || item.subCategory || ""),
+      subCategory: String(item.subCategory || ""),
+    }));
+    const planRows = input.planRows.map((row) => ({
+      eventText: row.event_text ?? null,
+    }));
+    for (const motif of getMotifsForTrip(timelineRows, planRows, input.sustainabilityMotifsEnabled)) {
+      requirements.push({
+        id: `sustainability-${motif.id}`,
+        label: motif.title,
+        detail: motif.topic,
+        tone: "emerald",
+      });
+    }
   }
 
   return {

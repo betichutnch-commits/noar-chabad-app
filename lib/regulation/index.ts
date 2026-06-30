@@ -74,7 +74,14 @@ export type { RowRegulationBrief, RowRegulationBriefLink } from "@/lib/regulatio
 export { gradeToApproxAge, gradeRangeToApproxAges } from "@/lib/regulation/grade-age";
 export type { SensitiveLocationDetection, TripSensitiveContext } from "@/lib/regulation/sensitive-locations";
 
-export { evaluateTripCompliance, getRowRegulationHints, findLicensedScheduleRow } from "@/lib/regulation/compliance";
+export {
+  evaluateTripCompliance,
+  getRowRegulationHints,
+  getOccurrenceRegulationHints,
+  tripNeedsMokedTevaCoordination,
+  tripNeedsBusinessLicense,
+  findLicensedScheduleRow,
+} from "@/lib/regulation/compliance";
 export type { EvaluateTripComplianceInput, RowRegulationHint, TripComplianceDocument, TripComplianceStaffRole } from "@/lib/regulation/compliance";
 import licensedScheduleMapData from "@/lib/regulation/licensed-schedule-map.json";
 import maintenanceGuideData from "@/lib/regulation/maintenance-guide.json";

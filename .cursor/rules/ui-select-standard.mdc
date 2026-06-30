@@ -1,0 +1,42 @@
+---
+description: Use the shared Select component for all dropdowns — never native HTML select
+globs: **/*.{tsx,jsx}
+alwaysApply: false
+---
+
+# UI Select Standard
+
+All dropdown / list-picker UI must use `@/components/ui/Select`. Do **not** use native `<select>` / `<option>` — browser menus break visual consistency (RTL chevron, focus ring, menu shadow, centered status lists).
+
+## Component
+
+```tsx
+import { Select } from "@/components/ui/Select";
+```
+
+## Variants
+
+| `variant` | When to use |
+|-----------|-------------|
+| `default` | General forms, filters, hub pickers |
+| `status` | Workflow status fields (e.g. design / print status) — centered list + checkmark |
+| `pill` | Document status badges with per-option tone via `getOptionClassName` |
+
+## Accents
+
+Match surrounding section color: `pink` (default), `cyan`, `amber`, `purple`, `fuchsia`, `emerald`.
+
+## Common props
+
+- `clearable={false}` when a value is always required
+- `textAlign="center"` for status-style lists
+- `size="sm"` in dense tables
+- `buttonClassName` / `menuClassName` only to align with local layout — keep tokens from `globals.css`
+
+## Examples in codebase
+
+- `StyledStatusSelect` in `app/dashboard/trip/[id]/plan/page.tsx` — status + pill wrappers
+- `RuleSelect` in `app/manager/settings/required-roles/page.tsx` — settings forms
+- `ParticipantsTab.tsx` — `accent="pink"`
+
+When adding a new dropdown, extend `Select` props if the pattern is reusable; do not fork a one-off menu.

@@ -58,6 +58,18 @@ export async function POST(request: Request, { params }: RouteContext) {
   const page_type = String(formData.get("page_type") || "").trim() || null;
   const print_location = String(formData.get("print_location") || "").trim() || null;
   const notes = String(formData.get("notes") || "").trim() || null;
+  const design_id = String(formData.get("design_id") || "").trim() || null;
+
+  if (design_id) {
+    const { data: designRow } = await admin
+      .from("trip_plan_row_designs")
+      .select("id, row_id, size_settings")
+      .eq("id", design_id)
+      .maybeSingle();
+    if (!designRow || String(designRow.row_id) !== rowId) {
+      return NextResponse.json({ error: "עיצוב לא שייך לשורה זו" }, { status: 400 });
+    }
+  }
 
   const storagePath = `${user.id}/trip-plan-prints/${id}/${rowId}/${storageSafeFileName(file.name)}`;
   const upload = await admin.storage.from("trip-files").upload(storagePath, file, { upsert: false });
@@ -82,6 +94,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     print_location,
     file_size_bytes: file.size,
     notes,
+    design_id,
   };
   const basePrintPayload = {
     row_id: rowId,
@@ -92,8 +105,23 @@ export async function POST(request: Request, { params }: RouteContext) {
     file_size_bytes: file.size,
     notes,
   };
+  const printPayloadWithoutDesign = {
+    row_id: rowId,
+    order_index: orderIndex,
+    file_path: storagePath,
+    file_name: file.name,
+    quantity,
+    print_size,
+    page_type,
+    print_location,
+    file_size_bytes: file.size,
+    notes,
+  };
 
   let inserted = await admin.from("trip_plan_row_prints").insert(printPayload).select("*").single();
+  if (inserted.error && String(inserted.error.message || "").match(/design_id/)) {
+    inserted = await admin.from("trip_plan_row_prints").insert(printPayloadWithoutDesign).select("*").single();
+  }
   if (inserted.error && String(inserted.error.message || "").match(/print_size|page_type|print_location/)) {
     inserted = await admin.from("trip_plan_row_prints").insert(basePrintPayload).select("*").single();
   }

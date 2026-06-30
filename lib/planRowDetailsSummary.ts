@@ -4,6 +4,7 @@ export type RowDetailsSummaryCounts = {
   responsibilities: number;
   purchase: number;
   equipment: number;
+  designs: number;
   prints: number;
   guidelines: number;
 };
@@ -24,6 +25,7 @@ function isFilledEquipmentItem(item: EquipmentLike) {
 export function computeRowDetailsSummaryCounts(input: {
   tasks?: PlanRowTask[];
   equipment?: EquipmentLike[];
+  designs?: unknown[];
   prints?: unknown[];
   staff_instructions?: string | null;
   participant_instructions?: string | null;
@@ -47,6 +49,7 @@ export function computeRowDetailsSummaryCounts(input: {
     responsibilities: tasks.filter((task) => String(task.task_text || "").trim()).length,
     purchase,
     equipment: equipmentCount,
+    designs: (input.designs || []).length,
     prints: (input.prints || []).length,
     guidelines,
   };
@@ -57,6 +60,7 @@ export function formatRowDetailsSummaryLine(counts: RowDetailsSummaryCounts): st
   if (counts.responsibilities > 0) parts.push(`${counts.responsibilities} אחריות`);
   if (counts.purchase > 0) parts.push(`${counts.purchase} רכש`);
   if (counts.equipment > 0) parts.push(`${counts.equipment} ציוד`);
+  if (counts.designs > 0) parts.push(`${counts.designs} עיצובים`);
   if (counts.prints > 0) parts.push(`${counts.prints} הדפסות`);
   if (counts.guidelines > 0) parts.push(`${counts.guidelines} הנחיות`);
   return parts.length ? parts.join(" · ") : null;

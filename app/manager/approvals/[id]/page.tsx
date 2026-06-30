@@ -12,6 +12,7 @@ import { isManagerUser } from '@/lib/auth'
 import type { ApprovedAssignmentPlanRow, RequiredStaffPlanRow, RequiredStaffContext } from '@/lib/tripRequiredRoles'
 import type { AppProfile, TripRecord } from '@/lib/types'
 import { TripComplianceApprovalBanner } from '@/components/plan/TripComplianceApprovalBanner'
+import { MokedTevaTripDataButton } from '@/components/plan/MokedTevaTripDataButton'
 import AppendixCForm, { type AppendixCFormValues } from '@/components/AppendixCForm'
 import { buildAppendixCInitialValues, getLanguageGender } from '@/lib/appendixCHelpers'
 
@@ -853,14 +854,26 @@ export default function ManagerTripView({ params }: { params: Promise<{ id: stri
                 </Button>
               </div>
             ) : (
-              <div className="flex w-full flex-wrap gap-2 md:w-auto md:justify-end">
+              <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:justify-end">
                 {trip.status === "approved" || trip.status === "approved_for_execution" ? (
-                  <Link
-                    href={`/manager/approvals/${trip.id}/plan`}
-                    className="inline-flex h-12 flex-1 items-center justify-center rounded-xl bg-brand-cyan px-4 text-sm font-black text-white shadow-sm hover:bg-cyan-600 md:flex-none md:min-w-[140px]"
-                  >
-                    מעבר לתכנון
-                  </Link>
+                  <>
+                    <MokedTevaTripDataButton
+                      tripId={trip.id}
+                      trip={{
+                        name: trip.name,
+                        start_date: trip.start_date,
+                        coordinator_name: trip.coordinator_name,
+                        details: (trip.details || {}) as Record<string, unknown>,
+                      }}
+                      className="flex-1 md:flex-none md:min-w-[150px]"
+                    />
+                    <Link
+                      href={`/manager/approvals/${trip.id}/plan`}
+                      className="inline-flex h-12 flex-1 items-center justify-center rounded-xl bg-brand-cyan px-4 text-sm font-black text-white shadow-sm hover:bg-cyan-600 md:flex-none md:min-w-[140px]"
+                    >
+                      מעבר לתכנון
+                    </Link>
+                  </>
                 ) : null}
                 <Link
                   href="/manager/approvals"

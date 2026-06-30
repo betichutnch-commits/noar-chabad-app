@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { Header } from '@/components/layout/Header'
 import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
+import { Select } from '@/components/ui/Select'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { 
   MapPin, AlertTriangle, Save, CheckCircle, FileUp, 
@@ -36,6 +37,9 @@ import {
   loadNewTripFormSnapshot,
   saveNewTripFormSnapshot,
 } from '@/lib/newTripFormSession'
+import { getMotifsForTimelineRow } from '@/lib/sustainability'
+import { SustainabilityMotifStrip } from '@/components/sustainability/SustainabilityMotifStrip'
+import { useSustainabilityMotifsEnabled } from '@/contexts/SustainabilityMotifsContext'
 
 type SecondaryStaffData = {
   name: string;
@@ -73,6 +77,7 @@ function NewTripContent() {
   
   // 1. שימוש ב-Hook
   const { user, profile, loading: userLoading } = useUser('/'); 
+  const sustainabilityMotifsEnabled = useSustainabilityMotifsEnabled();
 
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(0); 
@@ -875,27 +880,24 @@ function NewTripContent() {
                         <div className="md:col-span-3 w-full">
                             <label className="text-xs font-bold text-gray-500 block mb-1.5 mr-1">שכבות גיל</label>
                             <div className="flex gap-2">
-                                {/* שימוש במיכל שדומה לקומפוננטת Input */}
-                                <div className="relative w-full">
-                                    <select 
-                                        className="w-full bg-gray-50 text-gray-800 text-sm font-bold border border-gray-200 rounded-xl px-4 py-3.5 outline-none appearance-none focus:bg-white focus:!border-[#E91E63] focus:!ring-0 cursor-pointer"
-                                        value={generalInfo.gradeFrom} 
-                                        onChange={(e) => setGeneralInfo({...generalInfo, gradeFrom: e.target.value})}
-                                    >
-                                        <option value="">מכיתה...</option>{GRADES.map(g => <option key={g} value={g}>כיתה {g}</option>)}
-                                    </select>
-                                    <ChevronDown size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"/>
-                                </div>
-                                <div className="relative w-full">
-                                    <select 
-                                        className="w-full bg-gray-50 text-gray-800 text-sm font-bold border border-gray-200 rounded-xl px-4 py-3.5 outline-none appearance-none focus:bg-white focus:!border-[#E91E63] focus:!ring-0 cursor-pointer"
-                                        value={generalInfo.gradeTo} 
-                                        onChange={(e) => setGeneralInfo({...generalInfo, gradeTo: e.target.value})}
-                                    >
-                                        <option value="">עד כיתה...</option>{GRADES.map(g => <option key={g} value={g}>כיתה {g}</option>)}
-                                    </select>
-                                    <ChevronDown size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"/>
-                                </div>
+                                <Select
+                                    className="w-full"
+                                    value={generalInfo.gradeFrom}
+                                    onChange={(gradeFrom) => setGeneralInfo({ ...generalInfo, gradeFrom })}
+                                    options={GRADES.map((grade) => ({ value: grade, label: `כיתה ${grade}` }))}
+                                    placeholder="מכיתה..."
+                                    accent="pink"
+                                    buttonClassName="!rounded-xl !bg-gray-50 !py-3.5 !h-auto"
+                                />
+                                <Select
+                                    className="w-full"
+                                    value={generalInfo.gradeTo}
+                                    onChange={(gradeTo) => setGeneralInfo({ ...generalInfo, gradeTo })}
+                                    options={GRADES.map((grade) => ({ value: grade, label: `כיתה ${grade}` }))}
+                                    placeholder="עד כיתה..."
+                                    accent="pink"
+                                    buttonClassName="!rounded-xl !bg-gray-50 !py-3.5 !h-auto"
+                                />
                             </div>
                         </div>
 
@@ -1046,6 +1048,13 @@ function NewTripContent() {
                                             </div>
                                         </div>
                                       )}
+                                      {sustainabilityMotifsEnabled && item.category && (item.finalSubCategory || item.subCategory) ? (
+                                        <div className="mt-4">
+                                          <SustainabilityMotifStrip
+                                            motifs={getMotifsForTimelineRow(item.category, item.finalSubCategory || item.subCategory, sustainabilityMotifsEnabled)}
+                                          />
+                                        </div>
+                                      ) : null}
                                       <div className="mt-4 flex justify-end"><button onClick={(e) => handleRemoveLine(item.id, e)} className="text-red-500 text-xs font-bold flex items-center gap-1 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors border border-transparent hover:border-red-100"><Trash2 size={16} /> הסר שורה</button></div>
                                     </div>
                                 )}
@@ -1173,6 +1182,17 @@ function NewTripContent() {
                                     </div>
                                 </div>
                             )}
+                            {sustainabilityMotifsEnabled && currentLine.category && currentLine.subCategory ? (
+                              <div className="mt-3">
+                                <SustainabilityMotifStrip
+                                  motifs={getMotifsForTimelineRow(
+                                    currentLine.category,
+                                    currentLine.subCategory === 'אחר' ? currentLine.otherDetail : currentLine.subCategory,
+                                    sustainabilityMotifsEnabled,
+                                  )}
+                                />
+                              </div>
+                            ) : null}
                         </div>
                       )}
                       

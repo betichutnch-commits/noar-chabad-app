@@ -5,6 +5,7 @@ import { ArrowRight, Loader2, Plus, Save, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { ManagerHeader } from "@/components/layout/ManagerHeader";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 import { CATEGORIES } from "@/lib/constants";
 import {
   DEFAULT_ASSIGNMENT_REQUIREMENT_RULES,
@@ -18,10 +19,37 @@ import {
   type TripRoleRequirementRule,
 } from "@/lib/tripRequiredRoles";
 
-type SelectOption<T extends string> = { value: T; label: string };
+type LocalSelectOption<T extends string> = { value: T; label: string };
 type SettingsTab = "roles" | "assignments";
 
-const triggerOptions: SelectOption<RoleTriggerType>[] = [
+function RuleSelect<T extends string>({
+  value,
+  onChange,
+  options,
+  placeholder = "בחר",
+  clearable = false,
+}: {
+  value: T | "";
+  onChange: (value: T | "") => void;
+  options: LocalSelectOption<T>[];
+  placeholder?: string;
+  clearable?: boolean;
+}) {
+  return (
+    <Select
+      className="mt-1"
+      value={value}
+      onChange={onChange}
+      options={options}
+      placeholder={placeholder}
+      clearable={clearable}
+      accent="emerald"
+      buttonClassName="!rounded-2xl"
+    />
+  );
+}
+
+const triggerOptions: LocalSelectOption<RoleTriggerType>[] = [
   { value: "always", label: "תמיד" },
   { value: "organized_transport", label: "נסיעה מאורגנת" },
   { value: "sleeping", label: "לינה" },
@@ -31,23 +59,23 @@ const triggerOptions: SelectOption<RoleTriggerType>[] = [
   { value: "bus_count", label: "לפי אוטובוסים" },
 ];
 
-const calculationOptions: SelectOption<RoleCalculationType>[] = [
+const calculationOptions: LocalSelectOption<RoleCalculationType>[] = [
   { value: "fixed", label: "כמות קבועה" },
   { value: "ratio_participants", label: "1 לכל X חניכים" },
   { value: "per_bus", label: "לכל אוטובוס" },
 ];
 
-const mergeOptions: SelectOption<RoleMergePolicy>[] = [
+const mergeOptions: LocalSelectOption<RoleMergePolicy>[] = [
   { value: "mergeable", label: "ניתן למיזוג" },
   { value: "exclusive", label: "בלעדי - לא מתמזג" },
 ];
-const assignmentKindOptions: SelectOption<RequiredAssignmentKind>[] = [
+const assignmentKindOptions: LocalSelectOption<RequiredAssignmentKind>[] = [
   { value: "buses", label: "שיבוצי אוטובוס" },
   { value: "groups", label: "שיבוצי קבוצות" },
   { value: "rooms", label: "שיבוצי חדרים" },
   { value: "other", label: "אחר" },
 ];
-const audienceOptions: SelectOption<RequiredAssignmentAudience>[] = [
+const audienceOptions: LocalSelectOption<RequiredAssignmentAudience>[] = [
   { value: "participants", label: "חניכים" },
   { value: "staff", label: "צוות" },
   { value: "both", label: "חניכים וצוות" },
@@ -228,24 +256,22 @@ export default function RequiredRolesSettingsPage() {
 
                     <label className="text-xs font-black text-gray-600">
                       מתי חל
-                      <select value={rule.trigger_type} onChange={(event) => updateRule(index, { trigger_type: event.target.value as RoleTriggerType })} className="mt-1 h-10 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm font-bold outline-none">
-                        {triggerOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                      <RuleSelect
+                        value={rule.trigger_type}
+                        onChange={(trigger_type) => updateRule(index, { trigger_type: trigger_type as RoleTriggerType })}
+                        options={triggerOptions}
+                        clearable={false}
+                      />
                     </label>
 
                     <label className="text-xs font-black text-gray-600">
                       חישוב
-                      <select value={rule.calculation_type} onChange={(event) => updateRule(index, { calculation_type: event.target.value as RoleCalculationType })} className="mt-1 h-10 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm font-bold outline-none">
-                        {calculationOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                      <RuleSelect
+                        value={rule.calculation_type}
+                        onChange={(calculation_type) => updateRule(index, { calculation_type: calculation_type as RoleCalculationType })}
+                        options={calculationOptions}
+                        clearable={false}
+                      />
                     </label>
 
                     <label className="text-xs font-black text-gray-600">
@@ -266,13 +292,12 @@ export default function RequiredRolesSettingsPage() {
 
                     <label className="text-xs font-black text-gray-600">
                       מיזוג
-                      <select value={rule.merge_policy} onChange={(event) => updateRule(index, { merge_policy: event.target.value as RoleMergePolicy })} className="mt-1 h-10 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm font-bold outline-none">
-                        {mergeOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                      <RuleSelect
+                        value={rule.merge_policy}
+                        onChange={(merge_policy) => updateRule(index, { merge_policy: merge_policy as RoleMergePolicy })}
+                        options={mergeOptions}
+                        clearable={false}
+                      />
                     </label>
 
                     <div className="flex items-end justify-end gap-2">
@@ -289,31 +314,30 @@ export default function RequiredRolesSettingsPage() {
                     {rule.trigger_type === "category" ? (
                       <label className="text-xs font-black text-gray-600">
                         קטגוריה
-                        <select value={rule.category_key || ""} onChange={(event) => updateRule(index, { category_key: event.target.value })} className="mt-1 h-10 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm font-bold outline-none">
-                          <option value="">בחר קטגוריה</option>
-                          {Object.entries(CATEGORIES).map(([key, category]) => (
-                            <option key={key} value={key}>
-                              {category.label}
-                            </option>
-                          ))}
-                        </select>
+                        <RuleSelect
+                          value={rule.category_key || ""}
+                          onChange={(category_key) => updateRule(index, { category_key })}
+                          options={Object.entries(CATEGORIES).map(([key, category]) => ({ value: key, label: category.label }))}
+                          placeholder="בחר קטגוריה"
+                        />
                       </label>
                     ) : null}
 
                     {rule.trigger_type === "event" ? (
                       <label className="text-xs font-black text-gray-600">
                         התרחשות
-                        <select value={`${rule.category_key || ""}:${rule.event_label || ""}`} onChange={(event) => {
-                          const selected = eventOptions.find((item) => item.key === event.target.value);
-                          updateRule(index, { category_key: selected?.categoryKey || null, event_label: selected?.eventLabel || null });
-                        }} className="mt-1 h-10 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm font-bold outline-none">
-                          <option value="">בחר התרחשות</option>
-                          {eventOptions.map((event) => (
-                            <option key={event.key} value={event.key}>
-                              {event.categoryLabel} - {event.eventLabel}
-                            </option>
-                          ))}
-                        </select>
+                        <RuleSelect
+                          value={`${rule.category_key || ""}:${rule.event_label || ""}`}
+                          onChange={(key) => {
+                            const selected = eventOptions.find((item) => item.key === key);
+                            updateRule(index, { category_key: selected?.categoryKey || null, event_label: selected?.eventLabel || null });
+                          }}
+                          options={eventOptions.map((event) => ({
+                            value: event.key,
+                            label: `${event.categoryLabel} - ${event.eventLabel}`,
+                          }))}
+                          placeholder="בחר התרחשות"
+                        />
                       </label>
                     ) : null}
 
@@ -355,33 +379,30 @@ export default function RequiredRolesSettingsPage() {
                     </label>
                     <label className="text-xs font-black text-gray-600">
                       סוג
-                      <select value={rule.kind} onChange={(event) => updateAssignmentRule(index, { kind: event.target.value as RequiredAssignmentKind })} className="mt-1 h-10 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm font-bold outline-none">
-                        {assignmentKindOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                      <RuleSelect
+                        value={rule.kind}
+                        onChange={(kind) => updateAssignmentRule(index, { kind: kind as RequiredAssignmentKind })}
+                        options={assignmentKindOptions}
+                        clearable={false}
+                      />
                     </label>
                     <label className="text-xs font-black text-gray-600">
                       מתי נפתח
-                      <select value={rule.trigger_type} onChange={(event) => updateAssignmentRule(index, { trigger_type: event.target.value as RoleTriggerType })} className="mt-1 h-10 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm font-bold outline-none">
-                        {triggerOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                      <RuleSelect
+                        value={rule.trigger_type}
+                        onChange={(trigger_type) => updateAssignmentRule(index, { trigger_type: trigger_type as RoleTriggerType })}
+                        options={triggerOptions}
+                        clearable={false}
+                      />
                     </label>
                     <label className="text-xs font-black text-gray-600">
                       קהל יעד
-                      <select value={rule.audience} onChange={(event) => updateAssignmentRule(index, { audience: event.target.value as RequiredAssignmentAudience })} className="mt-1 h-10 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm font-bold outline-none">
-                        {audienceOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                      <RuleSelect
+                        value={rule.audience}
+                        onChange={(audience) => updateAssignmentRule(index, { audience: audience as RequiredAssignmentAudience })}
+                        options={audienceOptions}
+                        clearable={false}
+                      />
                     </label>
                     <label className="flex items-center gap-2 self-end rounded-2xl border border-gray-100 bg-white px-3 py-3 text-xs font-black text-gray-600">
                       <input type="checkbox" checked={rule.creates_items} onChange={(event) => updateAssignmentRule(index, { creates_items: event.target.checked })} />
@@ -406,34 +427,29 @@ export default function RequiredRolesSettingsPage() {
                     {rule.trigger_type === "category" ? (
                       <label className="text-xs font-black text-gray-600">
                         קטגוריה
-                        <select value={rule.category_key || ""} onChange={(event) => updateAssignmentRule(index, { category_key: event.target.value })} className="mt-1 h-10 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm font-bold outline-none">
-                          <option value="">בחר קטגוריה</option>
-                          {Object.entries(CATEGORIES).map(([key, category]) => (
-                            <option key={key} value={key}>
-                              {category.label}
-                            </option>
-                          ))}
-                        </select>
+                        <RuleSelect
+                          value={rule.category_key || ""}
+                          onChange={(category_key) => updateAssignmentRule(index, { category_key })}
+                          options={Object.entries(CATEGORIES).map(([key, category]) => ({ value: key, label: category.label }))}
+                          placeholder="בחר קטגוריה"
+                        />
                       </label>
                     ) : null}
                     {rule.trigger_type === "event" ? (
                       <label className="text-xs font-black text-gray-600">
                         התרחשות
-                        <select
+                        <RuleSelect
                           value={`${rule.category_key || ""}:${rule.event_label || ""}`}
-                          onChange={(event) => {
-                            const selected = eventOptions.find((item) => item.key === event.target.value);
+                          onChange={(key) => {
+                            const selected = eventOptions.find((item) => item.key === key);
                             updateAssignmentRule(index, { category_key: selected?.categoryKey || null, event_label: selected?.eventLabel || null });
                           }}
-                          className="mt-1 h-10 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm font-bold outline-none"
-                        >
-                          <option value="">בחר התרחשות</option>
-                          {eventOptions.map((event) => (
-                            <option key={event.key} value={event.key}>
-                              {event.categoryLabel} - {event.eventLabel}
-                            </option>
-                          ))}
-                        </select>
+                          options={eventOptions.map((event) => ({
+                            value: event.key,
+                            label: `${event.categoryLabel} - ${event.eventLabel}`,
+                          }))}
+                          placeholder="בחר התרחשות"
+                        />
                       </label>
                     ) : null}
                   </div>

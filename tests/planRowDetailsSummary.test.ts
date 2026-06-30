@@ -21,6 +21,7 @@ describe("planRowDetailsSummary", () => {
       responsibilities: 2,
       purchase: 1,
       equipment: 2,
+      designs: 0,
       prints: 0,
       guidelines: 1,
     });
@@ -30,6 +31,12 @@ describe("planRowDetailsSummary", () => {
       prints: [{ id: "p1" }, { id: "p2" }],
     });
     expect(formatRowDetailsSummaryLine(withPrints)).toBe("2 הדפסות");
+
+    const withDesigns = computeRowDetailsSummaryCounts({
+      designs: [{ id: "d1" }],
+      prints: [{ id: "p1" }],
+    });
+    expect(formatRowDetailsSummaryLine(withDesigns)).toBe("1 עיצובים · 1 הדפסות");
   });
 
   it("returns null when all counts are zero", () => {

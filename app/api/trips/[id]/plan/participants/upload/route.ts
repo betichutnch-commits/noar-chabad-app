@@ -3,6 +3,7 @@ import type { User } from "@supabase/supabase-js";
 import * as XLSX from "xlsx";
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
 import { canEditTripPlan } from "@/lib/tripPlan";
+import { normalizeStaffGender } from "@/lib/staffGender";
 
 type RouteContext = { params: Promise<{ id: string }> };
 type ExcelRow = Record<string, unknown>;
@@ -61,9 +62,15 @@ export async function POST(request: Request, { params }: RouteContext) {
       const name = [firstName, lastName].filter(Boolean).join(" ") || pick(row, ["שם מלא", "שם", "Name", "Full Name"]);
       if (!name) return null;
       const staffRole = pick(row, ["תפקיד", "Role", "Staff Role", "staffRole"]);
+      const participantType = uploadTypeOverride || normalizeType(pick(row, ["סוג", "type", "participant_type"]));
       const fatherPhone = pick(row, ["טל' אבא", "טלפון אבא", "Father Phone"]);
       const motherPhone = pick(row, ["טל' אמא", "טלפון אמא", "Mother Phone"]);
-      const phone = motherPhone || fatherPhone || pick(row, ["טלפון", "נייד", "Phone"]);
+      const personalPhone = pick(row, ["טלפון אישי", "Personal Phone"]);
+      const genericPhone = pick(row, ["נייד", "טלפון", "Phone"]);
+      const phone =
+        participantType === "staff"
+          ? personalPhone || genericPhone || motherPhone || fatherPhone
+          : motherPhone || fatherPhone || personalPhone || genericPhone;
       const identity = pick(row, ["ת.ז.", "תז", "מספר זהות", "ID"]);
       const birthDate = pick(row, ["ת. לידה", "תאריך לידה", "Birth Date", "birthDate"]);
       const grade = pick(row, ["כיתה", "Grade"]);
@@ -71,10 +78,13 @@ export async function POST(request: Request, { params }: RouteContext) {
       const fatherName = pick(row, ["שם אבא", "Father Name"]);
       const motherName = pick(row, ["שם אמא", "Mother Name"]);
       const fatherEmail = pick(row, ["דוא\"ל אבא", "דואל אבא", "אימייל אבא", "Father Email"]);
+      const personalEmail = pick(row, ["דוא\"ל אישי", "דוא\"ל", "אימייל", "Email"]);
+      const staffEmail = participantType === "staff" ? personalEmail || fatherEmail : fatherEmail;
       const medicalNotes = pick(row, ["רגישות רפואית", "רגישויות רפואיות", "Medical Notes", "Allergies"]);
       const paymentStatus = pick(row, ["תשלום", "סטטוס תשלום", "שילם", "Payment Status"]);
       const parentApproval = pick(row, ["אישור השתתפות", "אישור הורים", "אישור הורה", "Parent Approval"]);
       const policeApproval = pick(row, ["אישור משטרה", "Police Approval", "policeApproval"]);
+      const gender = pick(row, ["מגדר", "Gender", "gender"]);
       const raw = {
         staffRole,
         firstName,
@@ -83,11 +93,14 @@ export async function POST(request: Request, { params }: RouteContext) {
         birthDate,
         grade,
         branch,
+        gender: participantType === "staff" ? normalizeStaffGender(gender) : "",
         fatherName,
         fatherPhone,
         motherName,
         motherPhone,
-        fatherEmail,
+        personalPhone: participantType === "staff" ? personalPhone || genericPhone || "" : "",
+        personalEmail: participantType === "staff" ? staffEmail : "",
+        fatherEmail: participantType === "staff" ? "" : fatherEmail,
         medicalNotes,
         paymentStatus,
         parentApproval,
@@ -97,10 +110,13 @@ export async function POST(request: Request, { params }: RouteContext) {
         trip_id: id,
         source: "excel",
         source_record_id: `${identity || name}|${phone}|${index + 2}`,
-        participant_type: uploadTypeOverride || normalizeType(pick(row, ["סוג", "type", "participant_type"])),
+        participant_type: participantType,
         full_name: name,
         phone: phone || null,
-        contact_phone: fatherPhone || motherPhone || pick(row, ["טלפון הורה/איש קשר", "טלפון הורה", "איש קשר", "Contact Phone"]) || null,
+        contact_phone:
+          participantType === "staff"
+            ? fatherPhone || motherPhone || null
+            : fatherPhone || motherPhone || pick(row, ["טלפון הורה/איש קשר", "טלפון הורה", "איש קשר", "Contact Phone"]) || null,
         registration_status: parentApproval || null,
         payment_status: paymentStatus || null,
         parent_approval: parentApproval || null,

@@ -32,7 +32,7 @@ export const PLAN_TABLE_TOUR_SECTION_OPTIONS: Array<{
   {
     id: "schedule",
     title: "תכנון הלו״ז",
-    description: "טבלת האירועים, עמודות הבסיס והאייקונים, בטיחות, ציוד והדפסות.",
+    description: "טבלת האירועים, עמודות הבסיס והאייקונים, בטיחות, ציוד, עיצובים והדפסות.",
   },
   {
     id: "participants",
@@ -47,7 +47,7 @@ export const PLAN_TABLE_TOUR_SECTION_OPTIONS: Array<{
   {
     id: "quick-actions",
     title: "שורת האייקונים",
-    description: "מסמכי תיק, חירום, ציוד, רכש, סיכונים, קשר, תפקידים והדפסות.",
+    description: "מסמכי תיק, חירום, ציוד, רכש, סיכונים, קשר, תפקידים, עיצובים והדפסות.",
   },
 ];
 
@@ -57,7 +57,7 @@ const SECTION_INTRO: Record<PlanTableTourSection, PlanTableTourStep> = {
     section: "schedule",
     placement: "center",
     title: "הדרכה: לו״ז מפורט",
-    body: "נעבור על טבלת האירועים — שדות הבסיס, עמודות האייקונים, בטיחות, ציוד והפעולות.",
+    body: "נעבור על טבלת האירועים — שדות הבסיס, עמודות האייקונים, בטיחות, ציוד, עיצובים והפעולות.",
   },
   participants: {
     id: "intro-participants",
@@ -240,6 +240,15 @@ export const PLAN_TABLE_TOUR_STEPS: PlanTableTourStep[] = [
     body: "מסמכי הנחיה, רגולציה וחוזרי מנכ״ל הרלוונטיים לתיאום התכנון והבטיחות.",
   },
   {
+    id: "quick-action-designs",
+    target: "quick-action-designs",
+    section: "quick-actions",
+    tab: "schedule",
+    placement: "bottom",
+    title: "עיצובים",
+    body: "כל פריטי העיצוב מהלו״ז: מעצב, גודל, סטטוס וקישור להדפסה — בתצוגה מרוכזת לניהול העיצוב לפני הדפוס.",
+  },
+  {
     id: "quick-action-prints",
     target: "quick-action-prints",
     section: "quick-actions",
@@ -336,7 +345,7 @@ export const PLAN_TABLE_TOUR_STEPS: PlanTableTourStep[] = [
     tab: "schedule",
     placement: "bottom",
     title: "הדפסות",
-    body: "קבצים להדפסה, כמות, גודל, בית דפוס וסטטוס. שם בית הדפוס נמשך לרשימת בתי הדפוס המרוכזת.",
+    body: "עיצוב והדפסה באותה עמודה: לחיצה על אייקון המדפסת פותחת את שני החלקים יחד — עיצוב למעלה והדפסה למטה.",
   },
   {
     id: "notes",

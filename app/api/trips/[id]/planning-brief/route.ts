@@ -6,6 +6,7 @@ import { isPlanningApprovedStatus, readCoordinatorPlanningMeta } from "@/lib/coo
 import type { AutofillPlanRow } from "@/lib/tripDocumentAutofill";
 import { canEditTripPlan } from "@/lib/tripPlan";
 import { fetchApprovedRequiredStaffPlan } from "@/lib/tripRequiredRoles";
+import { getSustainabilityMotifsEnabledFromDb } from "@/lib/sustainability/settings";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -40,13 +41,14 @@ export async function GET(_request: Request, { params }: RouteContext) {
 
   const tripDetails = (trip.details && typeof trip.details === "object" ? trip.details : {}) as Record<string, unknown>;
 
-  const [approvedStaffRows, documentsRes, planRes] = await Promise.all([
+  const [approvedStaffRows, documentsRes, planRes, sustainabilityMotifsEnabled] = await Promise.all([
     fetchApprovedRequiredStaffPlan(supabase, id),
     supabase
       .from("trip_plan_document_overrides")
       .select("document_key, status, pdf_url, form_data")
       .eq("trip_id", id),
     supabase.from("trip_plans").select("id").eq("trip_id", id).maybeSingle(),
+    getSustainabilityMotifsEnabledFromDb(supabase),
   ]);
 
   let planRows: AutofillPlanRow[] = [];
@@ -82,6 +84,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
       form_data?: Record<string, unknown> | null;
     }>,
     planRows,
+    sustainabilityMotifsEnabled,
   });
 
   const meta = readCoordinatorPlanningMeta(tripDetails);

@@ -5,6 +5,9 @@ import { assigneePersistPayload, loadTripStaffRoster, normalizeAssigneeForPersis
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
 import { canEditTripPlan } from "@/lib/tripPlan";
 
+const isMissingDesignsTableError = (message?: string | null) =>
+  Boolean(message && (message.includes("trip_plan_row_designs") || message.includes("design_id")));
+
 type RouteContext = { params: Promise<{ id: string; rowId: string }> };
 type Body = {
   day_index?: number | null;
@@ -218,25 +221,33 @@ const readFullRow = async (supabase: Awaited<ReturnType<typeof createSupabaseSer
 
   const printsWithStatus = await supabase
     .from("trip_plan_row_prints")
-    .select("id, row_id, order_index, file_path, file_name, quantity, print_size, page_type, print_location, file_size_bytes, notes, status")
+    .select("id, row_id, order_index, file_path, file_name, quantity, print_size, page_type, print_location, file_size_bytes, notes, status, design_id")
     .eq("row_id", rowId)
     .order("order_index", { ascending: true });
   const printsWithFields =
     printsWithStatus.error && String(printsWithStatus.error.message || "").match(/status/)
       ? await supabase
         .from("trip_plan_row_prints")
-        .select("id, row_id, order_index, file_path, file_name, quantity, print_size, page_type, print_location, file_size_bytes, notes")
+        .select("id, row_id, order_index, file_path, file_name, quantity, print_size, page_type, print_location, file_size_bytes, notes, design_id")
         .eq("row_id", rowId)
         .order("order_index", { ascending: true })
       : printsWithStatus;
   const printsRes =
-    printsWithFields.error && String(printsWithFields.error.message || "").match(/print_size|page_type|print_location/)
+    printsWithFields.error && String(printsWithFields.error.message || "").match(/print_size|page_type|print_location|design_id/)
       ? await supabase
           .from("trip_plan_row_prints")
           .select("id, row_id, order_index, file_path, file_name, quantity, file_size_bytes, notes")
           .eq("row_id", rowId)
           .order("order_index", { ascending: true })
       : printsWithFields;
+
+  const designsRes = await supabase
+    .from("trip_plan_row_designs")
+    .select(
+      "id, row_id, order_index, document_name, designer_name, size_settings, notes, content_mode, document_text, designer_instructions, brief_file_path, brief_file_name, output_file_path, output_file_name, status",
+    )
+    .eq("row_id", rowId)
+    .order("order_index", { ascending: true });
 
   const tasksWithRefs = await supabase
     .from("trip_plan_row_tasks")
@@ -265,6 +276,7 @@ const readFullRow = async (supabase: Awaited<ReturnType<typeof createSupabaseSer
       safety: safetyRes.data || [],
       equipment: equipmentRes.data || [],
       prints: printsRes.data || [],
+      designs: designsRes.error && isMissingDesignsTableError(designsRes.error.message) ? [] : designsRes.data || [],
       tasks: tasksRes.error && isMissingTasksTableError(tasksRes.error.message) ? [] : tasksRes.data || [],
     },
     error: null,

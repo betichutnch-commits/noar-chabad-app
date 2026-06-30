@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Rubik } from "next/font/google";
 import "./globals.css";
 import AutoLogout from "@/components/AutoLogout";
+import { AppProviders } from "@/components/AppProviders";
 
 const rubik = Rubik({
   subsets: ["hebrew", "latin"],
@@ -38,9 +39,11 @@ export default function RootLayout({
         {/* רכיב הניתוק האוטומטי */}
         <AutoLogout />
         
-        <main className="min-h-screen flex flex-col">
-           {children}
-        </main>
+        <AppProviders>
+          <main className="min-h-screen flex flex-col">
+             {children}
+          </main>
+        </AppProviders>
       </body>
     </html>
   );
