@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Download, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { registerServiceWorker } from "@/lib/pushClient";
 
-const DISMISS_KEY = "pwa-install-dismissed-at";
-const DISMISS_DAYS = 14;
+/** Once dismissed (X), never show again on this browser. */
+const DISMISS_KEY = "pwa-install-dismissed";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -21,15 +21,19 @@ function isStandalone(): boolean {
   );
 }
 
-function wasRecentlyDismissed(): boolean {
+function wasDismissed(): boolean {
   try {
-    const raw = localStorage.getItem(DISMISS_KEY);
-    if (!raw) return false;
-    const at = Number(raw);
-    if (!Number.isFinite(at)) return false;
-    return Date.now() - at < DISMISS_DAYS * 24 * 60 * 60 * 1000;
+    return localStorage.getItem(DISMISS_KEY) === "1";
   } catch {
     return false;
+  }
+}
+
+function markDismissed() {
+  try {
+    localStorage.setItem(DISMISS_KEY, "1");
+  } catch {
+    /* ignore */
   }
 }
 
@@ -37,14 +41,17 @@ export function PwaInstallPrompt() {
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
   const [visible, setVisible] = useState(false);
   const [installing, setInstalling] = useState(false);
+  const dismissedRef = useRef(false);
 
   useEffect(() => {
     void registerServiceWorker().catch(() => {});
 
-    if (isStandalone() || wasRecentlyDismissed()) return;
+    dismissedRef.current = wasDismissed();
+    if (isStandalone() || dismissedRef.current) return;
 
     const onBeforeInstall = (event: Event) => {
       event.preventDefault();
+      if (dismissedRef.current || wasDismissed() || isStandalone()) return;
       setDeferred(event as BeforeInstallPromptEvent);
       setVisible(true);
     };
@@ -54,13 +61,10 @@ export function PwaInstallPrompt() {
   }, []);
 
   const dismiss = () => {
+    dismissedRef.current = true;
+    markDismissed();
     setVisible(false);
     setDeferred(null);
-    try {
-      localStorage.setItem(DISMISS_KEY, String(Date.now()));
-    } catch {
-      /* ignore */
-    }
   };
 
   const install = async () => {
@@ -70,6 +74,8 @@ export function PwaInstallPrompt() {
       await deferred.prompt();
       await deferred.userChoice;
     } finally {
+      dismissedRef.current = true;
+      markDismissed();
       setInstalling(false);
       setVisible(false);
       setDeferred(null);
