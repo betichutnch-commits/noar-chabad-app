@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { RecipientSelector } from './types'
+import { hqRolesIncludeBranchOfficer, resolveHqRolesFromMeta } from '@/lib/hqRoles'
 
 export function normalizeDepartmentKey(department?: string | null): string {
   return String(department || '')
@@ -62,9 +63,13 @@ export async function resolveRecipientUserIds(
       >
       const role = String(meta.role || '').toLowerCase().trim()
       const department = normalizeDepartmentKey(String(meta.department || ''))
-      const canDeptReview = meta.can_dept_review === true || String(meta.can_dept_review || '').toLowerCase() === 'true'
+      const hqRoles = resolveHqRolesFromMeta(meta)
+      const canDeptReview =
+        hqRolesIncludeBranchOfficer(hqRoles) ||
+        meta.can_dept_review === true ||
+        String(meta.can_dept_review || '').toLowerCase() === 'true'
       const isLegacyOfficer = role === 'dept_trips_officer'
-      const isCapabilityOfficer = role === 'dept_staff' && canDeptReview
+      const isCapabilityOfficer = (role === 'dept_staff' || role === 'dept_trips_officer') && canDeptReview
       return department === dept && (isLegacyOfficer || isCapabilityOfficer)
     })
     const officerIds = dedupe(officers.map((r) => (r as { id: string }).id))

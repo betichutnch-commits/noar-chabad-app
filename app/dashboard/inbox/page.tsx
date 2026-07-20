@@ -12,6 +12,8 @@ import {
 import { useUser } from '@/hooks/useUser'
 import { useSignedUrl } from '@/hooks/useSignedUrl';
 import { parseMessageContent, isBugCategory, normalizeMessageStatus, getInboxStatusLabel, parseMessageSubject } from '@/lib/inbox';
+import { formatNotificationTitle } from '@/lib/notificationDisplay';
+import { NotificationPreviewText } from '@/components/notifications/NotificationPreviewText';
 import Image from 'next/image';
 
 // רכיב לתצוגת תמונה מאובטחת
@@ -296,11 +298,16 @@ export default function InboxPage() {
                                 onClick={() => toggleExpand(note.id, note.is_read)}
                                 className={`w-full text-right p-4 flex items-center gap-4 cursor-pointer ${!note.is_read ? 'bg-cyan-50/30' : ''}`}
                                 aria-expanded={isExpanded}
-                                aria-label={`פתיחת הודעה: ${note.title || 'ללא כותרת'}`}
+                                aria-label={`פתיחת הודעה: ${formatNotificationTitle(note.title || 'ללא כותרת', note.message)}`}
                               >
                                 <div className="shrink-0">{getIcon(note.type || 'info')}</div>
                                 <div className="flex-1 min-w-0 grid grid-cols-1 gap-2 items-center">
-                                  <div className={`text-sm truncate ${!note.is_read ? 'text-gray-900 font-bold' : 'text-gray-600'}`}>{note.title}</div>
+                                  <NotificationPreviewText
+                                    title={note.title || 'ללא כותרת'}
+                                    message={note.message}
+                                    className={`text-sm truncate ${!note.is_read ? 'text-gray-900 font-bold' : 'text-gray-600'}`}
+                                    tripNameClassName="truncate text-xs font-bold text-brand-cyan"
+                                  />
                                   <div className="text-xs text-gray-400 flex items-center justify-end gap-2">
                                     <span>{formatDate(note.created_at || '')}</span>
                                     {isExpanded ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
@@ -344,7 +351,12 @@ export default function InboxPage() {
                                 <div className="flex items-center gap-3">
                                   <div className="shrink-0">{getIcon(note.type || 'info')}</div>
                                   <div className="min-w-0 flex-1">
-                                    <div className={`text-sm truncate ${!note.is_read ? 'font-black text-gray-900' : 'text-gray-700'}`}>{note.title}</div>
+                                    <NotificationPreviewText
+                                      title={note.title || 'ללא כותרת'}
+                                      message={note.message}
+                                      className={`text-sm truncate ${!note.is_read ? 'font-black text-gray-900' : 'text-gray-700'}`}
+                                      tripNameClassName="truncate text-xs font-bold text-brand-cyan"
+                                    />
                                     <div className="text-[11px] text-gray-400 mt-1">{formatDate(note.created_at || '')}</div>
                                   </div>
                                 </div>
@@ -355,7 +367,12 @@ export default function InboxPage() {
                         <div className="col-span-2 p-6 overflow-y-auto">
                           {selectedIncoming ? (
                             <div className="space-y-4">
-                              <h3 className="text-xl font-black text-gray-800">{selectedIncoming.title || 'ללא כותרת'}</h3>
+                              <NotificationPreviewText
+                                title={selectedIncoming.title || 'ללא כותרת'}
+                                message={selectedIncoming.message}
+                                className="text-xl font-black text-gray-800"
+                                tripNameClassName="text-sm font-bold text-brand-cyan mb-1"
+                              />
                               <div className="text-xs text-gray-400">{formatDate(selectedIncoming.created_at || '')}</div>
                               <div className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap">{selectedIncoming.message}</div>
                               {selectedIncoming.actions?.length ? (

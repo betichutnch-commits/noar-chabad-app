@@ -12,6 +12,9 @@ import type { PlanRowFollowUpActionId, PlanRowFollowUpMeta } from "@/lib/planRow
 
 type PlanDesignQuickDialogProps = {
   draft: PlanDesignDraft;
+  mode?: "create" | "edit";
+  existingBriefFileName?: string | null;
+  existingOutputFileName?: string | null;
   uploading?: boolean;
   designerSuggestions: string[];
   fieldClass: string;
@@ -26,6 +29,9 @@ type PlanDesignQuickDialogProps = {
 
 export function PlanDesignQuickDialog({
   draft,
+  mode = "create",
+  existingBriefFileName = null,
+  existingOutputFileName = null,
   uploading = false,
   designerSuggestions,
   fieldClass,
@@ -51,7 +57,7 @@ export function PlanDesignQuickDialog({
 
   return (
     <PlanQuickDialog
-      title="הוספת עיצוב"
+      title={mode === "edit" ? "עריכת עיצוב" : "הוספת עיצוב"}
       onClose={onClose}
       scrollable
       footer={
@@ -74,7 +80,7 @@ export function PlanDesignQuickDialog({
                 disabled={uploading || !draft.document_name.trim()}
                 className="rounded-lg bg-fuchsia-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-fuchsia-700 disabled:opacity-50"
               >
-                {uploading ? "שומר..." : "הוסף לשורה"}
+                {uploading ? "שומר..." : mode === "edit" ? "שמור שינויים" : "הוסף לשורה"}
               </button>
             </div>
           )}
@@ -171,7 +177,9 @@ export function PlanDesignQuickDialog({
               className="sr-only"
               onChange={(e) => onDraftChange({ brief_file: e.target.files?.[0] || null })}
             />
-            <span className="truncate text-xs font-bold text-gray-600">{draft.brief_file?.name || "לא נבחר קובץ"}</span>
+            <span className="truncate text-xs font-bold text-gray-600">
+              {draft.brief_file?.name || existingBriefFileName || "לא נבחר קובץ"}
+            </span>
           </div>
         )}
       </div>
@@ -186,7 +194,9 @@ export function PlanDesignQuickDialog({
           className="sr-only"
           onChange={(e) => onDraftChange({ output_file: e.target.files?.[0] || null })}
         />
-        <span className="truncate text-xs font-bold text-gray-600">{draft.output_file?.name || "לא נבחר קובץ"}</span>
+        <span className="truncate text-xs font-bold text-gray-600">
+          {draft.output_file?.name || existingOutputFileName || "לא נבחר קובץ"}
+        </span>
       </div>
     </PlanQuickDialog>
   );

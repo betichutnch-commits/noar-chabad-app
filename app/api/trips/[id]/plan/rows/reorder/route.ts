@@ -51,13 +51,23 @@ export async function PUT(request: Request, { params }: RouteContext) {
     return NextResponse.json({ error: "Invalid row order payload" }, { status: 400 });
   }
 
-  const updates = await Promise.all(
+  // Unique (plan_id, order_index): move to temporary negative indices first,
+  // otherwise parallel/swapped updates collide and the whole reorder fails.
+  const tempUpdates = await Promise.all(
+    rowIds.map((rowId, index) =>
+      supabase.from("trip_plan_rows").update({ order_index: -(index + 1) }).eq("id", rowId).eq("plan_id", planId),
+    ),
+  );
+  const tempError = tempUpdates.find((result) => result.error)?.error;
+  if (tempError) return NextResponse.json({ error: tempError.message }, { status: 500 });
+
+  const finalUpdates = await Promise.all(
     rowIds.map((rowId, index) =>
       supabase.from("trip_plan_rows").update({ order_index: index }).eq("id", rowId).eq("plan_id", planId),
     ),
   );
-  const updateError = updates.find((result) => result.error)?.error;
-  if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
+  const finalError = finalUpdates.find((result) => result.error)?.error;
+  if (finalError) return NextResponse.json({ error: finalError.message }, { status: 500 });
 
   return NextResponse.json({ ok: true, row_ids: rowIds });
 }

@@ -479,3 +479,79 @@ export function evaluateRowRegulationBrief(input: {
     planningDocumentHints,
   };
 }
+
+/** מאחד כמה סיכומי שורות לסיכום דרישות כולל לטיול/לו״ז */
+export function aggregateRowRegulationBriefs(briefs: RowRegulationBrief[]): RowRegulationBrief | null {
+  if (!briefs.length) return null;
+
+  const linkByHref = new Map<string, RowRegulationBriefLink>();
+  for (const brief of briefs) {
+    for (const link of brief.circularLinks) {
+      if (!linkByHref.has(link.href)) linkByHref.set(link.href, link);
+    }
+  }
+
+  const medicBrief = briefs.reduce<RowRegulationBrief | null>((best, brief) => {
+    if (!brief.medicRequired && !brief.needsFirstAidKit) return best;
+    if (!best) return brief;
+    const bestCount = best.medicCount ?? (best.needsFirstAidKit ? 0 : -1);
+    const nextCount = brief.medicCount ?? (brief.needsFirstAidKit ? 0 : -1);
+    return nextCount >= bestCount ? brief : best;
+  }, null);
+
+  const adultBrief = briefs.reduce<RowRegulationBrief | null>((best, brief) => {
+    if (!brief.adultStaffRequired) return best;
+    if (!best) return brief;
+    return (brief.adultStaffCount ?? 0) >= (best.adultStaffCount ?? 0) ? brief : best;
+  }, null);
+
+  const securityBrief = briefs.reduce<RowRegulationBrief | null>((best, brief) => {
+    if (!brief.securityRequired) return best;
+    if (!best) return brief;
+    return (brief.securityCount ?? 0) >= (best.securityCount ?? 0) ? brief : best;
+  }, null);
+
+  const ageBrief = briefs.find((brief) => brief.ageEligible === false) || null;
+  const coordinationLeadDays = briefs.reduce<number | null>((max, brief) => {
+    if (brief.coordinationLeadDays == null) return max;
+    if (max == null) return brief.coordinationLeadDays;
+    return Math.max(max, brief.coordinationLeadDays);
+  }, null);
+
+  const unique = (values: string[]) => Array.from(new Set(values.filter(Boolean)));
+
+  return {
+    activityLabel: "סיכום דרישות ללו״ז",
+    circularSectionId: briefs.find((b) => b.circularSectionId)?.circularSectionId ?? null,
+    circularTitle: briefs.find((b) => b.circularTitle)?.circularTitle ?? null,
+    circularLinks: Array.from(linkByHref.values()),
+    medicRequired: Boolean(medicBrief?.medicRequired),
+    medicCount: medicBrief?.medicCount ?? null,
+    medicEscortType: medicBrief?.medicEscortType ?? null,
+    medicEscortLabel: medicBrief?.medicEscortLabel ?? null,
+    medicNotes: medicBrief?.medicNotes ?? null,
+    medicSummary: medicBrief?.medicSummary ?? null,
+    needsFirstAidKit: briefs.some((b) => b.needsFirstAidKit),
+    adultStaffRequired: Boolean(adultBrief?.adultStaffRequired),
+    adultStaffCount: adultBrief?.adultStaffCount ?? null,
+    adultStaffSummary: adultBrief?.adultStaffSummary ?? null,
+    adultStaffRatioLabel: adultBrief?.adultStaffRatioLabel ?? null,
+    securityRequired: Boolean(securityBrief?.securityRequired),
+    securityCount: securityBrief?.securityCount ?? null,
+    securityNotes: securityBrief?.securityNotes ?? null,
+    minAge: ageBrief?.minAge ?? null,
+    maxAge: ageBrief?.maxAge ?? null,
+    ageEligible: ageBrief ? false : null,
+    ageMessage: ageBrief?.ageMessage ?? null,
+    needsLicense: briefs.some((b) => b.needsLicense),
+    needsInsurance: briefs.some((b) => b.needsInsurance),
+    needsMokedTeva: briefs.some((b) => b.needsMokedTeva),
+    sensitiveLocation: briefs.some((b) => b.sensitiveLocation),
+    coordinationLeadDays,
+    coordinationLabels: unique(briefs.flatMap((b) => b.coordinationLabels)),
+    needsParentConsent: briefs.some((b) => b.needsParentConsent),
+    checklistHighlights: unique(briefs.flatMap((b) => b.checklistHighlights)).slice(0, 6),
+    planningDocumentHints: unique(briefs.flatMap((b) => b.planningDocumentHints)).slice(0, 6),
+  };
+}
+

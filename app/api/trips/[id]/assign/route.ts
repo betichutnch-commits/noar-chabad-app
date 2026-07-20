@@ -4,6 +4,7 @@ import { createSupabaseServiceRoleClient } from '@/lib/supabaseService'
 import { isManagerUser } from '@/lib/auth'
 import type { User } from '@supabase/supabase-js'
 import { notifyUserIds } from '@/lib/notifications'
+import { withTripNotificationTitle } from '@/lib/notificationDisplay'
 
 type RouteContext = { params: Promise<{ id: string }> }
 type Body = { assignee_id?: string | null }
@@ -86,7 +87,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     )
     await notifyUserIds([nextAssigneeId], {
       kind: 'trip.assigned_safety',
-      title: 'טיול שויך לטיפולך',
+      title: withTripNotificationTitle(String(trip.name || ''), 'שויך לטיפולך'),
       body: `${actorName} שייך אליך את הטיול "${trip.name}".`,
       url: `/manager/approvals/${trip.id}`,
       inAppType: 'assignment',

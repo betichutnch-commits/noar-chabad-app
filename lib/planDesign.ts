@@ -33,3 +33,27 @@ export const emptyPlanDesignDraft = (): PlanDesignDraft => ({
   output_file: null,
   status: "לביצוע",
 });
+
+export function planDesignToDraft(design: {
+  document_name: string;
+  designer_name?: string | null;
+  size_settings?: string | null;
+  notes?: string | null;
+  content_mode?: DesignContentMode | null;
+  document_text?: string | null;
+  designer_instructions?: string | null;
+  status?: string | null;
+}): PlanDesignDraft {
+  return {
+    document_name: design.document_name || "",
+    designer_name: design.designer_name || "",
+    size_settings: design.size_settings || "",
+    notes: design.notes || "",
+    content_mode: design.content_mode === "file" ? "file" : "text",
+    document_text: design.document_text || "",
+    designer_instructions: design.designer_instructions || "",
+    brief_file: null,
+    output_file: null,
+    status: design.status || "לביצוע",
+  };
+}

@@ -43,7 +43,13 @@ export function StaffAssigneePicker({
 }: StaffAssigneePickerProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
-  const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [menuPos, setMenuPos] = useState<{
+    left: number;
+    width: number;
+    maxHeight: number;
+    top?: number;
+    bottom?: number;
+  } | null>(null);
   const [newPersonName, setNewPersonName] = useState("");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
@@ -61,11 +67,26 @@ export function StaffAssigneePicker({
     return () => window.removeEventListener("mousedown", onPointerDown);
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    const onScrollOrResize = () => {
+      const rect = rootRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setMenuPos(computeMenuPosition(rect));
+    };
+    window.addEventListener("scroll", onScrollOrResize, true);
+    window.addEventListener("resize", onScrollOrResize);
+    return () => {
+      window.removeEventListener("scroll", onScrollOrResize, true);
+      window.removeEventListener("resize", onScrollOrResize);
+    };
+  }, [open]);
+
   const openMenu = () => {
     if (disabled) return;
     const rect = rootRef.current?.getBoundingClientRect();
     if (!rect) return;
-    setMenuPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+    setMenuPos(computeMenuPosition(rect));
     setOpen(true);
     setCreateError("");
   };
@@ -163,6 +184,32 @@ export function StaffAssigneePicker({
   );
 }
 
+const MENU_MAX_HEIGHT = 288;
+const MENU_VIEWPORT_PADDING = 12;
+const MENU_MIN_HEIGHT = 140;
+
+function computeMenuPosition(rect: DOMRect) {
+  const spaceBelow = window.innerHeight - rect.bottom - MENU_VIEWPORT_PADDING;
+  const spaceAbove = rect.top - MENU_VIEWPORT_PADDING;
+  const openAbove = spaceBelow < 180 && spaceAbove > spaceBelow;
+
+  if (openAbove) {
+    return {
+      bottom: window.innerHeight - rect.top + 4,
+      left: rect.left,
+      width: rect.width,
+      maxHeight: Math.max(MENU_MIN_HEIGHT, Math.min(MENU_MAX_HEIGHT, spaceAbove - 4)),
+    };
+  }
+
+  return {
+    top: rect.bottom + 4,
+    left: rect.left,
+    width: rect.width,
+    maxHeight: Math.max(MENU_MIN_HEIGHT, Math.min(MENU_MAX_HEIGHT, spaceBelow)),
+  };
+}
+
 function StaffAssigneeMenu({
   menuPos,
   mode,
@@ -178,7 +225,13 @@ function StaffAssigneeMenu({
   createError,
   tripId,
 }: {
-  menuPos: { top: number; left: number; width: number };
+  menuPos: {
+    left: number;
+    width: number;
+    maxHeight: number;
+    top?: number;
+    bottom?: number;
+  };
   mode: "planning" | "roster";
   planningRoles: PlanningRoleOption[];
   rosterPeople: StaffRosterEntry[];
@@ -195,8 +248,14 @@ function StaffAssigneeMenu({
   return (
     <div
       id="staff-assignee-picker-menu"
-      className="fixed z-[300] max-h-72 min-w-[12rem] overflow-auto rounded-2xl border border-violet-200 bg-white p-1.5 shadow-2xl ring-2 ring-violet-100"
-      style={{ top: menuPos.top, left: menuPos.left, width: Math.max(menuPos.width, 220) }}
+      className="fixed z-[300] min-w-[12rem] overflow-y-auto overscroll-contain rounded-2xl border border-violet-200 bg-white p-1.5 pb-2 shadow-2xl ring-2 ring-violet-100"
+      style={{
+        top: menuPos.top,
+        bottom: menuPos.bottom,
+        left: menuPos.left,
+        width: Math.max(menuPos.width, 220),
+        maxHeight: menuPos.maxHeight,
+      }}
     >
       <button
         type="button"

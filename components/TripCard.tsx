@@ -143,6 +143,8 @@ export const TripCard = ({
   const isPast = new Date(trip.start_date) < new Date(new Date().setHours(0, 0, 0, 0));
   const isCancelled = trip.status === "cancelled";
   const isManagerView = viewerContext === "manager";
+  const isApprovedForPlanning =
+    trip.status === "approved" || trip.status === "approved_for_execution";
 
   const showCoordinatorMeta =
     showCoordinatorMetaProp !== undefined ? showCoordinatorMetaProp : isManagerView;
@@ -152,9 +154,10 @@ export const TripCard = ({
   const detailTarget =
     isManagerView && manageHref
       ? manageHref
-      : trip.status === "approved" || trip.status === "approved_for_execution"
-        ? `/dashboard?planning=${trip.id}`
+      : isApprovedForPlanning
+        ? `/dashboard/trip/${trip.id}/plan`
         : `/dashboard/trip/${trip.id}`;
+  const primaryActionLabel = !isManagerView && isApprovedForPlanning ? "לתכנון" : "לפרטים";
 
   const endDate = typeof d.endDate === "string" ? d.endDate : trip.start_date || "";
   const smartDate = getSmartDateDisplay(trip.start_date || "", endDate);
@@ -313,7 +316,7 @@ export const TripCard = ({
                   }}
                   className="py-2 px-3 bg-white border border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1"
                 >
-                  <ArrowRight size={14} /> לפרטים
+                  <ArrowRight size={14} /> {primaryActionLabel}
                 </button>
               </div>
             ) : null}
@@ -435,7 +438,7 @@ export const TripCard = ({
               }}
               className="flex-1 py-2 bg-white border border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1"
             >
-              <ArrowRight size={14} /> לפרטים
+              <ArrowRight size={14} /> {primaryActionLabel}
             </button>
           </>
         ) : isDraft ? (
@@ -466,18 +469,18 @@ export const TripCard = ({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                router.push(
-                  trip.status === "approved" || trip.status === "approved_for_execution"
-                    ? `/dashboard?planning=${trip.id}`
-                    : `/dashboard/trip/${trip.id}`,
-                );
+                router.push(detailTarget);
               }}
-              className="w-full py-2 bg-white border border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1"
+              className={`w-full py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1 shadow-sm ${
+                isApprovedForPlanning
+                  ? "bg-brand-cyan text-white hover:bg-cyan-600"
+                  : "bg-white border border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700"
+              }`}
             >
-              <ArrowRight size={14} /> לפרטים
+              <ArrowRight size={14} /> {primaryActionLabel}
             </button>
 
-            {onCancelTrip && !isPast && !isCancelled ? (
+            {onCancelTrip && !isCancelled ? (
               <button
                 onClick={(e) => {
                   e.stopPropagation();

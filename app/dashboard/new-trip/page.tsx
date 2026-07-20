@@ -10,7 +10,7 @@ import { Tooltip } from '@/components/ui/Tooltip'
 import { 
   MapPin, AlertTriangle, Save, CheckCircle, FileUp, 
   Flag, ChevronDown, ChevronUp, Lock, Unlock, Check, Trash2, Loader2, Link as LinkIcon,
-  Home, ArrowRight, FileEdit, User, Phone, CreditCard, Mail, Plus, X, Briefcase, UserPlus, Edit2, MessageSquare
+  Home, ArrowRight, FileEdit, User, Phone, CreditCard, Mail, Plus, X, Briefcase, UserPlus, Edit2, MessageSquare, CircleAlert
 } from 'lucide-react'
 import { useSearchParams, useRouter } from 'next/navigation'
 
@@ -27,6 +27,7 @@ import {
   detectSensitiveLocation,
   evaluateRowRegulationBrief,
   shouldShowRowRegulationBrief,
+  aggregateRowRegulationBriefs,
   type RowRegulationBrief,
 } from '@/lib/regulation'
 import { SensitiveLocationDialog } from '@/components/plan/SensitiveLocationDialog'
@@ -72,6 +73,31 @@ type TimelineLine = {
   insuranceFile: UploadedFileRef;
 };
 
+const URGENT_DEPARTURE_ERROR_TITLE = 'שגיאה';
+const URGENT_DEPARTURE_ERROR_MESSAGE = 'לא ניתן להגיש טיול פחות מ-48 שעות לפני היציאה.';
+
+function isTripDepartureTooSoon(startDate: string): boolean {
+  if (!startDate) return false;
+  const dateObj = new Date(startDate);
+  const now = new Date();
+  const diffTime = dateObj.getTime() - now.getTime();
+  const diffHours = diffTime / (1000 * 3600);
+  return diffHours < 48 && diffTime > -86400000;
+}
+
+function daysBetweenIsoDates(from: string, to: string): number {
+  const fromMs = new Date(`${from}T12:00:00`).getTime();
+  const toMs = new Date(`${to}T12:00:00`).getTime();
+  return Math.round((toMs - fromMs) / (1000 * 3600 * 24));
+}
+
+function addDaysToIsoDate(isoDate: string, days: number): string {
+  if (!isoDate) return isoDate;
+  const next = new Date(`${isoDate}T12:00:00`);
+  next.setDate(next.getDate() + days);
+  return next.toISOString().split('T')[0];
+}
+
 function NewTripContent() {
   const router = useRouter();
   
@@ -84,6 +110,7 @@ function NewTripContent() {
   const [userGender, setUserGender] = useState<'male' | 'female' | 'mixed'>('mixed');
   const searchParams = useSearchParams();
   const editId = searchParams.get('id');
+  const submittedParam = searchParams.get('submitted');
   
   const [isOtherSelected, setIsOtherSelected] = useState(false);
   const [tempOtherType, setTempOtherType] = useState('');
@@ -107,6 +134,10 @@ function NewTripContent() {
   const [isUploadingInsurance, setIsUploadingInsurance] = useState(false);
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
   const [isRowsLocked, setIsRowsLocked] = useState(false);
+  const [timelineGuideOpen, setTimelineGuideOpen] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState<{ tripId: string } | null>(
+    submittedParam ? { tripId: submittedParam } : null,
+  );
   
   // State להצעות מיקום וקטגוריות
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
@@ -118,6 +149,7 @@ function NewTripContent() {
   const startTimeRef = useRef<HTMLInputElement>(null);
   const endDateRef = useRef<HTMLInputElement>(null);
   const endTimeRef = useRef<HTMLInputElement>(null);
+  const timelineStartAnchorRef = useRef('');
 
   // State ראשי של הטיול
   const [generalInfo, setGeneralInfo] = useState({ 
@@ -165,7 +197,13 @@ function NewTripContent() {
   } | null>(null);
   const [regulationBriefDialog, setRegulationBriefDialog] = useState<{
     brief: RowRegulationBrief;
-    sensitiveFlags: { sensitiveLocation: boolean; sensitiveLocationLabel: string };
+    title?: string;
+    confirmLabel?: string;
+    /** optional — only when confirming a deferred row add from snapshot restore */
+    pendingAdd?: {
+      sensitiveFlags: { sensitiveLocation: boolean; sensitiveLocationLabel: string };
+      brief: RowRegulationBrief;
+    };
     onConfirm: () => void;
   } | null>(null);
 
@@ -229,17 +267,42 @@ function NewTripContent() {
   useEffect(() => { 
     setStartHebrewDate(getHebrewDateString(generalInfo.startDate));
     setEndHebrewDate(getHebrewDateString(generalInfo.endDate));
-    if (generalInfo.startDate && !currentLine.date) setCurrentLine(prev => ({ ...prev, date: generalInfo.startDate }));
-    
-    if (generalInfo.startDate) {
-        const dateObj = new Date(generalInfo.startDate);
-        const now = new Date();
-        const diffTime = dateObj.getTime() - now.getTime();
-        const diffHours = diffTime / (1000 * 3600);
-        if (diffHours < 48 && diffTime > -86400000) setIsUrgentError(true);
-        else setIsUrgentError(false);
-    } else setIsUrgentError(false);
-  }, [generalInfo.startDate, generalInfo.endDate, currentLine.date]);
+    setIsUrgentError(isTripDepartureTooSoon(generalInfo.startDate));
+
+    const newStart = generalInfo.startDate;
+    if (!newStart) {
+      timelineStartAnchorRef.current = '';
+      return;
+    }
+
+    const anchor = timelineStartAnchorRef.current;
+    if (!anchor) {
+      timelineStartAnchorRef.current = newStart;
+      setCurrentLine((prev) => ({ ...prev, date: newStart }));
+      return;
+    }
+
+    if (anchor === newStart) return;
+
+    const shiftDays = daysBetweenIsoDates(anchor, newStart);
+    timelineStartAnchorRef.current = newStart;
+    if (shiftDays === 0) return;
+
+    setTimeline((prev) =>
+      prev.map((item) => ({
+        ...item,
+        date: item.date ? addDaysToIsoDate(item.date, shiftDays) : item.date,
+      })),
+    );
+    setCurrentLine((prev) => ({
+      ...prev,
+      date: prev.date ? addDaysToIsoDate(prev.date, shiftDays) : newStart,
+    }));
+  }, [generalInfo.startDate, generalInfo.endDate]);
+
+  useEffect(() => {
+    setTimelineGuideOpen(false);
+  }, [generalInfo.tripType]);
 
   const getNextDate = (d: string) => { if(!d) return ''; const x=new Date(d); x.setDate(x.getDate()+1); return x.toISOString().split('T')[0]; };
   const toggleStaffAge = (age: string) => setGeneralInfo(prev => ({ ...prev, staffAges: prev.staffAges.includes(age) ? prev.staffAges.filter(a => a !== age) : [...prev.staffAges, age] }));
@@ -254,6 +317,16 @@ function NewTripContent() {
       if (!tempOtherType.trim()) return showModal('error', 'שגיאה', 'נא לפרט את סוג הפעילות');
       setGeneralInfo(prev => ({ ...prev, tripType: 'אחר', tripTypeOther: tempOtherType }));
       setStep(1); window.scrollTo(0,0);
+  };
+
+  const handleStartDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const startDate = e.target.value;
+      setGeneralInfo((prev) => ({ ...prev, startDate }));
+      const tooSoon = isTripDepartureTooSoon(startDate);
+      setIsUrgentError(tooSoon);
+      if (tooSoon) {
+          showModal('error', URGENT_DEPARTURE_ERROR_TITLE, URGENT_DEPARTURE_ERROR_MESSAGE);
+      }
   };
 
   const handleEndDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -361,7 +434,7 @@ function NewTripContent() {
       sensitiveLocation: sensitiveFlags.sensitiveLocation,
       sensitiveLocationLabel: sensitiveFlags.sensitiveLocationLabel || undefined,
       regulationBrief,
-      regulationBriefAcknowledged: Boolean(regulationBrief),
+      regulationBriefAcknowledged: false,
       requiresLicense: needsLicense,
       licenseFile: currentLine.licenseFile,
       insuranceFile: currentLine.insuranceFile,
@@ -396,26 +469,18 @@ function NewTripContent() {
       sub,
       currentLine.locationType,
     );
-    if (!showBrief) {
-      finalizeAddLine(sensitiveFlags);
-      return;
-    }
-    const brief = evaluateRowRegulationBrief({
-      planCategoryKey: currentLine.category,
-      planSubCategoryLabel: sub,
-      participantCount: getParticipantCount(),
-      gradeFrom: generalInfo.gradeFrom,
-      gradeTo: generalInfo.gradeTo,
-      sensitiveLocation: sensitiveFlags.sensitiveLocation,
-    });
-    setRegulationBriefDialog({
-      brief,
-      sensitiveFlags,
-      onConfirm: () => {
-        setRegulationBriefDialog(null);
-        finalizeAddLine(sensitiveFlags, brief);
-      },
-    });
+    const brief = showBrief
+      ? evaluateRowRegulationBrief({
+          planCategoryKey: currentLine.category,
+          planSubCategoryLabel: sub,
+          participantCount: getParticipantCount(),
+          gradeFrom: generalInfo.gradeFrom,
+          gradeTo: generalInfo.gradeTo,
+          sensitiveLocation: sensitiveFlags.sensitiveLocation,
+        })
+      : undefined;
+    // אין פופאפ לכל שורה — הסיכום מוצג רק ב«סיום הוספת שורות»
+    finalizeAddLine(sensitiveFlags, brief);
   };
 
   const persistFormSnapshot = useCallback(
@@ -428,8 +493,11 @@ function NewTripContent() {
         isRowsLocked,
         expandedItem,
         editId: editId || null,
-        pendingRegulation: pendingRegulation ?? (regulationBriefDialog
-          ? { sensitiveFlags: regulationBriefDialog.sensitiveFlags, brief: regulationBriefDialog.brief }
+        pendingRegulation: pendingRegulation ?? (regulationBriefDialog?.pendingAdd
+          ? {
+              sensitiveFlags: regulationBriefDialog.pendingAdd.sensitiveFlags,
+              brief: regulationBriefDialog.pendingAdd.brief,
+            }
           : null),
       });
     },
@@ -448,8 +516,11 @@ function NewTripContent() {
     }
 
     persistFormSnapshot(
-      regulationBriefDialog
-        ? { sensitiveFlags: regulationBriefDialog.sensitiveFlags, brief: regulationBriefDialog.brief }
+      regulationBriefDialog?.pendingAdd
+        ? {
+            sensitiveFlags: regulationBriefDialog.pendingAdd.sensitiveFlags,
+            brief: regulationBriefDialog.pendingAdd.brief,
+          }
         : null,
     );
 
@@ -479,17 +550,12 @@ function NewTripContent() {
     setCurrentLine(snap.currentLine as typeof currentLine);
     setIsRowsLocked(snap.isRowsLocked);
     setExpandedItem(snap.expandedItem);
+    timelineStartAnchorRef.current = String((snap.generalInfo as { startDate?: string }).startDate || '');
 
     if (snap.pendingRegulation) {
       const { sensitiveFlags, brief } = snap.pendingRegulation;
-      setRegulationBriefDialog({
-        brief,
-        sensitiveFlags,
-        onConfirm: () => {
-          setRegulationBriefDialog(null);
-          finalizeAddLine(sensitiveFlags, brief);
-        },
-      });
+      // הוספת שורה בלי פופאפ — הסיכום יוצג בסיום הלו״ז
+      finalizeAddLine(sensitiveFlags, brief);
     }
 
     clearNewTripFormSnapshot();
@@ -500,6 +566,7 @@ function NewTripContent() {
 
   useEffect(() => {
     const loadTrip = async () => {
+      if (submittedParam) return;
       if (!editId) {
         if (!userLoading && user) restoreFormSnapshot();
         return;
@@ -533,6 +600,7 @@ function NewTripContent() {
           secondaryStaffObj: d.secondaryStaffObj || null,
         });
         setTimeline(d.timeline || []);
+        timelineStartAnchorRef.current = data.start_date || '';
         setStep(1);
       }
       setLoading(false);
@@ -639,8 +707,84 @@ function NewTripContent() {
   const handleLockToggle = () => {
       const config = TRIP_LOGIC[generalInfo.tripType] || TRIP_LOGIC['אחר'];
       const minRows = config.minRows || 2;
-      if (!isRowsLocked && timeline.length < minRows) return showModal('error', 'שגיאה', `לא ניתן לסיים הוספת שורות. בסוג פעילות זה נדרשות לפחות ${minRows} שורות בלו"ז.`);
-      setIsRowsLocked(!isRowsLocked);
+      if (!isRowsLocked && timeline.length < minRows) {
+        return showModal('error', 'שגיאה', `לא ניתן לסיים הוספת שורות. בסוג פעילות זה נדרשות לפחות ${minRows} שורות בלו"ז.`);
+      }
+
+      // פתיחה מחדש לעריכה
+      if (isRowsLocked) {
+        setIsRowsLocked(false);
+        return;
+      }
+
+      const scheduleBriefs = timeline
+        .map((item) => {
+          const sub = item.finalSubCategory || (item.subCategory === 'אחר' ? item.otherDetail : item.subCategory);
+          if (
+            !shouldShowRowRegulationBrief(
+              generalInfo.tripType,
+              item.category,
+              sub,
+              item.locationType,
+            )
+          ) {
+            return null;
+          }
+          return (
+            item.regulationBrief ||
+            evaluateRowRegulationBrief({
+              planCategoryKey: item.category,
+              planSubCategoryLabel: sub,
+              participantCount: getParticipantCount(),
+              gradeFrom: generalInfo.gradeFrom,
+              gradeTo: generalInfo.gradeTo,
+              sensitiveLocation: Boolean(item.sensitiveLocation),
+            })
+          );
+        })
+        .filter((brief): brief is RowRegulationBrief => Boolean(brief));
+
+      const aggregated = aggregateRowRegulationBriefs(scheduleBriefs);
+      if (!aggregated) {
+        setIsRowsLocked(true);
+        return;
+      }
+
+      setRegulationBriefDialog({
+        brief: aggregated,
+        title: 'סיכום דרישות ללו״ז',
+        confirmLabel: 'הבנתי — סיום לו״ז',
+        onConfirm: () => {
+          setTimeline((prev) =>
+            prev.map((row) => {
+              const sub = row.finalSubCategory || (row.subCategory === 'אחר' ? row.otherDetail : row.subCategory);
+              if (
+                !shouldShowRowRegulationBrief(
+                  generalInfo.tripType,
+                  row.category,
+                  sub,
+                  row.locationType,
+                )
+              ) {
+                return row;
+              }
+              const brief =
+                row.regulationBrief ||
+                evaluateRowRegulationBrief({
+                  planCategoryKey: row.category,
+                  planSubCategoryLabel: sub,
+                  participantCount: getParticipantCount(),
+                  gradeFrom: generalInfo.gradeFrom,
+                  gradeTo: generalInfo.gradeTo,
+                  sensitiveLocation: Boolean(row.sensitiveLocation),
+                });
+              return { ...row, regulationBrief: brief, regulationBriefAcknowledged: true };
+            }),
+          );
+          setRegulationBriefDialog(null);
+          setIsRowsLocked(true);
+        },
+      });
   };
 
   const executeSubmission = async (status: 'pending' | 'draft') => {
@@ -672,8 +816,12 @@ function NewTripContent() {
         if (payload.id) newId = payload.id as string;
         
         if (status === 'draft') return newId;
-        else showModal('success', 'הטיול נשלח', 'הטיול נשלח בהצלחה! תוך 48 שעות תתקבל תשובה.');
 
+        clearNewTripFormSnapshot();
+        const submittedId = String(newId || '');
+        setSubmitSuccess({ tripId: submittedId });
+        router.replace(submittedId ? `/dashboard/new-trip?submitted=${submittedId}` : '/dashboard/new-trip?submitted=1');
+        return newId;
     } catch(e: unknown) { 
         const message = e instanceof Error ? e.message : 'שגיאה לא ידועה';
         showModal('error', 'שגיאה', 'שגיאה: ' + message); 
@@ -684,7 +832,9 @@ function NewTripContent() {
   };
 
   const handleSubmit = async () => {
-    if (isUrgentError) return;
+    if (isUrgentError) {
+        return showModal('error', URGENT_DEPARTURE_ERROR_TITLE, URGENT_DEPARTURE_ERROR_MESSAGE);
+    }
     
     // 4. ולידציה עם Zod (פרטים כלליים)
     const validation = tripGeneralSchema.safeParse(generalInfo);
@@ -741,6 +891,41 @@ function NewTripContent() {
   };
 
   if (userLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-brand-cyan" size={40}/></div>;
+
+  if (submitSuccess) {
+    return (
+      <>
+        <Header title="הבקשה נשלחה" />
+        <div className="flex min-h-[70vh] items-center justify-center p-6">
+          <div className="w-full max-w-md rounded-3xl border border-emerald-100 bg-white p-8 text-center shadow-lg shadow-emerald-50">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+              <CheckCircle size={32} strokeWidth={2.5} />
+            </div>
+            <h2 className="text-2xl font-black text-gray-900">הבקשה נשלחה בהצלחה</h2>
+            <p className="mt-3 text-sm font-medium leading-relaxed text-gray-600">
+              תוך 48 שעות תתקבל תשובה. אפשר לעקוב אחרי הסטטוס במסך הטיולים.
+            </p>
+            <div className="mt-8 flex flex-col gap-3">
+              <button
+                type="button"
+                onClick={() => router.replace('/dashboard')}
+                className="w-full rounded-2xl bg-brand-green py-3.5 text-base font-black text-white shadow-lg shadow-green-100 transition hover:bg-[#7CB342]"
+              >
+                למסך הראשי
+              </button>
+              <button
+                type="button"
+                onClick={() => router.replace('/dashboard/my-trips')}
+                className="w-full rounded-2xl border border-gray-200 bg-white py-3 text-sm font-bold text-gray-700 transition hover:bg-gray-50"
+              >
+                לטיולים שלי
+              </button>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -840,7 +1025,7 @@ function NewTripContent() {
                                     <div className="bg-gray-50 rounded-xl border border-gray-200 flex items-center h-[52px] focus-within:!border-[#E91E63] focus-within:!ring-0 transition-all overflow-hidden cursor-pointer" onClick={() => startDateRef.current?.showPicker()}>
                                          <div className="flex-1 px-3 border-l border-gray-200 relative h-full flex flex-col justify-center">
                                              <input ref={startDateRef} type="date" className="w-full bg-transparent text-xs font-bold text-gray-800 outline-none z-10 relative" 
-                                                 value={generalInfo.startDate} onChange={(e) => setGeneralInfo({...generalInfo, startDate: e.target.value})} onClick={(e) => e.stopPropagation()} />
+                                                 value={generalInfo.startDate} onChange={handleStartDateChange} onClick={(e) => e.stopPropagation()} />
                                              <div className="text-[9px] text-[#00BCD4] font-bold leading-none mt-0.5 truncate">{startHebrewDate || '-'}</div>
                                          </div>
                                          <div className="w-20 h-full flex items-center justify-center bg-gray-100 relative z-20 hover:bg-gray-200 transition-colors" onClick={(e) => { e.stopPropagation(); startTimeRef.current?.showPicker(); }}>
@@ -867,13 +1052,6 @@ function NewTripContent() {
                         </div>
                     </div>
                     
-                    {isUrgentError && (
-                        <div className="bg-red-50 border border-red-200 text-red-700 p-2 rounded-lg flex items-center gap-2 text-xs font-bold animate-fadeIn mt-2">
-                            <AlertTriangle size={14} className="shrink-0"/>
-                            <div>שגיאה: לא ניתן להגיש טיול פחות מ-48 שעות לפני היציאה.</div>
-                        </div>
-                    )}
-
                     <div className="h-px bg-gray-100"></div>
 
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
@@ -959,9 +1137,44 @@ function NewTripContent() {
                 </section>
 
                 <section className="bg-surface-card rounded-[32px] shadow-sm border border-border-subtle overflow-visible relative z-30 mb-8 animate-fadeIn">
-                   <div className="bg-brand-cyan text-white h-12 flex items-center px-6 font-bold text-lg shadow-sm justify-between rounded-t-3xl">
-                       <div className="flex items-center gap-2"><MapPin size={20}/> <span>{currentLogic.timelineTitle}</span></div>
-                       <span className="text-xs bg-white/20 px-3 py-1 rounded-full">{timeline.length} שורות</span>
+                   <div className="bg-brand-cyan text-white rounded-t-3xl shadow-sm">
+                       <div className="flex items-center gap-2 px-4 py-3 md:gap-3 md:px-6">
+                           <div className="flex shrink-0 items-center gap-2 font-bold text-base md:text-lg">
+                               <MapPin size={20} className="shrink-0"/>
+                               <span className="whitespace-nowrap">{currentLogic.timelineTitle}</span>
+                           </div>
+                           <p className="min-w-0 flex-1 truncate text-xs text-white/90 md:text-sm">
+                               {currentLogic.timelineGuideSummary}
+                           </p>
+                           <button
+                               type="button"
+                               onClick={() => setTimelineGuideOpen((open) => !open)}
+                               aria-expanded={timelineGuideOpen}
+                               aria-label={timelineGuideOpen ? 'הסתר הסבר מפורט' : 'הצג הסבר מפורט'}
+                               className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors ${
+                                   timelineGuideOpen ? 'bg-white text-brand-cyan' : 'bg-white/20 text-white hover:bg-white/30'
+                               }`}
+                           >
+                               <CircleAlert size={16} strokeWidth={2.5} />
+                           </button>
+                           <span className="shrink-0 whitespace-nowrap rounded-full bg-white/20 px-2.5 py-1 text-[11px] md:px-3 md:text-xs">
+                               {timeline.length} שורות
+                           </span>
+                       </div>
+                       {timelineGuideOpen ? (
+                           <div className="border-t border-white/15 px-6 pb-4 pt-3 animate-fadeIn">
+                               <p className="mb-2 text-xs font-bold text-white/95">כיצד למלא את הלו״ז — שלב אחר שלב:</p>
+                               <ol className="list-decimal list-inside space-y-1 text-xs leading-relaxed text-white/90 md:text-sm">
+                                   {currentLogic.timelineGuideSteps.map((step) => (
+                                       <li key={step}>{step}</li>
+                                   ))}
+                               </ol>
+                               <p className="mt-2.5 text-[11px] leading-relaxed text-white/80 md:text-xs">
+                                   בכל שורה: מלאו מיקום, בחרו התרחשות ופירוט, ולחצו ✓. לפעילויות הדורשות רישוי — העלו רישוי עסק וביטוח.
+                                   בסיום לחצו «סיום הוספת שורות». נדרשות לפחות {currentLogic.minRows} שורות.
+                               </p>
+                           </div>
+                       ) : null}
                    </div>
                    
                    <div className="p-6 space-y-4 bg-surface-muted rounded-b-3xl">
@@ -1299,7 +1512,6 @@ function NewTripContent() {
                 
                 <div className="fixed bottom-0 left-0 right-0 md:right-56 bg-surface-card/90 backdrop-blur-md border-t border-border-subtle p-4 z-40 transition-all">
                     <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-end gap-3">
-                        {isUrgentError && <div className="bg-red-50 text-red-600 px-4 py-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-2"><AlertTriangle size={16}/> תאריך היציאה קרוב מדי!</div>}
                         <button onClick={handleSaveDraft} disabled={loading} className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-6 py-3.5 rounded-2xl font-bold text-base shadow-sm transition-all flex items-center justify-center gap-2 transform hover:-translate-y-1">
                             {loading ? <Loader2 size={20} className="animate-spin" /> : <FileEdit size={20} />}
                             <span>{t('save_draft')}</span>
@@ -1322,6 +1534,9 @@ function NewTripContent() {
       {regulationBriefDialog ? (
         <RowRegulationBriefDialog
           brief={regulationBriefDialog.brief}
+          title={regulationBriefDialog.title}
+          confirmLabel={regulationBriefDialog.confirmLabel}
+          scopeLabel="לטיול זה"
           onConfirm={regulationBriefDialog.onConfirm}
           onClose={() => setRegulationBriefDialog(null)}
           onNavigateLink={handleRegulationLinkNavigate}

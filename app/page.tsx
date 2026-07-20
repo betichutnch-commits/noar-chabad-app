@@ -13,7 +13,7 @@ import Image from 'next/image';
 import { loginSchema, registerSchema } from '@/lib/schemas';
 import { DEPARTMENTS_CONFIG } from '@/lib/constants'; 
 import type { User } from '@supabase/supabase-js';
-import { getCoordinatorRoleTitle, getDeptTripsOfficerTitle, isDeptReviewOfficer, isManagerUser } from '@/lib/auth';
+import { getCoordinatorRoleTitle, isManagerUser } from '@/lib/auth';
 import { isUserApprovedForAppAccess } from '@/lib/accountApproval';
 
 export default function Home() {
@@ -55,17 +55,15 @@ export default function Home() {
   // דאטה
   const [selectedDept, setSelectedDept] = useState(''); 
   const [selectedRoleType, setSelectedRoleType] = useState('');
-  const [isDeptTripsOfficerSignup, setIsDeptTripsOfficerSignup] = useState(false);
   const [formData, setFormData] = useState({
     idNumber: '', password: '', firstName: '', lastName: '', phone: '', email: '', birthDate: '', branch: '', role: ''
   });
   const [forgotIdentifier, setForgotIdentifier] = useState('');
   const [resetPasswordData, setResetPasswordData] = useState({ password: '', confirmPassword: '' });
 
-  const getRoleLabel = (roleType: 'coordinator' | 'hq' | 'dept_trips_officer') => {
+  const getRoleLabel = (roleType: 'coordinator' | 'hq') => {
     if (roleType === 'coordinator') return getCoordinatorRoleTitle(selectedDept);
-    if (roleType === 'dept_trips_officer') return getDeptTripsOfficerTitle(selectedDept);
-    return 'צוות מטה';
+    return 'צוות מטה המחלקה';
   };
 
   const checkRoleAndRedirect = useCallback(async (user: User) => {
@@ -80,9 +78,8 @@ export default function Home() {
     router.refresh(); 
     await new Promise(resolve => setTimeout(resolve, 500));
 
-    if (isDeptReviewOfficer(user)) {
-        router.push('/hq/dept-review');
-    } else if (isManagerUser(user)) {
+    // מנהלי בטיחות → ממשק מנהלים; שאר המשתמשים (כולל מטה/אחראית סניפים) → דשבורד
+    if (isManagerUser(user)) {
         router.push('/manager');
     } else {
         router.push('/dashboard');
@@ -237,7 +234,7 @@ export default function Home() {
   const handleRegister = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const effectiveRole = selectedRoleType;
-    const canDeptReview = selectedRoleType === 'dept_staff' ? isDeptTripsOfficerSignup : false;
+    const isHqSignup = selectedRoleType === 'dept_staff';
 
     // 1. ולידציה עם Zod
     const fullName = `${formData.firstName} ${formData.lastName}`.trim();
@@ -274,7 +271,8 @@ export default function Home() {
               identity_number: formData.idNumber,
               department: selectedDept, 
               role: effectiveRole,
-              can_dept_review: canDeptReview,
+              can_dept_review: false,
+              hq_roles: isHqSignup ? [] : undefined,
               branch_name: selectedRoleType === 'coordinator' ? formData.branch : null,
               phone: formData.phone,
               contact_email: formData.email,
@@ -593,7 +591,7 @@ export default function Home() {
           </div>
 
           <div className="mt-10 border-t border-gray-200 pt-6">
-             <Button variant="dark" onClick={() => { setSelectedDept('בטיחות ומפעלים'); setSelectedRoleType('safety_admin'); setIsDeptTripsOfficerSignup(false); setView('register_form'); }} className="w-full justify-center" icon={<ShieldCheck size={20} className="text-[#8BC34A]" />}>
+             <Button variant="dark" onClick={() => { setSelectedDept('בטיחות ומפעלים'); setSelectedRoleType('safety_admin'); setView('register_form'); }} className="w-full justify-center" icon={<ShieldCheck size={20} className="text-[#8BC34A]" />}>
                 הרשמה למחלקת בטיחות ומפעלים
              </Button>
           </div>
@@ -619,7 +617,7 @@ export default function Home() {
           <p className="text-center text-gray-400 mb-8">מחלקה נבחרת: <span className="font-bold text-[#00BCD4]">{selectedDept}</span></p>
           
           <div className="space-y-4">
-            <button onClick={() => { setSelectedRoleType('coordinator'); setIsDeptTripsOfficerSignup(false); setView('register_form'); }}
+            <button onClick={() => { setSelectedRoleType('coordinator'); setView('register_form'); }}
               className="w-full bg-white p-6 rounded-2xl shadow-sm border-2 border-transparent hover:border-pink-400 hover:bg-pink-50 text-right group relative overflow-hidden transition-all">
               <div className="flex items-center justify-between relative z-10">
                   <div>
@@ -630,12 +628,12 @@ export default function Home() {
               </div>
             </button>
 
-            <button onClick={() => { setSelectedRoleType('dept_staff'); setIsDeptTripsOfficerSignup(false); setView('register_form'); }}
+            <button onClick={() => { setSelectedRoleType('dept_staff'); setView('register_form'); }}
               className="w-full bg-white p-6 rounded-2xl shadow-sm border-2 border-transparent hover:border-[#00BCD4] hover:bg-cyan-50 text-right group relative overflow-hidden transition-all">
               <div className="flex items-center justify-between relative z-10">
                   <div>
-                    <h3 className="font-black text-lg text-gray-800 group-hover:text-[#00BCD4]">{getRoleLabel('hq')}</h3>
-                    <p className="text-sm text-gray-400 mt-1">מטה {selectedDept} (כולל אפשרות לסמן {getRoleLabel('dept_trips_officer')} בשלב הבא)</p>
+                    <h3 className="font-black text-lg text-gray-800 group-hover:text-[#00BCD4]">הרשמה למטה המחלקה</h3>
+                    <p className="text-sm text-gray-400 mt-1">מטה {selectedDept} — התפקיד יוגדר ע״י המנהל באישור החשבון</p>
                   </div>
                   <Briefcase className="text-gray-200 group-hover:text-[#00BCD4] transition-colors" size={32} />
               </div>
@@ -669,14 +667,10 @@ export default function Home() {
                     {isSafety
                       ? 'מחלקת בטיחות ומפעלים'
                       : `${selectedDept} - ${getRoleLabel(
-                          selectedRoleType === 'coordinator'
-                            ? 'coordinator'
-                            : selectedRoleType === 'dept_staff' && isDeptTripsOfficerSignup
-                              ? 'dept_trips_officer'
-                              : 'hq',
+                          selectedRoleType === 'coordinator' ? 'coordinator' : 'hq',
                         )}`}
                 </p>
-            </div>
+              </div>
 
             <form onSubmit={handleRegister} className="space-y-4">
               
@@ -719,18 +713,9 @@ export default function Home() {
               </div>
 
               {selectedRoleType === 'dept_staff' && (
-                <label className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50/50 px-4 py-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={isDeptTripsOfficerSignup}
-                    onChange={(e) => setIsDeptTripsOfficerSignup(e.target.checked)}
-                    className="mt-1 h-4 w-4 accent-amber-500"
-                  />
-                  <div className="text-sm">
-                    <div className="font-bold text-amber-800">הרשאת אישור ראשוני מחלקתי</div>
-                    <div className="text-amber-700">סימון זה יפעיל עבורך הרשאת אישור ראשוני ל{getCoordinatorRoleTitle(selectedDept).replace(' סניף', '')} (בנוסף לתפקיד צוות מטה).</div>
-                  </div>
-                </label>
+                <div className="rounded-2xl border border-cyan-100 bg-cyan-50/60 px-4 py-3 text-sm text-cyan-800">
+                  התפקיד במטה (מנהל מחלקה, אחראי סניפים, מזכיר/ה ועוד) יוגדר ע״י המנהל בעת אישור החשבון.
+                </div>
               )}
 
               <Button type="submit" isLoading={loading} className="w-full mt-6 bg-[#8BC34A] hover:bg-green-600 shadow-green-200 border border-transparent">

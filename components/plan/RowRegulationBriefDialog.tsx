@@ -6,16 +6,24 @@ import type { RowRegulationBrief } from "@/lib/regulation";
 
 export function RowRegulationBriefDialog({
   brief,
+  title,
+  confirmLabel = "הבנתי",
+  scopeLabel = "לטיול זה",
   onConfirm,
   onClose,
   onNavigateLink,
 }: {
   brief: RowRegulationBrief;
+  title?: string;
+  confirmLabel?: string;
+  /** ניסוח ריק: «לטיול זה» / «לפעילות זו» */
+  scopeLabel?: string;
   onConfirm: () => void;
   onClose: () => void;
   onNavigateLink?: (href: string, external: boolean) => void;
 }) {
   const officialLink = brief.circularLinks.find((l) => l.external);
+  const dialogTitle = title || brief.activityLabel;
 
   const handleOfficialLink = () => {
     if (!officialLink) return;
@@ -27,7 +35,7 @@ export function RowRegulationBriefDialog({
   };
 
   return (
-    <PlanQuickDialog title={brief.activityLabel} onClose={onClose}>
+    <PlanQuickDialog title={dialogTitle} onClose={onClose}>
       <div className="max-h-[70vh] space-y-4 overflow-y-auto text-sm text-gray-700">
         {officialLink ? (
           <button
@@ -51,7 +59,7 @@ export function RowRegulationBriefDialog({
             ) : brief.needsFirstAidKit ? (
               <p className="text-sm font-black text-violet-900">ערכת עזרה ראשונה</p>
             ) : (
-              <p className="text-xs text-gray-600">לא זוהתה דרישה רפואית ספציפית לפעילות זו.</p>
+              <p className="text-xs text-gray-600">לא זוהתה דרישה רפואית ספציפית {scopeLabel}.</p>
             )}
           </div>
 
@@ -71,7 +79,7 @@ export function RowRegulationBriefDialog({
                 ) : null}
               </p>
             ) : (
-              <p className="text-xs text-gray-600">לשורה זו לא חושב יחס מלווה בוגר (מחושב ברמת הטיול).</p>
+              <p className="text-xs text-gray-600">לא חושב יחס מלווה בוגר {scopeLabel}.</p>
             )}
           </div>
 
@@ -86,7 +94,7 @@ export function RowRegulationBriefDialog({
                 {brief.securityNotes ? ` — ${brief.securityNotes}` : ""}
               </p>
             ) : (
-              <p className="text-xs text-gray-600">לא זוהתה דרישת מאבטח לשורה זו.</p>
+              <p className="text-xs text-gray-600">לא זוהתה דרישת מאבטח {scopeLabel}.</p>
             )}
           </div>
         </div>
@@ -98,10 +106,10 @@ export function RowRegulationBriefDialog({
           </div>
         ) : null}
 
-        {(brief.needsLicense || brief.sensitiveLocation) ? (
+        {brief.needsLicense || brief.sensitiveLocation ? (
           <div className="space-y-2 rounded-xl border border-orange-200 bg-orange-50/80 p-3 text-xs text-orange-900">
             {brief.needsLicense ? (
-              <p className="font-bold">נדרש רישוי עסק + ביטוח — יש להעלות מסמכים לשורה לפני שליחת הבקשה.</p>
+              <p className="font-bold">נדרש רישוי עסק + ביטוח — יש להעלות מסמכים לפני שליחת הבקשה.</p>
             ) : null}
             {brief.sensitiveLocation ? (
               <p className="flex items-center gap-1 font-bold">
@@ -117,12 +125,26 @@ export function RowRegulationBriefDialog({
           </p>
         ) : null}
 
+        {brief.coordinationLabels.length > 0 ? (
+          <div className="rounded-xl border border-amber-100 bg-amber-50/70 p-3 text-xs text-amber-950">
+            <p className="mb-1 font-black">תיאומים נדרשים</p>
+            <ul className="list-disc space-y-0.5 pr-4">
+              {brief.coordinationLabels.map((label) => (
+                <li key={label}>{label}</li>
+              ))}
+            </ul>
+            {brief.coordinationLeadDays ? (
+              <p className="mt-2 font-bold">מינימום {brief.coordinationLeadDays} ימי תיאום מראש</p>
+            ) : null}
+          </div>
+        ) : null}
+
         <button
           type="button"
           onClick={onConfirm}
           className="w-full rounded-xl bg-brand-green py-3 text-sm font-black text-white shadow-lg shadow-green-100 transition-all hover:bg-[#7CB342]"
         >
-          הבנתי — הוסף ללו״ז
+          {confirmLabel}
         </button>
       </div>
     </PlanQuickDialog>

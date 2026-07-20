@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { isManagerUser } from '@/lib/auth'
 import type { User } from '@supabase/supabase-js'
 import { notifyUserIds, notifyUsers } from '@/lib/notifications'
+import { withTripNotificationTitle } from '@/lib/notificationDisplay'
 import { replaceRowSafetyWithDefaultRisks } from '@/lib/eventDefaultRisks'
 import { seedRowsFromTripDetails } from '@/lib/tripPlan'
 import {
@@ -162,10 +163,10 @@ export async function POST(request: Request, { params }: RouteContext) {
 
   const title =
     body.status === 'approved'
-      ? 'הטיול אושר לפרסום ותכנון!'
+      ? withTripNotificationTitle(String(trip.name || ''), 'אושר לפרסום ותכנון!')
       : body.status === 'approved_for_execution'
-        ? 'הטיול אושר לביצוע!'
-        : 'הטיול נדחה'
+        ? withTripNotificationTitle(String(trip.name || ''), 'אושר לביצוע!')
+        : withTripNotificationTitle(String(trip.name || ''), 'נדחה')
 
   const deadlineLabel = executionDeadlineDate
     ? new Date(executionDeadlineDate).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })
@@ -205,7 +206,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     },
     {
       kind: 'trip.safety_status',
-      title: 'עדכון ממחלקת הבטיחות',
+      title: withTripNotificationTitle(String(trip.name || ''), 'עדכון ממחלקת הבטיחות'),
       body: `הטיול "${trip.name}" עודכן: ${title}`,
       url: '/hq/dept-review',
       inAppType: 'info',
@@ -223,7 +224,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     if (secretaryIds.length) {
       await notifyUserIds(secretaryIds, {
         kind: 'trip.safety_status',
-        title: 'נדרשת חתימתך על כתב מינוי',
+        title: withTripNotificationTitle(String(trip.name || ''), 'נדרשת חתימתך על כתב מינוי'),
         body: `הטיול "${trip.name}" אושר. נא לחתום על כתב המינוי לאחראי הטיול.`,
         url: appendixCUrl,
         inAppType: 'info',

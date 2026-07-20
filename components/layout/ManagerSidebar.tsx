@@ -27,18 +27,23 @@ export const ManagerSidebar = ({ isOpen = true, onClose }: SidebarProps) => {
             .from('trips')
             .select('id', { count: 'exact', head: true })
             .eq('status', 'pending');
-        const usersCountPromise = supabase
-            .from('profiles')
-            .select('id', { count: 'exact', head: true })
-            .eq('status', 'pending');
-        const [trips, users] = await Promise.all([
+        // סטטוס אישור אמיתי נשמר ב-auth metadata (users_management_view), לא ב-profiles.status
+        const usersPendingPromise = supabase
+            .from('users_management_view')
+            .select('raw_user_meta_data');
+        const [trips, usersRes] = await Promise.all([
             tripsCountPromise,
-            usersCountPromise,
+            usersPendingPromise,
         ]);
+
+        const pendingUsers = (usersRes.data || []).filter((u: { raw_user_meta_data?: { status?: string } }) => {
+            const status = String(u.raw_user_meta_data?.status || 'pending').toLowerCase();
+            return status === 'pending';
+        }).length;
 
         setCounts({
             pendingTrips: trips.count || 0,
-            pendingUsers: users.count || 0,
+            pendingUsers,
         });
     };
     checkRoleAndCounts();

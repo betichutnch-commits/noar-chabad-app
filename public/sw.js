@@ -1,4 +1,10 @@
 /* global self */
+
+// Required for Chrome PWA installability: SW must handle fetch.
+self.addEventListener('fetch', (event) => {
+  event.respondWith(fetch(event.request))
+})
+
 self.addEventListener('push', (event) => {
   let payload = { title: 'התראה', body: '', url: '/' }
   try {
@@ -16,8 +22,8 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(payload.title, {
       body: payload.body,
-      icon: '/icon.png',
-      badge: '/icon.png',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
       data: { url: payload.url || '/' },
       lang: 'he',
       dir: 'rtl',

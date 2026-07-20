@@ -67,7 +67,6 @@ export function TripPlanningHubOverlay({ tripId, open, onClose, onAcknowledged }
   const router = useRouter();
   const { profile, loading: userLoading } = useUser("/");
   const [mounted, setMounted] = useState(false);
-  const [visible, setVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -79,20 +78,22 @@ export function TripPlanningHubOverlay({ tripId, open, onClose, onAcknowledged }
   }, []);
 
   useEffect(() => {
-    document.body.style.overflow = open ? "hidden" : "unset";
+    if (!open) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow = "unset";
+      document.body.style.overflow = prevOverflow || "";
     };
   }, [open]);
 
   useEffect(() => {
-    if (!open) {
-      setVisible(false);
-      return;
-    }
-    const frame = requestAnimationFrame(() => setVisible(true));
-    return () => cancelAnimationFrame(frame);
-  }, [open]);
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
 
   const loadBrief = useCallback(async () => {
     if (!tripId) return;
@@ -152,9 +153,7 @@ export function TripPlanningHubOverlay({ tripId, open, onClose, onAcknowledged }
       <button
         type="button"
         aria-label="סגירה"
-        className={`absolute inset-0 bg-brand-dark/45 backdrop-blur-sm transition-opacity duration-300 ${
-          visible ? "opacity-100" : "opacity-0"
-        }`}
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
       />
 
@@ -162,9 +161,7 @@ export function TripPlanningHubOverlay({ tripId, open, onClose, onAcknowledged }
         role="dialog"
         aria-modal="true"
         aria-label="תכנון והיערכות לטיול"
-        className={`relative z-10 flex w-full max-w-lg max-h-[min(90vh,720px)] flex-col overflow-hidden rounded-3xl border border-cyan-200 bg-surface-card shadow-[0_24px_64px_rgba(0,0,0,0.2),8px_8px_0_0_#FFC107] transition-all duration-300 ${
-          visible ? "scale-100 opacity-100" : "scale-[0.97] opacity-0"
-        }`}
+        className="relative z-10 flex w-full max-w-lg max-h-[min(90vh,720px)] flex-col overflow-hidden rounded-3xl border border-cyan-200 bg-white shadow-[0_24px_64px_rgba(0,0,0,0.2),8px_8px_0_0_#FFC107]"
         onClick={(event) => event.stopPropagation()}
       >
         {userLoading || loading ? (

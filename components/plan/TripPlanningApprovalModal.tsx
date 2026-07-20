@@ -2,13 +2,14 @@
 
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { CheckCircle2, Loader2 } from "lucide-react";
+import { CheckCircle2, Loader2, X } from "lucide-react";
 
 type TripPlanningApprovalModalProps = {
   tripId: string;
   tripName: string;
   open: boolean;
   onAcknowledged: () => void;
+  onDismiss?: () => void;
 };
 
 export function TripPlanningApprovalModal({
@@ -16,9 +17,9 @@ export function TripPlanningApprovalModal({
   tripName,
   open,
   onAcknowledged,
+  onDismiss,
 }: TripPlanningApprovalModalProps) {
   const [mounted, setMounted] = useState(false);
-  const [visible, setVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -26,20 +27,21 @@ export function TripPlanningApprovalModal({
   }, []);
 
   useEffect(() => {
-    document.body.style.overflow = open ? "hidden" : "unset";
+    if (!open) return;
+    document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = "unset";
     };
   }, [open]);
 
   useEffect(() => {
-    if (!open) {
-      setVisible(false);
-      return;
-    }
-    const frame = requestAnimationFrame(() => setVisible(true));
-    return () => cancelAnimationFrame(frame);
-  }, [open]);
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onDismiss?.();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onDismiss]);
 
   if (!open || !mounted) return null;
 
@@ -70,21 +72,29 @@ export function TripPlanningApprovalModal({
       className="fixed inset-0 z-[250] flex items-center justify-center p-5"
       role="presentation"
     >
-      <div
-        className={`absolute inset-0 bg-brand-dark/40 backdrop-blur-sm transition-opacity duration-300 ${
-          visible ? "opacity-100" : "opacity-0"
-        }`}
-        aria-hidden
+      <button
+        type="button"
+        aria-label="סגור"
+        className="absolute inset-0 bg-brand-dark/40 backdrop-blur-sm"
+        onClick={() => onDismiss?.()}
       />
 
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="planning-approval-title"
-        className={`relative z-10 w-full max-w-md overflow-hidden rounded-3xl border border-cyan-200 bg-surface-card shadow-[10px_10px_0_0_#FFC107] transition-all duration-300 ${
-          visible ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"
-        }`}
+        className="relative z-10 w-full max-w-md overflow-hidden rounded-3xl border border-cyan-200 bg-white shadow-[10px_10px_0_0_#FFC107]"
+        onClick={(event) => event.stopPropagation()}
       >
+        <button
+          type="button"
+          onClick={() => onDismiss?.()}
+          className="absolute left-3 top-3 z-20 rounded-full bg-white/20 p-1.5 text-white hover:bg-white/30"
+          aria-label="סגור"
+        >
+          <X size={18} />
+        </button>
+
         <div className="bg-gradient-to-l from-brand-cyan to-cyan-500 px-6 py-5 text-center text-white">
           <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/20 ring-2 ring-white/40">
             <CheckCircle2 size={30} strokeWidth={2} />
@@ -93,17 +103,17 @@ export function TripPlanningApprovalModal({
         </div>
 
         <div className="px-6 pb-6 pt-5 text-center">
-          <h2 id="planning-approval-title" className="text-2xl font-black leading-snug text-brand-dark">
+          <h2 id="planning-approval-title" className="text-2xl font-black leading-snug text-gray-900">
             הטיול אושר לפרסום ותכנון
           </h2>
 
-          <p className="mt-3 truncate rounded-xl border border-dashed border-cyan-200 bg-cyan-50 px-3 py-2 text-sm font-bold text-brand-dark">
+          <p className="mt-3 truncate rounded-xl border border-dashed border-cyan-200 bg-cyan-50 px-3 py-2 text-sm font-bold text-gray-900">
             {tripName}
           </p>
 
           <button
             type="button"
-            onClick={handleConfirm}
+            onClick={() => void handleConfirm()}
             disabled={submitting}
             className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-green py-3.5 text-base font-black text-white shadow-lg shadow-green-100 transition hover:brightness-105 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
           >

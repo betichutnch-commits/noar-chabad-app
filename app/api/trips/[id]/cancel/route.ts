@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { notifyUsers } from '@/lib/notifications'
+import { withTripNotificationTitle } from '@/lib/notificationDisplay'
 
 type RouteContext = { params: Promise<unknown> }
 type Body = { reason: string }
@@ -52,7 +53,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     { mode: 'safety_admins' },
     {
       kind: 'trip.cancelled',
-      title: 'ביטול טיול על ידי רכז',
+      title: withTripNotificationTitle(tripName, 'ביטול טיול על ידי רכז'),
       body: `הטיול "${tripName}" בוטל על ידי המגיש. סיבה: ${body.reason.trim().slice(0, 200)}`,
       url: `/manager/approvals/${trip.id}`,
       inAppType: 'warning',
@@ -67,7 +68,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     },
     {
       kind: 'trip.cancelled',
-      title: 'ביטול טיול',
+      title: withTripNotificationTitle(tripName, 'ביטול טיול'),
       body: `הטיול "${tripName}" בוטל על ידי הרכז.`,
       url: '/hq/dept-review',
       inAppType: 'warning',

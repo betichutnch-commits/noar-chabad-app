@@ -4,9 +4,20 @@ import { isManagerUser } from '@/lib/auth'
 import type { User } from '@supabase/supabase-js'
 import { notifyUserIds } from '@/lib/notifications'
 import { createSupabaseServiceRoleClient } from '@/lib/supabaseService'
+import {
+  ensureDefaultHqRoles,
+  hqRolesIncludeBranchOfficer,
+  normalizeHqRoles,
+  type HqRole,
+} from '@/lib/hqRoles'
 
 type RouteContext = { params: Promise<{ id: string }> }
-type Body = { new_status?: string; sync_role?: string; sync_can_dept_review?: boolean }
+type Body = {
+  new_status?: string
+  sync_role?: string
+  sync_can_dept_review?: boolean
+  hq_roles?: unknown
+}
 
 export async function POST(request: Request, { params }: RouteContext) {
   const { id: targetUserId } = await params
@@ -15,6 +26,7 @@ export async function POST(request: Request, { params }: RouteContext) {
   const syncRole = body.sync_role ? String(body.sync_role).trim().toLowerCase() : ''
   const syncCanDeptReview =
     typeof body?.sync_can_dept_review === 'boolean' ? body.sync_can_dept_review : undefined
+  const hqRoles = body.hq_roles !== undefined ? ensureDefaultHqRoles(normalizeHqRoles(body.hq_roles)) : undefined
   if (!targetUserId || !newStatus) {
     return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
   }
@@ -44,38 +56,68 @@ export async function POST(request: Request, { params }: RouteContext) {
     return NextResponse.json({ error: error.message }, { status: 400 })
   }
 
-  if (newStatus === 'approved' && syncRole) {
-    const allowed = new Set(['coordinator', 'dept_staff', 'safety_admin', 'user'])
-    if (allowed.has(syncRole)) {
+  if (newStatus === 'approved') {
+    const admin = createSupabaseServiceRoleClient()
+    if (!admin) {
+      return NextResponse.json({ error: 'SUPABASE_SERVICE_ROLE_KEY not configured' }, { status: 503 })
+    }
+
+    const { data: authData, error: authErr } = await admin.auth.admin.getUserById(targetUserId)
+    if (authErr || !authData?.user) {
+      return NextResponse.json({ error: authErr?.message || 'User metadata fetch failed' }, { status: 400 })
+    }
+
+    const currentMeta = (authData.user.user_metadata || {}) as Record<string, unknown>
+    const role =
+      syncRole ||
+      String(currentMeta.role || '').toLowerCase() ||
+      'user'
+    const allowed = new Set(['coordinator', 'dept_staff', 'safety_admin', 'secretary', 'user'])
+    const nextRole = allowed.has(role) ? role : 'user'
+
+    let nextHqRoles: HqRole[] | undefined
+    let nextCanDeptReview = false
+    if (nextRole === 'dept_staff') {
+      nextHqRoles =
+        hqRoles ??
+        ensureDefaultHqRoles(
+          normalizeHqRoles(currentMeta.hq_roles).length
+            ? normalizeHqRoles(currentMeta.hq_roles)
+            : syncCanDeptReview
+              ? (['branch_officer'] as HqRole[])
+              : (['dept_member'] as HqRole[]),
+        )
+      nextCanDeptReview = hqRolesIncludeBranchOfficer(nextHqRoles)
+    }
+
+    const { error: updateErr } = await admin.auth.admin.updateUserById(targetUserId, {
+      user_metadata: {
+        ...currentMeta,
+        role: nextRole,
+        can_dept_review: nextCanDeptReview,
+        hq_roles: nextRole === 'dept_staff' ? nextHqRoles : [],
+      },
+    })
+    if (updateErr) {
+      return NextResponse.json({ error: updateErr.message }, { status: 400 })
+    }
+
+    if (nextRole === 'dept_staff' || syncRole) {
       const { error: roleErr } = await supabase.rpc('update_user_role', {
         target_user_id: targetUserId,
-        new_role: syncRole,
+        new_role: nextRole,
       })
       if (roleErr) {
         console.warn('[users/status] sync role failed', roleErr.message)
       }
     }
-  }
 
-  if (newStatus === 'approved' && syncCanDeptReview !== undefined) {
-    const admin = createSupabaseServiceRoleClient()
-    if (admin) {
-      const { data: authData, error: authErr } = await admin.auth.admin.getUserById(targetUserId)
-      if (!authErr && authData?.user) {
-        const currentMeta = (authData.user.user_metadata || {}) as Record<string, unknown>
-        const role = String(currentMeta.role || syncRole || '').toLowerCase()
-        const { error: updateErr } = await admin.auth.admin.updateUserById(targetUserId, {
-          user_metadata: {
-            ...currentMeta,
-            role: role || 'user',
-            can_dept_review: role === 'dept_staff' ? syncCanDeptReview : false,
-          },
-        })
-        if (updateErr) {
-          console.warn('[users/status] sync can_dept_review failed', updateErr.message)
-        }
-      }
-    }
+    await admin
+      .from('profiles')
+      .update({
+        hq_roles: nextRole === 'dept_staff' ? nextHqRoles ?? [] : [],
+      })
+      .eq('id', targetUserId)
   }
 
   const label =
@@ -83,9 +125,7 @@ export async function POST(request: Request, { params }: RouteContext) {
 
   const bodyText =
     newStatus === 'approved'
-      ? syncRole
-        ? `החשבון אושר. התפקיד במערכת: ${syncRole}. ניתן להתחבר.`
-        : 'החשבון אושר. ניתן להתחבר למערכת.'
+      ? 'החשבון אושר. ניתן להתחבר למערכת.'
       : `סטטוס החשבון עודכן ל: ${newStatus}.`
 
   await notifyUserIds(

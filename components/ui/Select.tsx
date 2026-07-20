@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Check, ChevronDown } from "lucide-react";
 
 export type SelectOption<T extends string = string> = {
@@ -89,21 +90,63 @@ export function Select<T extends string>({
 }: SelectProps<T>) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuId = useId();
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number; center?: boolean } | null>(null);
   const accentStyle = accentClasses[accent];
   const isOpen = open && !disabled;
   const alignClass = textAlign === "center" ? "text-center" : "text-right";
   const activeLabel = options.find((option) => option.value === value)?.label || placeholder;
   const showPlaceholder = !value;
 
+  const updateMenuPos = useCallback(() => {
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    if (variant === "pill") {
+      setMenuPos({
+        top: rect.bottom + 6,
+        left: rect.left + rect.width / 2,
+        width: Math.max(rect.width, 192),
+        center: true,
+      });
+      return;
+    }
+    setMenuPos({ top: rect.bottom + 6, left: rect.left, width: rect.width });
+  }, [variant]);
+
+  const openMenu = () => {
+    updateMenuPos();
+    setOpen(true);
+  };
+
+  const closeMenu = () => {
+    setOpen(false);
+    setMenuPos(null);
+  };
+
   useEffect(() => {
+    if (!open) return;
     const onDocClick = (event: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
+      const target = event.target as Node;
+      if (rootRef.current?.contains(target)) return;
+      if (menuRef.current?.contains(target)) return;
+      closeMenu();
     };
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
-  }, []);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onScrollOrResize = () => updateMenuPos();
+    window.addEventListener("scroll", onScrollOrResize, true);
+    window.addEventListener("resize", onScrollOrResize);
+    return () => {
+      window.removeEventListener("scroll", onScrollOrResize, true);
+      window.removeEventListener("resize", onScrollOrResize);
+    };
+  }, [open, updateMenuPos]);
 
   const buttonBase =
     variant === "pill"
@@ -117,9 +160,10 @@ export function Select<T extends string>({
   return (
     <div className={`relative ${variant === "pill" ? "flex justify-center" : ""} ${className}`} ref={rootRef}>
       <button
+        ref={buttonRef}
         type="button"
         disabled={disabled}
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={() => (isOpen ? closeMenu() : openMenu())}
         className={`${buttonBase} ${alignClass} ${variant === "pill" ? pillTone : ""} ${isOpen ? accentStyle.buttonOpen : accentStyle.buttonFocus} ${buttonClassName}`}
       >
         <span className={`min-w-0 flex-1 truncate ${showPlaceholder ? "text-gray-400" : ""}`}>{activeLabel}</span>
@@ -128,62 +172,73 @@ export function Select<T extends string>({
           className={`pointer-events-none shrink-0 text-gray-400 transition-transform ${variant === "default" ? "" : "absolute left-3 top-1/2 -translate-y-1/2"} ${isOpen ? "rotate-180" : ""}`}
         />
       </button>
-      {isOpen ? (
-        <div
-          className={`absolute top-full z-[140] mt-1.5 min-w-full overflow-hidden rounded-xl border border-gray-100 bg-white shadow-2xl ${variant === "pill" ? "right-1/2 min-w-48 translate-x-1/2" : "right-0"} ${menuClassName}`}
-        >
-          <div className={`max-h-60 overflow-y-auto p-1.5 ${variant === "status" || variant === "pill" ? "text-center" : ""}`}>
-            {clearable ? (
-              <button
-                type="button"
-                onClick={() => {
-                  onChange("");
-                  setOpen(false);
-                }}
-                className={`w-full rounded-lg px-2.5 py-1.5 text-xs font-bold transition-colors ${alignClass} ${
-                  value === "" ? accentStyle.active : "text-gray-700 hover:bg-gray-50"
-                }`}
-              >
-                {placeholder}
-              </button>
-            ) : null}
-            {options.map((option) => {
-              const selected = value === option.value;
-              const customTone = getOptionClassName?.(option.value, selected);
-              const itemClass =
-                customTone && variant === "pill"
-                  ? `${customTone} ${selected ? "ring-1 ring-inset ring-current/20" : "opacity-85 hover:opacity-100"}`
-                  : selected
-                    ? accentStyle.active
-                    : "text-gray-700 hover:bg-gray-50";
+      {isOpen && menuPos && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              ref={menuRef}
+              id={menuId}
+              className={`fixed z-[300] overflow-hidden rounded-xl border border-gray-100 bg-white shadow-2xl ${menuClassName}`}
+              style={{
+                top: menuPos.top,
+                left: menuPos.left,
+                width: menuPos.width,
+                transform: menuPos.center ? "translateX(-50%)" : undefined,
+              }}
+            >
+              <div className={`max-h-60 overflow-y-auto p-1.5 ${variant === "status" || variant === "pill" ? "text-center" : ""}`}>
+                {clearable ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onChange("");
+                      closeMenu();
+                    }}
+                    className={`w-full rounded-lg px-2.5 py-1.5 text-xs font-bold transition-colors ${alignClass} ${
+                      value === "" ? accentStyle.active : "text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    {placeholder}
+                  </button>
+                ) : null}
+                {options.map((option) => {
+                  const selected = value === option.value;
+                  const customTone = getOptionClassName?.(option.value, selected);
+                  const itemClass =
+                    customTone && variant === "pill"
+                      ? `${customTone} ${selected ? "ring-1 ring-inset ring-current/20" : "opacity-85 hover:opacity-100"}`
+                      : selected
+                        ? accentStyle.active
+                        : "text-gray-700 hover:bg-gray-50";
 
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => {
-                    onChange(option.value);
-                    setOpen(false);
-                  }}
-                  className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-xs font-bold transition-colors ${alignClass} ${itemClass} ${
-                    variant === "status" ? "rounded-xl px-3 py-2 font-black" : ""
-                  }`}
-                >
-                  {variant === "status" ? (
-                    <>
-                      <Check size={13} className={selected ? "opacity-100" : "opacity-0"} />
-                      <span className="flex-1">{option.label}</span>
-                      <span className="w-[13px]" />
-                    </>
-                  ) : (
-                    option.label
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => {
+                        onChange(option.value);
+                        closeMenu();
+                      }}
+                      className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-xs font-bold transition-colors ${alignClass} ${itemClass} ${
+                        variant === "status" ? "rounded-xl px-3 py-2 font-black" : ""
+                      }`}
+                    >
+                      {variant === "status" ? (
+                        <>
+                          <Check size={13} className={selected ? "opacity-100" : "opacity-0"} />
+                          <span className="flex-1">{option.label}</span>
+                          <span className="w-[13px]" />
+                        </>
+                      ) : (
+                        option.label
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

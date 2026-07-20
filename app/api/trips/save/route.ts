@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { isManagerUser } from '@/lib/auth'
 import type { User } from '@supabase/supabase-js'
 import { notifyUsers } from '@/lib/notifications'
+import { withTripNotificationTitle } from '@/lib/notificationDisplay'
 
 type SaveTripBody = {
   editId?: string | null
@@ -72,7 +73,7 @@ export async function POST(request: Request) {
         },
         {
           kind: 'trip.submitted_dept_review',
-          title: 'בקשת טיול חדשה לאישור ראשוני',
+          title: withTripNotificationTitle(tripName, 'בקשת טיול חדשה לאישור ראשוני'),
           body: `${coord} הגיש/ה את "${tripName}" לאישור במחלקה.`,
           url: `/hq/dept-review/${tripId}`,
           inAppType: 'info',
@@ -86,7 +87,7 @@ export async function POST(request: Request) {
         { mode: 'safety_admins' },
         {
           kind: 'trip.submitted_safety',
-          title: 'בקשת טיול חדשה',
+          title: withTripNotificationTitle(tripName, 'בקשת טיול חדשה'),
           body: `${coord} הגיש/ה את "${tripName}" למחלקת הבטיחות.`,
           url: `/manager/approvals/${tripId}`,
           inAppType: 'info',

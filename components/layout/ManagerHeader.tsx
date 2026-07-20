@@ -9,6 +9,7 @@ import { useManagerInboxSummary } from '@/hooks/useManagerInboxSummary';
 import { formatUserRoleLabel } from '@/lib/auth';
 import { useUnreadNotifications } from '@/hooks/useUnreadNotifications';
 import { resolveDisplayName } from '@/lib/userDisplay';
+import { NotificationPreviewText } from '@/components/notifications/NotificationPreviewText';
 
 export const ManagerHeader = ({ title }: { title: string }) => {
   // אתחול עם ערכים דיפולטיביים
@@ -144,7 +145,7 @@ export const ManagerHeader = ({ title }: { title: string }) => {
                                   >
                                     <div className="flex gap-2 text-xs text-gray-500 items-center min-w-0">
                                       <Mail size={12} className="text-brand-cyan mt-0.5 shrink-0"/>
-                                      <span className="line-clamp-2 font-bold text-gray-800">{n.title}</span>
+                                      <NotificationPreviewText title={n.title} message={n.message} className="line-clamp-2 font-bold text-gray-800 text-xs" />
                                     </div>
                                   </Link>
                                 ))

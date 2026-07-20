@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   Loader2,
+  Pencil,
   Plus,
   Save,
   ArrowRight,
@@ -82,7 +83,7 @@ import { RegulationOccurrenceBadges } from "@/components/plan/RegulationOccurren
 import { TripPlanTasksTab } from "@/components/plan/TripPlanTasksTab";
 import { buildTripPlanTasks, type TripPlanTaskUploadContext } from "@/lib/tripPlanTasks";
 import { buildMokedTevaTripCopyData } from "@/lib/mokedTevaTripCopyData";
-import { emptyPlanDesignDraft, DESIGN_STATUS_OPTIONS } from "@/lib/planDesign";
+import { emptyPlanDesignDraft, planDesignToDraft, DESIGN_STATUS_OPTIONS } from "@/lib/planDesign";
 import { authFetch } from "@/lib/authFetch";
 import { PLAN_TRIP_PAGE_TITLE } from "@/lib/planTripLabels";
 import { getTripParticipantLabels, localizeParticipantCopy } from "@/lib/tripParticipantLabels";
@@ -778,6 +779,7 @@ export default function TripPlanPage() {
   const [printQuickDialogRowId, setPrintQuickDialogRowId] = useState<string | null>(null);
   const [printDialogSavePrompt, setPrintDialogSavePrompt] = useState(false);
   const [designQuickDialogRowId, setDesignQuickDialogRowId] = useState<string | null>(null);
+  const [editingDesignId, setEditingDesignId] = useState<string | null>(null);
   const [designDialogSavePrompt, setDesignDialogSavePrompt] = useState(false);
   const [designUploadError, setDesignUploadError] = useState("");
   const [designsSchemaMissing, setDesignsSchemaMissing] = useState(false);
@@ -789,6 +791,7 @@ export default function TripPlanPage() {
   const [tablePanDragging, setTablePanDragging] = useState(false);
   const [tablePanStart, setTablePanStart] = useState<{ x: number; y: number; left: number; top: number } | null>(null);
   const [rowDragId, setRowDragId] = useState<string | null>(null);
+  const rowDragIdRef = useRef<string | null>(null);
   const [rowDropTargetId, setRowDropTargetId] = useState<string | null>(null);
   const [reorderingRows, setReorderingRows] = useState(false);
   const reorderingRowsRef = useRef(false);
@@ -2162,11 +2165,13 @@ export default function TripPlanPage() {
           throw new Error(String((payload as { error?: string }).error || "Failed to reorder rows"));
         }
         await flushPendingEdits();
-      } catch {
+      } catch (error) {
         setRows(previousRows);
         rowsRef.current = previousRows;
+        window.alert(error instanceof Error ? error.message : "שינוי סדר השורות נכשל");
       } finally {
         setReorderingRows(false);
+        rowDragIdRef.current = null;
         setRowDragId(null);
         setRowDropTargetId(null);
       }
@@ -2304,6 +2309,62 @@ export default function TripPlanPage() {
       credentials: "include",
     });
     await loadPlan();
+  };
+
+  const openEditDesign = (rowId: string, design: PlanDesign) => {
+    updateDesignDraft(rowId, planDesignToDraft(design));
+    setEditingDesignId(design.id);
+    setDesignQuickDialogRowId(rowId);
+    setDesignDialogSavePrompt(false);
+    setDesignUploadError("");
+  };
+
+  const saveDesignEdit = async (rowId: string, designId: string) => {
+    const draft = getDesignDraft(rowId);
+    if (!draft.document_name.trim()) {
+      setDesignUploadError("שם המסמך הוא שדה חובה");
+      return;
+    }
+    await flushPendingEdits();
+    setUploadingRowId(rowId);
+    setDesignUploadError("");
+    try {
+      const res = await fetch(`/api/trips/${tripId}/plan/rows/${rowId}/designs/${designId}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          document_name: draft.document_name.trim(),
+          designer_name: draft.designer_name.trim() || null,
+          size_settings: draft.size_settings.trim() || null,
+          notes: draft.notes.trim() || null,
+          content_mode: draft.content_mode,
+          document_text: draft.document_text.trim() || null,
+          designer_instructions: draft.designer_instructions.trim() || null,
+          status: draft.status,
+        }),
+      });
+      const payload = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setDesignUploadError(payload.error || "שמירת העיצוב נכשלה");
+        return;
+      }
+      if (draft.designer_name.trim()) {
+        void patchDesignerMeta({ action: "updateDesigner", name: draft.designer_name.trim() }).catch(() => undefined);
+      }
+      setDesignDrafts((prev) => ({
+        ...prev,
+        [rowId]: emptyPlanDesignDraft(),
+      }));
+      setDesignQuickDialogRowId(null);
+      setEditingDesignId(null);
+      await loadPlan();
+      void loadDesignersMeta();
+    } catch (err) {
+      setDesignUploadError(err instanceof Error ? err.message : "שמירת העיצוב נכשלה");
+    } finally {
+      setUploadingRowId(null);
+    }
   };
 
   const updateDesignStatus = async (rowId: string, designId: string, status: string) => {
@@ -2521,6 +2582,7 @@ export default function TripPlanPage() {
         setPrintQuickDialogRowId(null);
         setPrintDialogSavePrompt(false);
         setDesignQuickDialogRowId(null);
+        setEditingDesignId(null);
         setDesignDialogSavePrompt(false);
         setExpandedCols((prev) => ({
           ...prev,
@@ -2534,6 +2596,7 @@ export default function TripPlanPage() {
         setPrintQuickDialogRowId(null);
         setPrintDialogSavePrompt(false);
         setDesignQuickDialogRowId(null);
+        setEditingDesignId(null);
         setDesignDialogSavePrompt(false);
         setExpandedCols((prev) => ({
           ...prev,
@@ -2552,6 +2615,7 @@ export default function TripPlanPage() {
       setPrintQuickDialogRowId(null);
       setPrintDialogSavePrompt(false);
       setDesignQuickDialogRowId(null);
+      setEditingDesignId(null);
       setDesignDialogSavePrompt(false);
       setExpandedCols((prev) => ({
         ...prev,
@@ -2587,6 +2651,21 @@ export default function TripPlanPage() {
   const markSectionDone = (rowId: string, section: PlanSectionWithDone, done = true) => {
     const doneKey = doneKeyBySection[section];
     setRows((prev) => prev.map((row) => (row.id === rowId ? { ...row, [doneKey]: done } : row)));
+    if (done) {
+      setExpandedCols((prev) => {
+        const current = prev[rowId] || emptyExpandedCols();
+        if (section === "prints") {
+          return {
+            ...prev,
+            [rowId]: { ...current, designs: false, prints: false },
+          };
+        }
+        return {
+          ...prev,
+          [rowId]: { ...current, [section]: false },
+        };
+      });
+    }
     setTimeout(() => {
       void saveRowById(rowId);
     }, 0);
@@ -3404,7 +3483,15 @@ export default function TripPlanPage() {
           onMouseDown={(e) => {
             if (!tableScrollRef.current) return;
             const target = e.target as HTMLElement;
-            if (target.closest("input,textarea,button,label,a")) return;
+            // Pan must not steal mousedown from inputs or the row drag handle
+            // (preventDefault here would cancel HTML5 row dragging).
+            if (
+              target.closest(
+                'input,textarea,button,label,a,select,[data-row-drag-handle],[draggable="true"]',
+              )
+            ) {
+              return;
+            }
             e.preventDefault();
             setTablePanDragging(true);
             setTablePanStart({
@@ -3594,26 +3681,29 @@ export default function TripPlanPage() {
                 <tr
                   className={`group align-middle border-b border-gray-100 odd:bg-white even:bg-slate-50/50 ${
                     rowDragId === row.id ? "opacity-60" : ""
-                  } ${rowDropTargetId === row.id ? "bg-cyan-50/80" : ""}`}
+                  } ${rowDropTargetId === row.id ? "bg-cyan-50/80 ring-2 ring-inset ring-brand-cyan/40" : ""}`}
+                  onDragOver={(event) => {
+                    const draggingId = rowDragIdRef.current;
+                    if (!draggingId || draggingId === row.id || row.id.startsWith("temp-")) return;
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = "move";
+                    if (rowDropTargetId !== row.id) setRowDropTargetId(row.id);
+                  }}
+                  onDragLeave={(event) => {
+                    const related = event.relatedTarget as Node | null;
+                    if (related && event.currentTarget.contains(related)) return;
+                    if (rowDropTargetId === row.id) setRowDropTargetId(null);
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const draggingId = rowDragIdRef.current || event.dataTransfer.getData("text/plain");
+                    if (!draggingId) return;
+                    void reorderPlanRows(draggingId, row.id);
+                  }}
                 >
-                  <td
-                    className="p-2 align-middle"
-                    onDragOver={(event) => {
-                      if (!rowDragId || rowDragId === row.id || row.id.startsWith("temp-")) return;
-                      event.preventDefault();
-                      event.dataTransfer.dropEffect = "move";
-                      setRowDropTargetId(row.id);
-                    }}
-                    onDragLeave={() => {
-                      if (rowDropTargetId === row.id) setRowDropTargetId(null);
-                    }}
-                    onDrop={(event) => {
-                      event.preventDefault();
-                      if (!rowDragId) return;
-                      void reorderPlanRows(rowDragId, row.id);
-                    }}
-                  >
+                  <td className="p-2 align-middle">
                     <div
+                      data-row-drag-handle
                       draggable={!row.id.startsWith("temp-") && !reorderingRows}
                       onMouseDown={(event) => event.stopPropagation()}
                       onDragStart={(event) => {
@@ -3622,15 +3712,22 @@ export default function TripPlanPage() {
                           return;
                         }
                         event.stopPropagation();
+                        rowDragIdRef.current = row.id;
                         setRowDragId(row.id);
                         event.dataTransfer.effectAllowed = "move";
                         event.dataTransfer.setData("text/plain", row.id);
+                        try {
+                          event.dataTransfer.setData("application/x-plan-row-id", row.id);
+                        } catch {
+                          /* some browsers ignore custom types */
+                        }
                       }}
                       onDragEnd={() => {
+                        rowDragIdRef.current = null;
                         setRowDragId(null);
                         setRowDropTargetId(null);
                       }}
-                      className={`mt-1 rounded-xl px-1 py-1 text-center text-xs font-bold text-gray-600 ${
+                      className={`mt-1 select-none rounded-xl px-1 py-1 text-center text-xs font-bold text-gray-600 ${
                         row.id.startsWith("temp-") ? "" : "cursor-grab active:cursor-grabbing hover:bg-slate-100/80"
                       }`}
                       title={row.id.startsWith("temp-") ? undefined : "גרור לשינוי מיקום השורה"}
@@ -4762,6 +4859,16 @@ export default function TripPlanPage() {
                                   מעצב: {linkedDesign.designer_name || "—"} | גודל: {linkedDesign.size_settings || "—"}
                                 </div>
                                 <div className="text-gray-500">סטטוס: {linkedDesign.status || "—"}</div>
+                                <div className="mt-1 flex flex-wrap gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => openEditDesign(row.id, linkedDesign)}
+                                    className="inline-flex items-center gap-1 font-bold text-fuchsia-700"
+                                  >
+                                    <Pencil size={11} />
+                                    עריכה
+                                  </button>
+                                </div>
                               </div>
                             ) : (
                               <div className="border-b border-gray-100 bg-gray-50 px-2 py-1.5 text-[10px] font-bold text-gray-400">
@@ -4801,14 +4908,24 @@ export default function TripPlanPage() {
                                 מעצב: {design.designer_name || "—"} | גודל: {design.size_settings || "—"}
                               </div>
                               <div className="text-gray-500">סטטוס: {design.status || "—"}</div>
-                              <button
-                                type="button"
-                                onClick={() => void removeDesign(row.id, design.id)}
-                                className="mt-1 inline-flex items-center gap-1 font-bold text-red-600"
-                              >
-                                <Trash2 size={11} />
-                                הסר עיצוב
-                              </button>
+                              <div className="mt-1 flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => openEditDesign(row.id, design)}
+                                  className="inline-flex items-center gap-1 font-bold text-fuchsia-700"
+                                >
+                                  <Pencil size={11} />
+                                  עריכה
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void removeDesign(row.id, design.id)}
+                                  className="inline-flex items-center gap-1 font-bold text-red-600"
+                                >
+                                  <Trash2 size={11} />
+                                  הסר עיצוב
+                                </button>
+                              </div>
                             </div>
                             <div className="bg-gray-50 px-2 py-2 text-[10px] font-bold text-gray-400">ללא הדפסה</div>
                           </div>
@@ -7229,16 +7346,32 @@ export default function TripPlanPage() {
       ) : null}
       {designQuickDialogRowId ? (
         <PlanDesignQuickDialog
+          mode={editingDesignId ? "edit" : "create"}
           draft={getDesignDraft(designQuickDialogRowId)}
+          existingBriefFileName={
+            rows
+              .find((row) => row.id === designQuickDialogRowId)
+              ?.designs?.find((design) => design.id === editingDesignId)?.brief_file_name || null
+          }
+          existingOutputFileName={
+            rows
+              .find((row) => row.id === designQuickDialogRowId)
+              ?.designs?.find((design) => design.id === editingDesignId)?.output_file_name || null
+          }
           uploading={uploadingRowId === designQuickDialogRowId}
           designerSuggestions={designerSuggestionNames}
           fieldClass={fieldClass}
           savePromptOpen={designDialogSavePrompt}
           uploadError={designUploadError}
           onDraftChange={(patch) => updateDesignDraft(designQuickDialogRowId, patch)}
-          onUpload={() => void addDesign(designQuickDialogRowId, { showFollowUpPrompt: true })}
+          onUpload={() =>
+            editingDesignId
+              ? void saveDesignEdit(designQuickDialogRowId, editingDesignId)
+              : void addDesign(designQuickDialogRowId, { showFollowUpPrompt: true })
+          }
           onClose={() => {
             setDesignQuickDialogRowId(null);
+            setEditingDesignId(null);
             setDesignDialogSavePrompt(false);
           }}
           onFollowUp={(action, meta) => handleRowFollowUp(designQuickDialogRowId, action, meta)}

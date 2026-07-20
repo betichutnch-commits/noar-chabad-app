@@ -1,6 +1,6 @@
 "use client"
 
-import React, { Suspense, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Menu, Bell, X, Mail, ClipboardList } from 'lucide-react';
 import Image from 'next/image';
@@ -11,6 +11,7 @@ import { PushPermissionBanner } from '@/components/PushPermissionBanner';
 import { hasDeptReviewCapability } from '@/lib/auth';
 import { useDeptReviewQueue } from '@/hooks/useDeptReviewQueue';
 import { resolveDisplayName } from '@/lib/userDisplay';
+import { NotificationPreviewText } from '@/components/notifications/NotificationPreviewText';
 import { CoordinatorPlanningHost } from '@/components/plan/CoordinatorPlanningHost';
 import { TripPlanningHubHost } from '@/components/plan/TripPlanningHubHost';
 
@@ -41,6 +42,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   });
   const avatarUrl = user?.user_metadata?.avatar_url || null;
   const showDeptReview = hasDeptReviewCapability(user);
+
+  // Safety: never leave body scroll locked after navigations / stuck overlays.
+  useEffect(() => {
+    document.body.style.overflow = "";
+  }, []);
 
   return (
     <div className="min-h-screen bg-surface-base dir-rtl text-right font-sans">
@@ -175,7 +181,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                               >
                                   <div className="flex gap-2">
                                       <Mail size={14} className="text-brand-cyan mt-0.5 shrink-0"/>
-                                      <span className="text-xs font-bold text-gray-700 line-clamp-2">{n.title}</span>
+                                      <NotificationPreviewText title={n.title} message={n.message} />
                                   </div>
                               </Link>
                           ))

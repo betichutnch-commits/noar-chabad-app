@@ -21,12 +21,20 @@ import {
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { isManagerUser, formatUserRoleLabel, getUserRoleShortLabel, getCoordinatorRoleTitle } from '@/lib/auth'
+import { isManagerUser, formatUserRoleLabel, getUserRoleShortLabel } from '@/lib/auth'
+import {
+  HQ_ROLE_OPTIONS,
+  ensureDefaultHqRoles,
+  formatHqRolesLabel,
+  hqRolesIncludeBranchOfficer,
+  resolveHqRolesFromMeta,
+  type HqRole,
+} from '@/lib/hqRoles'
 import { fetchManagedUsersAction, type ManagedUser } from './actions'
 
 import { useUser } from '@/hooks/useUser'
 
-type RoleOption = 'coordinator' | 'dept_staff' | 'safety_admin' | 'secretary';
+type RoleOption = 'coordinator' | 'dept_staff' | 'safety_admin' | 'secretary'
 
 const ROLE_OPTIONS: Array<{ value: RoleOption; label: string; description: string }> = [
   {
@@ -37,7 +45,7 @@ const ROLE_OPTIONS: Array<{ value: RoleOption; label: string; description: strin
   {
     value: 'dept_staff',
     label: 'צוות מטה',
-    description: 'חבר מטה במחלקה (ללא הרשאות בטיחות מיוחדות).',
+    description: 'חבר מטה במחלקה — ניתן לבחור כמה תפקידי מטה.',
   },
   {
     value: 'safety_admin',
@@ -114,9 +122,16 @@ function UsersManagementContent() {
     isOpen: boolean;
     user: ManagedUser | null;
     selectedRole: RoleOption;
-    isDeptTripsOfficer: boolean;
+    selectedHqRoles: HqRole[];
     saving: boolean;
-  }>({ isOpen: false, user: null, selectedRole: 'coordinator', isDeptTripsOfficer: false, saving: false });
+  }>({ isOpen: false, user: null, selectedRole: 'coordinator', selectedHqRoles: ['dept_member'], saving: false });
+
+  const [approveModal, setApproveModal] = useState<{
+    isOpen: boolean;
+    user: ManagedUser | null;
+    selectedHqRoles: HqRole[];
+    saving: boolean;
+  }>({ isOpen: false, user: null, selectedHqRoles: ['dept_member'], saving: false });
 
   const [modal, setModal] = useState({
       isOpen: false,
@@ -169,9 +184,32 @@ function UsersManagementContent() {
     }
   }, [user, userLoading, profile, router, page, perPage]);
 
+  const applyLocalMeta = (userId: string, patch: Record<string, unknown>) => {
+    setUsers(prev => prev.map(u => {
+      if (u.id !== userId) return u;
+      return { ...u, raw_user_meta_data: { ...u.raw_user_meta_data, ...patch } };
+    }));
+  };
+
   const updateUserStatus = (userId: string, newStatus: string) => {
+      const target = users.find(u => u.id === userId);
+      if (!target) return;
+
+      if (newStatus === 'approved') {
+        const role = String(target.raw_user_meta_data?.role || '').toLowerCase();
+        if (role === 'dept_staff' || role === 'dept_trips_officer') {
+          const initial = ensureDefaultHqRoles(resolveHqRolesFromMeta(target.raw_user_meta_data));
+          setApproveModal({
+            isOpen: true,
+            user: target,
+            selectedHqRoles: initial.length ? initial : ['dept_member'],
+            saving: false,
+          });
+          return;
+        }
+      }
+
       showModal('confirm', 'שינוי סטטוס משתמש', `האם אתה בטוח שברצונך לשנות את הסטטוס ל-${newStatus === 'approved' ? 'פעיל' : 'חסום'}?`, async () => {
-          const target = users.find(u => u.id === userId);
           const res = await fetch(`/api/users/${encodeURIComponent(userId)}/status`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -181,9 +219,6 @@ function UsersManagementContent() {
               ...(newStatus === 'approved' && target?.raw_user_meta_data?.role
                 ? {
                     sync_role: String(target.raw_user_meta_data.role).toLowerCase(),
-                    sync_can_dept_review:
-                      target.raw_user_meta_data.can_dept_review === true ||
-                      String(target.raw_user_meta_data.can_dept_review || '').toLowerCase() === 'true',
                   }
                 : {}),
             }),
@@ -195,15 +230,52 @@ function UsersManagementContent() {
               return;
           }
 
-          setUsers(prev => prev.map(u => {
-              if (u.id === userId) {
-                  const newMeta = { ...u.raw_user_meta_data, status: newStatus };
-                  return { ...u, raw_user_meta_data: newMeta };
-              }
-              return u;
-          }));
+          applyLocalMeta(userId, { status: newStatus });
           showModal('success', 'עודכן בהצלחה', 'סטטוס המשתמש עודכן.');
       });
+  };
+
+  const toggleApproveHqRole = (role: HqRole) => {
+    setApproveModal(prev => {
+      const has = prev.selectedHqRoles.includes(role);
+      const next = has ? prev.selectedHqRoles.filter(r => r !== role) : [...prev.selectedHqRoles, role];
+      return { ...prev, selectedHqRoles: next };
+    });
+  };
+
+  const handleApproveWithHqRoles = async () => {
+    if (!approveModal.user) return;
+    if (approveModal.selectedHqRoles.length === 0) {
+      showModal('error', 'חסר תפקיד', 'יש לבחור לפחות תפקיד מטה אחד.');
+      return;
+    }
+    setApproveModal(prev => ({ ...prev, saving: true }));
+    const hqRoles = ensureDefaultHqRoles(approveModal.selectedHqRoles);
+    const res = await fetch(`/api/users/${encodeURIComponent(approveModal.user.id)}/status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        new_status: 'approved',
+        sync_role: 'dept_staff',
+        hq_roles: hqRoles,
+        sync_can_dept_review: hqRolesIncludeBranchOfficer(hqRoles),
+      }),
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setApproveModal(prev => ({ ...prev, saving: false }));
+      showModal('error', 'שגיאה', payload?.error || res.statusText);
+      return;
+    }
+    applyLocalMeta(approveModal.user.id, {
+      status: 'approved',
+      role: 'dept_staff',
+      hq_roles: hqRoles,
+      can_dept_review: hqRolesIncludeBranchOfficer(hqRoles),
+    });
+    setApproveModal({ isOpen: false, user: null, selectedHqRoles: ['dept_member'], saving: false });
+    showModal('success', 'עודכן בהצלחה', 'המשתמש אושר ותפקידי המטה נשמרו.');
   };
 
   const normalizeRoleForFilter = (role?: string | null): RoleOption | 'unknown' => {
@@ -217,17 +289,14 @@ function UsersManagementContent() {
 
   const openRoleModal = (target: ManagedUser) => {
     const currentRole = String(target.raw_user_meta_data?.role || 'coordinator').toLowerCase();
-    const canDeptReviewMeta =
-      target.raw_user_meta_data?.can_dept_review === true ||
-      String(target.raw_user_meta_data?.can_dept_review || '').toLowerCase() === 'true';
-    const isDeptTripsOfficer = currentRole === 'dept_trips_officer' || canDeptReviewMeta;
     const normalizedRole = currentRole === 'dept_trips_officer' ? 'dept_staff' : currentRole;
     const initial: RoleOption = (ROLE_OPTIONS.find(opt => opt.value === normalizedRole)?.value as RoleOption) || 'coordinator';
+    const hqRoles = ensureDefaultHqRoles(resolveHqRolesFromMeta(target.raw_user_meta_data));
     setRoleModal({
       isOpen: true,
       user: target,
       selectedRole: initial,
-      isDeptTripsOfficer,
+      selectedHqRoles: hqRoles,
       saving: false,
     });
   };
@@ -237,21 +306,36 @@ function UsersManagementContent() {
       isOpen: false,
       user: null,
       selectedRole: 'coordinator',
-      isDeptTripsOfficer: false,
+      selectedHqRoles: ['dept_member'],
       saving: false,
     });
 
+  const toggleRoleModalHqRole = (role: HqRole) => {
+    setRoleModal(prev => {
+      const has = prev.selectedHqRoles.includes(role);
+      const next = has ? prev.selectedHqRoles.filter(r => r !== role) : [...prev.selectedHqRoles, role];
+      return { ...prev, selectedHqRoles: next };
+    });
+  };
+
   const handleRoleSave = async () => {
     if (!roleModal.user) return;
+    if (roleModal.selectedRole === 'dept_staff' && roleModal.selectedHqRoles.length === 0) {
+      showModal('error', 'חסר תפקיד', 'יש לבחור לפחות תפקיד מטה אחד.');
+      return;
+    }
     setRoleModal(prev => ({ ...prev, saving: true }));
     const roleToSave = roleModal.selectedRole;
-    const canDeptReviewToSave =
-      roleModal.selectedRole === 'dept_staff' ? roleModal.isDeptTripsOfficer : false;
+    const hqRoles = roleToSave === 'dept_staff' ? ensureDefaultHqRoles(roleModal.selectedHqRoles) : [];
     const res = await fetch(`/api/users/${encodeURIComponent(roleModal.user.id)}/role`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ new_role: roleToSave, can_dept_review: canDeptReviewToSave }),
+      body: JSON.stringify({
+        new_role: roleToSave,
+        hq_roles: hqRoles,
+        can_dept_review: hqRolesIncludeBranchOfficer(hqRoles),
+      }),
     });
     const payload = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -259,17 +343,11 @@ function UsersManagementContent() {
       showModal('error', 'שגיאה בשינוי תפקיד', payload?.error || res.statusText);
       return;
     }
-    setUsers(prev => prev.map(u => {
-      if (u.id !== roleModal.user!.id) return u;
-      return {
-        ...u,
-        raw_user_meta_data: {
-          ...u.raw_user_meta_data,
-          role: roleToSave,
-          can_dept_review: canDeptReviewToSave,
-        },
-      };
-    }));
+    applyLocalMeta(roleModal.user.id, {
+      role: roleToSave,
+      hq_roles: hqRoles,
+      can_dept_review: hqRolesIncludeBranchOfficer(hqRoles),
+    });
     closeRoleModal();
     showModal('success', 'עודכן', 'התפקיד עודכן בהצלחה.');
   };
@@ -301,15 +379,15 @@ function UsersManagementContent() {
 
       {roleModal.isOpen && roleModal.user && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden">
-            <div className="bg-gray-900 text-white px-6 py-4 flex items-center justify-between">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="bg-gray-900 text-white px-6 py-4 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <UserCog size={20} />
                 <span className="font-bold">שינוי תפקיד והרשאות</span>
               </div>
               <button onClick={closeRoleModal} aria-label="סגור" className="hover:opacity-70"><X size={18}/></button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-4 overflow-y-auto">
               <div className="text-sm text-gray-500">
                 <span className="font-bold text-gray-800">{String(roleModal.user.raw_user_meta_data?.full_name || '') || roleModal.user.email}</span>
                 <span> • {String(roleModal.user.raw_user_meta_data?.department || '') || 'ללא מחלקה'}</span>
@@ -334,7 +412,12 @@ function UsersManagementContent() {
                           setRoleModal(prev => ({
                             ...prev,
                             selectedRole: opt.value,
-                            isDeptTripsOfficer: opt.value === 'dept_staff' ? prev.isDeptTripsOfficer : false,
+                            selectedHqRoles:
+                              opt.value === 'dept_staff'
+                                ? prev.selectedHqRoles.length
+                                  ? prev.selectedHqRoles
+                                  : ['dept_member']
+                                : prev.selectedHqRoles,
                           }))
                         }
                         className="mt-1"
@@ -350,31 +433,97 @@ function UsersManagementContent() {
                   );
                 })}
                 {roleModal.selectedRole === 'dept_staff' && (
-                  <label className="flex items-start gap-3 p-3 rounded-2xl border border-amber-200 bg-amber-50/50 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={roleModal.isDeptTripsOfficer}
-                      onChange={(e) =>
-                        setRoleModal(prev => ({ ...prev, isDeptTripsOfficer: e.target.checked }))
-                      }
-                      className="mt-1 h-4 w-4 accent-amber-500"
-                    />
-                    <div className="flex-1">
-                      <div className="font-bold text-amber-800">הרשאת אישור ראשוני מחלקתי</div>
-                      <p className="text-xs text-amber-700 mt-0.5">
-                        סימון זה יפעיל הרשאת אישור ראשוני ל{getCoordinatorRoleTitle(String(roleModal.user?.raw_user_meta_data?.department || '')).replace(' סניף', '')} עבור משתמש צוות המטה.
-                      </p>
-                    </div>
-                  </label>
+                  <div className="rounded-2xl border border-cyan-100 bg-cyan-50/40 p-3 space-y-2">
+                    <p className="text-xs font-bold text-cyan-800">תפקידי מטה (ניתן לבחור כמה)</p>
+                    {HQ_ROLE_OPTIONS.map(opt => {
+                      const dept = String(roleModal.user?.raw_user_meta_data?.department || '');
+                      const checked = roleModal.selectedHqRoles.includes(opt.value);
+                      return (
+                        <label key={opt.value} className="flex items-start gap-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleRoleModalHqRole(opt.value)}
+                            className="mt-1 h-4 w-4 accent-cyan-600"
+                          />
+                          <span className="text-sm font-medium text-gray-800">{opt.labelFor(dept)}</span>
+                        </label>
+                      );
+                    })}
+                    <p className="text-[11px] text-cyan-700">
+                      רק «אחראי/ת הסניפים» מקבל/ת הרשאת אישור פש״ש ראשוני.
+                    </p>
+                  </div>
                 )}
               </div>
-              <div className="bg-amber-50 border border-amber-100 rounded-2xl p-3 text-xs text-amber-700">
-                שים לב: ברוב המקרים התפקיד יתעדכן אוטומטית תוך רגעים. אם המשתמש עדיין לא רואה שינוי, מספיק רענון עמוד.
-              </div>
             </div>
-            <div className="px-6 py-4 bg-gray-50 flex justify-end gap-3 border-t border-gray-100">
+            <div className="px-6 py-4 bg-gray-50 flex justify-end gap-3 border-t border-gray-100 shrink-0">
               <Button variant="ghost" onClick={closeRoleModal}>בטל</Button>
               <Button onClick={handleRoleSave} isLoading={roleModal.saving} icon={<CheckCircle size={16}/>}>שמור תפקיד</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {approveModal.isOpen && approveModal.user && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="bg-purple-700 text-white px-6 py-4 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <CheckCircle size={20} />
+                <span className="font-bold">אישור משתמש מטה</span>
+              </div>
+              <button
+                onClick={() => setApproveModal({ isOpen: false, user: null, selectedHqRoles: ['dept_member'], saving: false })}
+                aria-label="סגור"
+                className="hover:opacity-70"
+              >
+                <X size={18}/>
+              </button>
+            </div>
+            <div className="p-6 space-y-4 overflow-y-auto">
+              <p className="text-sm text-gray-600">
+                בחר/י תפקידי מטה עבור{' '}
+                <span className="font-bold text-gray-800">
+                  {String(approveModal.user.raw_user_meta_data?.full_name || '') || approveModal.user.email}
+                </span>
+              </p>
+              <div className="space-y-2">
+                {HQ_ROLE_OPTIONS.map(opt => {
+                  const dept = String(approveModal.user?.raw_user_meta_data?.department || '');
+                  const checked = approveModal.selectedHqRoles.includes(opt.value);
+                  return (
+                    <label
+                      key={opt.value}
+                      className={`flex items-start gap-3 p-3 rounded-2xl border cursor-pointer ${
+                        checked ? 'border-purple-300 bg-purple-50' : 'border-gray-200'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleApproveHqRole(opt.value)}
+                        className="mt-1 h-4 w-4 accent-purple-600"
+                      />
+                      <span className="text-sm font-bold text-gray-800">{opt.labelFor(dept)}</span>
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-gray-500">
+                רק «אחראי/ת הסניפים» יוכל/תוכל לאשר פש״ש לפני מחלקת בטיחות.
+              </p>
+            </div>
+            <div className="px-6 py-4 bg-gray-50 flex justify-end gap-3 border-t border-gray-100 shrink-0">
+              <Button
+                variant="ghost"
+                onClick={() => setApproveModal({ isOpen: false, user: null, selectedHqRoles: ['dept_member'], saving: false })}
+              >
+                בטל
+              </Button>
+              <Button onClick={() => void handleApproveWithHqRoles()} isLoading={approveModal.saving} icon={<CheckCircle size={16}/>}>
+                אשר ושמור תפקידים
+              </Button>
             </div>
           </div>
         </div>
@@ -494,7 +643,9 @@ function UsersManagementContent() {
                   const meta = u.raw_user_meta_data || {};
                   const isExpanded = expandedUser === u.id;
                   const role = String(meta.role || '').toLowerCase();
+                  const hqRoles = resolveHqRolesFromMeta(meta);
                   const canDeptReview =
+                    hqRolesIncludeBranchOfficer(hqRoles) ||
                     meta.can_dept_review === true ||
                     String(meta.can_dept_review || '').toLowerCase() === 'true' ||
                     role === 'dept_trips_officer';
@@ -502,14 +653,17 @@ function UsersManagementContent() {
                   const RoleIcon = getRoleIcon(normalizedRole, canDeptReview);
                   const accent = getRoleAccent(normalizedRole, canDeptReview);
                   const branchName = String(meta.branch_name || meta.branch || '');
-                  const roleLabel = getUserRoleShortLabel(
-                      canDeptReview && normalizedRole === 'dept_staff' ? 'dept_trips_officer' : normalizedRole,
-                      String(meta.department || ''),
-                  );
+                  const dept = String(meta.department || '');
+                  const roleLabel =
+                    normalizedRole === 'dept_staff'
+                      ? (hqRoles.length ? formatHqRolesLabel(hqRoles, null) : getUserRoleShortLabel(normalizedRole, dept, hqRoles))
+                      : getUserRoleShortLabel(normalizedRole, dept, hqRoles);
                   const fullRoleLabel = formatUserRoleLabel({
-                      role: canDeptReview && normalizedRole === 'dept_staff' ? 'dept_trips_officer' : normalizedRole,
-                      department: String(meta.department || ''),
+                      role: normalizedRole,
+                      department: dept,
                       branchName,
+                      hqRoles,
+                      canDeptReview,
                   });
 
                   return (
@@ -587,7 +741,7 @@ function UsersManagementContent() {
                                 </div>
                                 {filter === 'pending' && (
                                     <p className="mt-3 text-[11px] text-gray-400 text-left">
-                                        בעת אישור, תפקיד המשתמש יסונכרן אוטומטית בטבלת ה־profiles.
+                                        באישור נרשם מטה תתבקש/י לבחור תפקידי מטה (ניתן כמה במקביל).
                                     </p>
                                 )}
                             </div>

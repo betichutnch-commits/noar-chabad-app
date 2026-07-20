@@ -66,6 +66,7 @@ export {
   tripHasSensitiveActivity,
 } from "@/lib/regulation/sensitive-locations";
 export {
+  aggregateRowRegulationBriefs,
   evaluateRowRegulationBrief,
   getOfficialMankalUrlForSection,
   shouldShowRowRegulationBrief,

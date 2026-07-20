@@ -9,6 +9,7 @@ import { useUnreadNotifications } from '@/hooks/useUnreadNotifications';
 import { formatUserRoleLabel, getCoordinatorRoleTitle } from '@/lib/auth';
 import { useDeptReviewQueue } from '@/hooks/useDeptReviewQueue';
 import { resolveDisplayName } from '@/lib/userDisplay';
+import { NotificationPreviewText } from '@/components/notifications/NotificationPreviewText';
 
 const DEPT_LOGOS: Record<string, string> = {
     'בת מלך': '/logos/bat-melech.png',
@@ -198,7 +199,7 @@ export const Header = ({ title }: { title: string }) => {
                                     >
                                         <div className="flex gap-2">
                                             <Mail size={14} className="text-brand-cyan mt-0.5 shrink-0"/>
-                                            <span className="text-xs font-bold text-gray-700 line-clamp-2">{n.title}</span>
+                                            <NotificationPreviewText title={n.title} message={n.message} />
                                         </div>
                                     </Link>
                                 ))

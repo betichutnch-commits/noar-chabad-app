@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { isDeptReviewOfficer } from '@/lib/auth'
 import type { User } from '@supabase/supabase-js'
 import { notifyUserIds, notifyUsers } from '@/lib/notifications'
+import { withTripNotificationTitle } from '@/lib/notificationDisplay'
 
 type RouteContext = { params: Promise<unknown> }
 
@@ -13,14 +14,14 @@ interface DeptReviewBody {
   notes?: string
 }
 
-const NOTIFY_BY_ACTION: Record<DeptReviewAction, { title: string; message: (tripName: string) => string; type: string }> = {
+const NOTIFY_BY_ACTION: Record<DeptReviewAction, { title: (tripName: string) => string; message: (tripName: string) => string; type: string }> = {
   return: {
-    title: 'הבקשה הוחזרה להערות',
+    title: (name) => withTripNotificationTitle(name, 'הוחזרה להערות'),
     message: (name) => `אחראי המחלקה החזיר את הטיול "${name}" להערות. כנס/י לפרטים לעדכון הבקשה ושליחה מחדש.`,
     type: 'warning',
   },
   forward: {
-    title: 'הבקשה הועברה למחלקת הבטיחות',
+    title: (name) => withTripNotificationTitle(name, 'הועברה למחלקת הבטיחות'),
     message: (name) => `הטיול "${name}" עבר את שלב האישור הראשוני והועבר למחלקת הבטיחות לאישור סופי.`,
     type: 'success',
   },
@@ -105,7 +106,7 @@ export async function POST(request: Request, { params }: RouteContext) {
   const tripName = String(trip.name || '')
   await notifyUserIds([trip.user_id], {
     kind: 'trip.dept_review_coordinator',
-    title: notify.title,
+    title: notify.title(tripName),
     body: notify.message(tripName),
     url: `/dashboard/trip/${trip.id}`,
     inAppType: notify.type,
@@ -116,7 +117,7 @@ export async function POST(request: Request, { params }: RouteContext) {
       { mode: 'safety_admins' },
       {
         kind: 'trip.dept_forwarded_safety',
-        title: 'טיול הועבר לאישור בטיחות',
+        title: withTripNotificationTitle(tripName, 'הועבר לאישור בטיחות'),
         body: `הטיול "${tripName}" הועבר ממחלקתך למחלקת הבטיחות לאישור סופי.`,
         url: `/manager/approvals/${trip.id}`,
         inAppType: 'info',

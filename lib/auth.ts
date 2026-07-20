@@ -1,5 +1,11 @@
 import type { User } from "@supabase/supabase-js";
 import { DEPARTMENTS_CONFIG } from "@/lib/constants";
+import {
+  formatHqRolesLabel,
+  getHqRoles,
+  hqRolesIncludeBranchOfficer,
+  type HqRole,
+} from "@/lib/hqRoles";
 
 const MANAGER_DEPARTMENT = "בטיחות ומפעלים";
 
@@ -16,6 +22,7 @@ export interface UserLikeProfile {
   department?: string | null;
   is_tech_admin?: boolean | null;
   can_dept_review?: boolean | null;
+  hq_roles?: unknown;
 }
 
 const resolveRole = (user: User | null, profile?: UserLikeProfile | null): string => {
@@ -56,6 +63,10 @@ export const hasDeptReviewCapability = (
   const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
   const role = resolveRole(user, profile);
   if (isLegacyDeptTripsOfficerRole(role)) return true;
+
+  const hqRoles = getHqRoles(user, profile);
+  if (hqRolesIncludeBranchOfficer(hqRoles)) return true;
+
   if (role !== "dept_staff") return false;
 
   const capabilityValue = profile?.can_dept_review ?? meta.can_dept_review;
@@ -73,6 +84,8 @@ export interface RoleLabelInput {
   role?: string | null;
   department?: string | null;
   branchName?: string | null;
+  hqRoles?: HqRole[] | null;
+  canDeptReview?: boolean | null;
 }
 
 type DepartmentLanguage = "male" | "female" | "mixed";
@@ -114,17 +127,33 @@ export const getCoordinatorsPluralTitle = (department?: string | null): string =
 
 export const getDeptTripsOfficerTitle = (department?: string | null): string => {
   const language = getDepartmentLanguage(department);
-  if (language === "female") return "אחראית טיולי הרכזות";
-  if (language === "male") return "אחראי טיולי הרכזים";
-  return "אחראי/ת טיולי הרכזים/ות";
+  if (language === "female") return "אחראית הסניפים";
+  if (language === "male") return "אחראי הסניפים";
+  return "אחראי/ת הסניפים";
 };
 
 export const formatUserRoleLabel = ({
   role,
   department,
   branchName,
+  hqRoles,
+  canDeptReview,
 }: RoleLabelInput): string => {
   const normalized = String(role ?? "").toLowerCase();
+
+  if (normalized === "dept_staff" || normalized === "dept_trips_officer") {
+    const roles =
+      hqRoles && hqRoles.length > 0
+        ? hqRoles
+        : getHqRoles(null, {
+            role: normalized,
+            can_dept_review: canDeptReview,
+            hq_roles: hqRoles,
+          });
+    if (roles.length > 0) {
+      return formatHqRolesLabel(roles, department);
+    }
+  }
 
   switch (normalized) {
     case "admin":
@@ -154,8 +183,12 @@ export const formatUserRoleLabel = ({
 export const getUserRoleShortLabel = (
   role?: string | null,
   department?: string | null,
+  hqRoles?: HqRole[] | null,
 ): string => {
   const normalized = String(role ?? "").toLowerCase();
+  if ((normalized === "dept_staff" || normalized === "dept_trips_officer") && hqRoles?.length) {
+    return formatHqRolesLabel(hqRoles, department);
+  }
   switch (normalized) {
     case "admin":
       return "מנהל מערכת";

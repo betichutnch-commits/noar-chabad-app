@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabaseServer'
 import { isManagerUser } from '@/lib/auth'
 import type { User } from '@supabase/supabase-js'
 import { notifyUserIds } from '@/lib/notifications'
+import { withTripNotificationTitle } from '@/lib/notificationDisplay'
 
 type RouteContext = { params: Promise<unknown> }
 type StaffBody = { name: string; idNumber: string; phone: string; email: string; role: string }
@@ -13,7 +14,7 @@ const canManageTrip = async (
   tripId: string
 ) => {
   const [{ data: trip }, { data: profile }] = await Promise.all([
-    supabase.from('trips').select('id, user_id, details').eq('id', tripId).single(),
+    supabase.from('trips').select('id, user_id, details, name').eq('id', tripId).single(),
     supabase.from('profiles').select('role, department, is_tech_admin').eq('id', userId).single(),
   ])
 
@@ -60,8 +61,8 @@ export async function PUT(request: Request, { params }: RouteContext) {
 
   await notifyUserIds([existingUser.id], {
     kind: 'trip.secondary_staff',
-    title: 'שיבוץ לטיול',
-    body: 'שובצת לטיול חדש. היכנס/י לפרטים במערכת.',
+    title: withTripNotificationTitle(String(trip.name || ''), 'שיבוץ לטיול'),
+    body: `שובצת לטיול "${String(trip.name || 'טיול')}". היכנס/י לפרטים במערכת.`,
     url: `/dashboard/trip/${id}`,
     inAppType: 'assignment',
   })

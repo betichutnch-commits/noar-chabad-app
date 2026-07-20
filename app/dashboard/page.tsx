@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { Header } from '@/components/layout/Header'
 import { 
-  Loader2, Search, MapPin, ShieldAlert, Sun, Trash2, Calendar, PlusCircle
+  Loader2, Search, Trash2, Calendar, PlusCircle
 } from 'lucide-react'
 import { TripCard } from '@/components/TripCard' 
 import { formatHebrewDate } from '@/lib/dateUtils'
@@ -187,30 +187,6 @@ export default function DashboardPage() {
       return matchesStatus && matchesType && matchesSearch;
   });
 
-  const SafetyCard = () => (
-      <div className="bg-surface-card p-6 rounded-3xl border border-border-subtle shadow-sm flex flex-col justify-center relative overflow-hidden h-full">
-          <div className="absolute top-0 left-0 bg-red-500 text-white text-[9px] px-2 py-1 rounded-br-lg z-20 font-bold shadow-sm">אופציונלי - דורש תכנות</div>
-          <div className="flex items-center gap-3 mb-3 relative z-10 pt-2">
-              <div className="w-10 h-10 bg-green-50 rounded-2xl flex items-center justify-center text-green-600 shrink-0 shadow-sm"><ShieldAlert size={20}/></div>
-              <h3 className="text-base font-bold text-text-primary">חדר מצב</h3>
-          </div>
-          <p className="text-sm text-text-secondary leading-relaxed relative z-10">אין התראות חריגות להיום.<br/><span className="text-green-600 font-bold">ניתן לקיים פעילות כסדרה.</span></p>
-          <div className="absolute top-0 right-0 w-1 h-full bg-green-500"></div>
-      </div>
-  );
-
-  const WeatherCard = () => (
-      <div className="bg-gradient-to-br from-brand-cyan to-cyan-600 p-6 rounded-3xl text-white shadow-lg shadow-cyan-100/50 flex flex-col justify-between relative overflow-hidden h-full min-h-[140px]">
-          <div className="absolute top-0 left-0 bg-red-500 text-white text-[9px] px-2 py-1 rounded-br-lg z-20 font-bold shadow-sm">אופציונלי - דורש תכנות</div>
-          <div className="relative z-10 pt-2">
-              <div className="flex justify-between items-start"><div className="text-xs font-bold opacity-80 mb-1">תחזית להיום</div><MapPin size={16} className="opacity-60"/></div>
-              <div className="flex items-end gap-2 mt-2"><div className="text-4xl font-black">24°</div><div className="text-sm font-medium opacity-90 mb-1.5">ירושלים</div></div>
-              <div className="text-sm opacity-80 mt-1">שמשי ונעים</div>
-          </div>
-          <Sun size={100} className="absolute -bottom-6 -left-6 text-white opacity-10 rotate-12"/>
-      </div>
-  );
-
   return (
     <>
       <Header title="מסך ראשי" />
@@ -239,16 +215,34 @@ export default function DashboardPage() {
 
       {/* תיקון: min-h-screen מבטיח גובה מלא כדי שיהיה מקום לפופאפ */}
       <div className="p-4 md:p-8 space-y-6 animate-fadeIn pb-32 max-w-[100vw] overflow-x-hidden md:max-w-7xl md:mx-auto min-h-screen">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-surface-card p-6 rounded-3xl border border-border-subtle shadow-sm relative overflow-hidden group hover:shadow-md transition-all h-full md:col-span-1">
-                  <div className="relative z-10">
-                      <div className="flex justify-between items-start mb-2"><div className="text-xs font-bold text-text-muted uppercase tracking-widest">הפעילות הבאה</div>{upcomingTrip && <div className="bg-cyan-50 text-brand-cyan px-2 py-1 rounded-lg text-[10px] font-bold">בקרוב</div>}</div>
-                      {upcomingTrip ? (<><h3 className="text-xl font-black text-text-primary truncate mb-1 leading-tight">{upcomingTrip.name}</h3><div className="flex items-center gap-2 text-sm text-text-secondary font-bold mt-2"><Calendar size={16} className="text-brand-pink"/><span>{formatHebrewDate(upcomingTrip.start_date)}</span></div></>) : (<div className="flex flex-col items-center justify-center py-4 text-center"><span className="text-gray-300 mb-2">--</span><div className="text-text-muted font-medium text-sm">אין פעילויות מתוכננות בקרוב</div></div>)}
+          <div className="grid grid-cols-1 gap-4 justify-items-center">
+              <div className="bg-surface-card p-6 rounded-3xl border border-border-subtle shadow-sm relative overflow-hidden group hover:shadow-md transition-all w-full max-w-xl">
+                  <div className="relative z-10 flex flex-col items-center text-center">
+                      <div className="mb-2 flex w-full items-center justify-center gap-2">
+                        <div className="text-xs font-bold text-text-muted uppercase tracking-widest">הפעילות הבאה</div>
+                        {upcomingTrip ? (
+                          <div className="bg-cyan-50 text-brand-cyan px-2 py-1 rounded-lg text-[10px] font-bold">בקרוב</div>
+                        ) : null}
+                      </div>
+                      {upcomingTrip ? (
+                        <>
+                          <h3 className="text-xl font-black text-text-primary truncate mb-1 leading-tight max-w-full">
+                            {upcomingTrip.name}
+                          </h3>
+                          <div className="flex items-center justify-center gap-2 text-sm text-text-secondary font-bold mt-2">
+                            <Calendar size={16} className="text-brand-pink" />
+                            <span>{formatHebrewDate(upcomingTrip.start_date)}</span>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-4">
+                          <span className="text-gray-300 mb-2">--</span>
+                          <div className="text-text-muted font-medium text-sm">אין פעילויות מתוכננות בקרוב</div>
+                        </div>
+                      )}
                   </div>
                   <div className="w-32 h-32 bg-gradient-to-tr from-[#E91E63]/10 to-transparent rounded-full absolute -bottom-10 -left-10 transition-transform group-hover:scale-110"></div>
               </div>
-              <div className="hidden md:block h-full"><SafetyCard /></div>
-              <div className="hidden md:block h-full"><WeatherCard /></div>
           </div>
 
           {hasDeptReviewAccess && (
@@ -337,7 +331,6 @@ export default function DashboardPage() {
                   ))}
               </div>
           </div>
-          <div className="grid grid-cols-1 gap-4 md:hidden mt-8 border-t border-gray-100 pt-8"><div className="h-[140px]"><SafetyCard /></div><div className="h-[160px]"><WeatherCard /></div></div>
       </div>
     </>
   )

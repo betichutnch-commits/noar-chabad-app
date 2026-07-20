@@ -11,6 +11,7 @@ import { formatUserRoleLabel } from '@/lib/auth';
 import { DEPARTMENTS_CONFIG } from '@/lib/constants';
 import { PushPermissionBanner } from '@/components/PushPermissionBanner';
 import { useUnreadNotifications } from '@/hooks/useUnreadNotifications';
+import { NotificationPreviewText } from '@/components/notifications/NotificationPreviewText';
 
 export default function ManagerLayout({ children }: { children: React.ReactNode }) {
   const { user, roleChangedNotice, clearRoleChangedNotice } = useUser();
@@ -155,7 +156,7 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
                                       }}
                                       className="block p-3 border-b border-gray-100 bg-white hover:bg-cyan-50"
                                     >
-                                      <div className="text-xs text-gray-700 font-bold line-clamp-2">{n.title}</div>
+                                      <NotificationPreviewText title={n.title} message={n.message} />
                                     </Link>
                                   ))
                                 )}

@@ -9,13 +9,20 @@ export function TripPlanningHubHost() {
   const searchParams = useSearchParams();
   const tripId = searchParams.get("planning")?.trim() || "";
 
+  const clearPlanningParam = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("planning");
+    const qs = params.toString();
+    router.replace(qs ? `/dashboard?${qs}` : "/dashboard");
+  };
+
   if (!tripId) return null;
 
   return (
     <TripPlanningHubOverlay
       tripId={tripId}
       open
-      onClose={() => router.replace("/dashboard")}
+      onClose={clearPlanningParam}
     />
   );
 }
