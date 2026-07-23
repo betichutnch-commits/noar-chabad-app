@@ -72,3 +72,5 @@ Manual checks are listed in `docs/pre-merge-checklist.md`.
 Design consistency baseline:
 - `docs/design-system.md`
 - `docs/feature-delivery-checklist.md`
+
+<!-- staging deploy trigger -->
