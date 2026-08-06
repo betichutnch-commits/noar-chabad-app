@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
+import { Select } from '@/components/ui/Select'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { isManagerUser, formatUserRoleLabel, getUserRoleShortLabel } from '@/lib/auth'
 import {
@@ -30,11 +31,22 @@ import {
   resolveHqRolesFromMeta,
   type HqRole,
 } from '@/lib/hqRoles'
+import { ASSIGNABLE_DEPARTMENTS, isValidAssignableDepartment } from '@/lib/constants'
 import { fetchManagedUsersAction, type ManagedUser } from './actions'
 
 import { useUser } from '@/hooks/useUser'
 
 type RoleOption = 'coordinator' | 'dept_staff' | 'safety_admin' | 'secretary'
+
+const DEPARTMENT_OPTIONS = ASSIGNABLE_DEPARTMENTS.map((department) => ({
+  value: department,
+  label: department,
+}))
+
+function resolveInitialDepartment(meta?: Record<string, unknown> | null): string {
+  const department = String(meta?.department || '').trim()
+  return isValidAssignableDepartment(department) ? department : ''
+}
 
 const ROLE_OPTIONS: Array<{ value: RoleOption; label: string; description: string }> = [
   {
@@ -122,16 +134,50 @@ function UsersManagementContent() {
     isOpen: boolean;
     user: ManagedUser | null;
     selectedRole: RoleOption;
+    selectedDepartment: string;
     selectedHqRoles: HqRole[];
     saving: boolean;
-  }>({ isOpen: false, user: null, selectedRole: 'coordinator', selectedHqRoles: ['dept_member'], saving: false });
+  }>({
+    isOpen: false,
+    user: null,
+    selectedRole: 'coordinator',
+    selectedDepartment: '',
+    selectedHqRoles: ['dept_member'],
+    saving: false,
+  });
 
   const [approveModal, setApproveModal] = useState<{
     isOpen: boolean;
     user: ManagedUser | null;
+    selectedDepartment: string;
     selectedHqRoles: HqRole[];
     saving: boolean;
-  }>({ isOpen: false, user: null, selectedHqRoles: ['dept_member'], saving: false });
+  }>({
+    isOpen: false,
+    user: null,
+    selectedDepartment: '',
+    selectedHqRoles: ['dept_member'],
+    saving: false,
+  });
+
+  const emptyApproveModal = () =>
+    setApproveModal({
+      isOpen: false,
+      user: null,
+      selectedDepartment: '',
+      selectedHqRoles: ['dept_member'],
+      saving: false,
+    });
+
+  const emptyRoleModal = () =>
+    setRoleModal({
+      isOpen: false,
+      user: null,
+      selectedRole: 'coordinator',
+      selectedDepartment: '',
+      selectedHqRoles: ['dept_member'],
+      saving: false,
+    });
 
   const [modal, setModal] = useState({
       isOpen: false,
@@ -197,16 +243,16 @@ function UsersManagementContent() {
 
       if (newStatus === 'approved') {
         const role = String(target.raw_user_meta_data?.role || '').toLowerCase();
-        if (role === 'dept_staff' || role === 'dept_trips_officer') {
-          const initial = ensureDefaultHqRoles(resolveHqRolesFromMeta(target.raw_user_meta_data));
-          setApproveModal({
-            isOpen: true,
-            user: target,
-            selectedHqRoles: initial.length ? initial : ['dept_member'],
-            saving: false,
-          });
-          return;
-        }
+        const isDeptStaff = role === 'dept_staff' || role === 'dept_trips_officer';
+        const initial = ensureDefaultHqRoles(resolveHqRolesFromMeta(target.raw_user_meta_data));
+        setApproveModal({
+          isOpen: true,
+          user: target,
+          selectedDepartment: resolveInitialDepartment(target.raw_user_meta_data),
+          selectedHqRoles: isDeptStaff ? (initial.length ? initial : ['dept_member']) : [],
+          saving: false,
+        });
+        return;
       }
 
       showModal('confirm', 'שינוי סטטוס משתמש', `האם אתה בטוח שברצונך לשנות את הסטטוס ל-${newStatus === 'approved' ? 'פעיל' : 'חסום'}?`, async () => {
@@ -216,11 +262,6 @@ function UsersManagementContent() {
             credentials: 'include',
             body: JSON.stringify({
               new_status: newStatus,
-              ...(newStatus === 'approved' && target?.raw_user_meta_data?.role
-                ? {
-                    sync_role: String(target.raw_user_meta_data.role).toLowerCase(),
-                  }
-                : {}),
             }),
           });
           const payload = await res.json().catch(() => ({}));
@@ -243,23 +284,37 @@ function UsersManagementContent() {
     });
   };
 
-  const handleApproveWithHqRoles = async () => {
+  const handleApproveUser = async () => {
     if (!approveModal.user) return;
-    if (approveModal.selectedHqRoles.length === 0) {
+    if (!isValidAssignableDepartment(approveModal.selectedDepartment)) {
+      showModal('error', 'חסרה מחלקה', 'יש לבחור מחלקה לפני האישור.');
+      return;
+    }
+    const role = String(approveModal.user.raw_user_meta_data?.role || '').toLowerCase();
+    const isDeptStaff = role === 'dept_staff' || role === 'dept_trips_officer';
+    if (isDeptStaff && approveModal.selectedHqRoles.length === 0) {
       showModal('error', 'חסר תפקיד', 'יש לבחור לפחות תפקיד מטה אחד.');
       return;
     }
     setApproveModal(prev => ({ ...prev, saving: true }));
-    const hqRoles = ensureDefaultHqRoles(approveModal.selectedHqRoles);
+    const hqRoles = isDeptStaff ? ensureDefaultHqRoles(approveModal.selectedHqRoles) : [];
+    const syncRole = isDeptStaff
+      ? 'dept_staff'
+      : String(approveModal.user.raw_user_meta_data?.role || '').toLowerCase() || undefined;
     const res = await fetch(`/api/users/${encodeURIComponent(approveModal.user.id)}/status`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: JSON.stringify({
         new_status: 'approved',
-        sync_role: 'dept_staff',
-        hq_roles: hqRoles,
-        sync_can_dept_review: hqRolesIncludeBranchOfficer(hqRoles),
+        department: approveModal.selectedDepartment,
+        ...(syncRole ? { sync_role: syncRole } : {}),
+        ...(isDeptStaff
+          ? {
+              hq_roles: hqRoles,
+              sync_can_dept_review: hqRolesIncludeBranchOfficer(hqRoles),
+            }
+          : {}),
       }),
     });
     const payload = await res.json().catch(() => ({}));
@@ -270,12 +325,21 @@ function UsersManagementContent() {
     }
     applyLocalMeta(approveModal.user.id, {
       status: 'approved',
-      role: 'dept_staff',
-      hq_roles: hqRoles,
-      can_dept_review: hqRolesIncludeBranchOfficer(hqRoles),
+      department: approveModal.selectedDepartment,
+      ...(isDeptStaff
+        ? {
+            role: 'dept_staff',
+            hq_roles: hqRoles,
+            can_dept_review: hqRolesIncludeBranchOfficer(hqRoles),
+          }
+        : {}),
     });
-    setApproveModal({ isOpen: false, user: null, selectedHqRoles: ['dept_member'], saving: false });
-    showModal('success', 'עודכן בהצלחה', 'המשתמש אושר ותפקידי המטה נשמרו.');
+    emptyApproveModal();
+    showModal(
+      'success',
+      'עודכן בהצלחה',
+      isDeptStaff ? 'המשתמש אושר, המחלקה ותפקידי המטה נשמרו.' : 'המשתמש אושר והמחלקה עודכנה.',
+    );
   };
 
   const normalizeRoleForFilter = (role?: string | null): RoleOption | 'unknown' => {
@@ -296,19 +360,13 @@ function UsersManagementContent() {
       isOpen: true,
       user: target,
       selectedRole: initial,
+      selectedDepartment: resolveInitialDepartment(target.raw_user_meta_data),
       selectedHqRoles: hqRoles,
       saving: false,
     });
   };
 
-  const closeRoleModal = () =>
-    setRoleModal({
-      isOpen: false,
-      user: null,
-      selectedRole: 'coordinator',
-      selectedHqRoles: ['dept_member'],
-      saving: false,
-    });
+  const closeRoleModal = () => emptyRoleModal();
 
   const toggleRoleModalHqRole = (role: HqRole) => {
     setRoleModal(prev => {
@@ -320,6 +378,10 @@ function UsersManagementContent() {
 
   const handleRoleSave = async () => {
     if (!roleModal.user) return;
+    if (!isValidAssignableDepartment(roleModal.selectedDepartment)) {
+      showModal('error', 'חסרה מחלקה', 'יש לבחור מחלקה.');
+      return;
+    }
     if (roleModal.selectedRole === 'dept_staff' && roleModal.selectedHqRoles.length === 0) {
       showModal('error', 'חסר תפקיד', 'יש לבחור לפחות תפקיד מטה אחד.');
       return;
@@ -333,6 +395,7 @@ function UsersManagementContent() {
       credentials: 'include',
       body: JSON.stringify({
         new_role: roleToSave,
+        department: roleModal.selectedDepartment,
         hq_roles: hqRoles,
         can_dept_review: hqRolesIncludeBranchOfficer(hqRoles),
       }),
@@ -345,11 +408,12 @@ function UsersManagementContent() {
     }
     applyLocalMeta(roleModal.user.id, {
       role: roleToSave,
+      department: roleModal.selectedDepartment,
       hq_roles: hqRoles,
       can_dept_review: hqRolesIncludeBranchOfficer(hqRoles),
     });
     closeRoleModal();
-    showModal('success', 'עודכן', 'התפקיד עודכן בהצלחה.');
+    showModal('success', 'עודכן', 'התפקיד והמחלקה עודכנו בהצלחה.');
   };
 
   const filteredUsers = users.filter(u => {
@@ -390,7 +454,17 @@ function UsersManagementContent() {
             <div className="p-6 space-y-4 overflow-y-auto">
               <div className="text-sm text-gray-500">
                 <span className="font-bold text-gray-800">{String(roleModal.user.raw_user_meta_data?.full_name || '') || roleModal.user.email}</span>
-                <span> • {String(roleModal.user.raw_user_meta_data?.department || '') || 'ללא מחלקה'}</span>
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs font-bold text-gray-400">מחלקה</p>
+                <Select
+                  value={roleModal.selectedDepartment}
+                  options={DEPARTMENT_OPTIONS}
+                  onChange={(value) => setRoleModal((prev) => ({ ...prev, selectedDepartment: value }))}
+                  placeholder="בחרו מחלקה"
+                  accent="cyan"
+                  clearable={false}
+                />
               </div>
               <div className="space-y-2">
                 {ROLE_OPTIONS.map(opt => {
@@ -436,7 +510,7 @@ function UsersManagementContent() {
                   <div className="rounded-2xl border border-cyan-100 bg-cyan-50/40 p-3 space-y-2">
                     <p className="text-xs font-bold text-cyan-800">תפקידי מטה (ניתן לבחור כמה)</p>
                     {HQ_ROLE_OPTIONS.map(opt => {
-                      const dept = String(roleModal.user?.raw_user_meta_data?.department || '');
+                      const dept = roleModal.selectedDepartment;
                       const checked = roleModal.selectedHqRoles.includes(opt.value);
                       return (
                         <label key={opt.value} className="flex items-start gap-3 cursor-pointer">
@@ -465,16 +539,19 @@ function UsersManagementContent() {
         </div>
       )}
 
-      {approveModal.isOpen && approveModal.user && (
+      {approveModal.isOpen && approveModal.user && (() => {
+        const approveRole = String(approveModal.user.raw_user_meta_data?.role || '').toLowerCase();
+        const isDeptStaffApprove = approveRole === 'dept_staff' || approveRole === 'dept_trips_officer';
+        return (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-fadeIn">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] flex flex-col">
             <div className="bg-purple-700 text-white px-6 py-4 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <CheckCircle size={20} />
-                <span className="font-bold">אישור משתמש מטה</span>
+                <span className="font-bold">{isDeptStaffApprove ? 'אישור משתמש מטה' : 'אישור משתמש'}</span>
               </div>
               <button
-                onClick={() => setApproveModal({ isOpen: false, user: null, selectedHqRoles: ['dept_member'], saving: false })}
+                onClick={emptyApproveModal}
                 aria-label="סגור"
                 className="hover:opacity-70"
               >
@@ -483,51 +560,67 @@ function UsersManagementContent() {
             </div>
             <div className="p-6 space-y-4 overflow-y-auto">
               <p className="text-sm text-gray-600">
-                בחר/י תפקידי מטה עבור{' '}
+                שבץ/י מחלקה{isDeptStaffApprove ? ' ותפקידי מטה' : ''} עבור{' '}
                 <span className="font-bold text-gray-800">
                   {String(approveModal.user.raw_user_meta_data?.full_name || '') || approveModal.user.email}
                 </span>
               </p>
               <div className="space-y-2">
-                {HQ_ROLE_OPTIONS.map(opt => {
-                  const dept = String(approveModal.user?.raw_user_meta_data?.department || '');
-                  const checked = approveModal.selectedHqRoles.includes(opt.value);
-                  return (
-                    <label
-                      key={opt.value}
-                      className={`flex items-start gap-3 p-3 rounded-2xl border cursor-pointer ${
-                        checked ? 'border-purple-300 bg-purple-50' : 'border-gray-200'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleApproveHqRole(opt.value)}
-                        className="mt-1 h-4 w-4 accent-purple-600"
-                      />
-                      <span className="text-sm font-bold text-gray-800">{opt.labelFor(dept)}</span>
-                    </label>
-                  );
-                })}
+                <p className="text-xs font-bold text-gray-400">מחלקה</p>
+                <Select
+                  value={approveModal.selectedDepartment}
+                  options={DEPARTMENT_OPTIONS}
+                  onChange={(value) => setApproveModal((prev) => ({ ...prev, selectedDepartment: value }))}
+                  placeholder="בחרו מחלקה"
+                  accent="purple"
+                  clearable={false}
+                />
               </div>
-              <p className="text-xs text-gray-500">
-                רק «אחראי/ת הסניפים» יוכל/תוכל לאשר פש״ש לפני מחלקת בטיחות.
-              </p>
+              {isDeptStaffApprove && (
+                <>
+                  <div className="space-y-2">
+                    {HQ_ROLE_OPTIONS.map(opt => {
+                      const dept = approveModal.selectedDepartment;
+                      const checked = approveModal.selectedHqRoles.includes(opt.value);
+                      return (
+                        <label
+                          key={opt.value}
+                          className={`flex items-start gap-3 p-3 rounded-2xl border cursor-pointer ${
+                            checked ? 'border-purple-300 bg-purple-50' : 'border-gray-200'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleApproveHqRole(opt.value)}
+                            className="mt-1 h-4 w-4 accent-purple-600"
+                          />
+                          <span className="text-sm font-bold text-gray-800">{opt.labelFor(dept)}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    רק «אחראי/ת הסניפים» יוכל/תוכל לאשר פש״ש לפני מחלקת בטיחות.
+                  </p>
+                </>
+              )}
             </div>
             <div className="px-6 py-4 bg-gray-50 flex justify-end gap-3 border-t border-gray-100 shrink-0">
               <Button
                 variant="ghost"
-                onClick={() => setApproveModal({ isOpen: false, user: null, selectedHqRoles: ['dept_member'], saving: false })}
+                onClick={emptyApproveModal}
               >
                 בטל
               </Button>
-              <Button onClick={() => void handleApproveWithHqRoles()} isLoading={approveModal.saving} icon={<CheckCircle size={16}/>}>
-                אשר ושמור תפקידים
+              <Button onClick={() => void handleApproveUser()} isLoading={approveModal.saving} icon={<CheckCircle size={16}/>}>
+                {isDeptStaffApprove ? 'אשר ושמור' : 'אשר משתמש'}
               </Button>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       <div className="p-4 md:p-8 animate-fadeIn max-w-[100vw] overflow-x-hidden pb-32">
           {usersLoadError && (
@@ -741,7 +834,7 @@ function UsersManagementContent() {
                                 </div>
                                 {filter === 'pending' && (
                                     <p className="mt-3 text-[11px] text-gray-400 text-left">
-                                        באישור נרשם מטה תתבקש/י לבחור תפקידי מטה (ניתן כמה במקביל).
+                                        באישור ניתן לשבץ מחלקה. למשתמש מטה תתבקש/י גם לבחור תפקידי מטה.
                                     </p>
                                 )}
                             </div>

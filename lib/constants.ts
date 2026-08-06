@@ -44,6 +44,18 @@ export const DEPARTMENTS_CONFIG: Record<string, { color: string; gender: 'male' 
   }
 };
 
+/** Department used for safety_admin / manager signup (not in DEPARTMENTS_CONFIG). */
+export const SAFETY_DEPARTMENT = 'בטיחות ומפעלים';
+
+export const ASSIGNABLE_DEPARTMENTS: string[] = [
+  ...Object.keys(DEPARTMENTS_CONFIG),
+  SAFETY_DEPARTMENT,
+];
+
+export function isValidAssignableDepartment(department: string): boolean {
+  return ASSIGNABLE_DEPARTMENTS.includes(department);
+}
+
 type TripLogicEntry = {
   nameLabel: string;
   namePlaceholder: string;

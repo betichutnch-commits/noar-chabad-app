@@ -10,6 +10,7 @@ import {
   normalizeHqRoles,
   type HqRole,
 } from '@/lib/hqRoles'
+import { isValidAssignableDepartment } from '@/lib/constants'
 
 type RouteContext = { params: Promise<{ id: string }> }
 type Body = {
@@ -17,6 +18,7 @@ type Body = {
   sync_role?: string
   sync_can_dept_review?: boolean
   hq_roles?: unknown
+  department?: string
 }
 
 export async function POST(request: Request, { params }: RouteContext) {
@@ -27,8 +29,13 @@ export async function POST(request: Request, { params }: RouteContext) {
   const syncCanDeptReview =
     typeof body?.sync_can_dept_review === 'boolean' ? body.sync_can_dept_review : undefined
   const hqRoles = body.hq_roles !== undefined ? ensureDefaultHqRoles(normalizeHqRoles(body.hq_roles)) : undefined
+  const requestedDepartment =
+    body.department !== undefined ? String(body.department || '').trim() : undefined
   if (!targetUserId || !newStatus) {
     return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
+  }
+  if (requestedDepartment !== undefined && requestedDepartment && !isValidAssignableDepartment(requestedDepartment)) {
+    return NextResponse.json({ error: 'מחלקה לא חוקית' }, { status: 400 })
   }
 
   const supabase = await createSupabaseServerClient()
@@ -90,12 +97,18 @@ export async function POST(request: Request, { params }: RouteContext) {
       nextCanDeptReview = hqRolesIncludeBranchOfficer(nextHqRoles)
     }
 
+    const nextDepartment =
+      requestedDepartment && isValidAssignableDepartment(requestedDepartment)
+        ? requestedDepartment
+        : undefined
+
     const { error: updateErr } = await admin.auth.admin.updateUserById(targetUserId, {
       user_metadata: {
         ...currentMeta,
         role: nextRole,
         can_dept_review: nextCanDeptReview,
         hq_roles: nextRole === 'dept_staff' ? nextHqRoles : [],
+        ...(nextDepartment ? { department: nextDepartment } : {}),
       },
     })
     if (updateErr) {
@@ -116,6 +129,7 @@ export async function POST(request: Request, { params }: RouteContext) {
       .from('profiles')
       .update({
         hq_roles: nextRole === 'dept_staff' ? nextHqRoles ?? [] : [],
+        ...(nextDepartment ? { department: nextDepartment } : {}),
       })
       .eq('id', targetUserId)
   }

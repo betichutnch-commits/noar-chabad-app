@@ -10,9 +10,10 @@ import {
   hqRolesIncludeBranchOfficer,
   normalizeHqRoles,
 } from '@/lib/hqRoles'
+import { isValidAssignableDepartment } from '@/lib/constants'
 
 type RouteContext = { params: Promise<{ id: string }> }
-type Body = { new_role?: string; can_dept_review?: boolean; hq_roles?: unknown }
+type Body = { new_role?: string; can_dept_review?: boolean; hq_roles?: unknown; department?: string }
 
 const ALLOWED = new Set(['coordinator', 'dept_staff', 'safety_admin', 'secretary', 'user'])
 
@@ -22,11 +23,16 @@ export async function POST(request: Request, { params }: RouteContext) {
   const newRole = String(body?.new_role || '').trim().toLowerCase()
   const canDeptReview = typeof body?.can_dept_review === 'boolean' ? body.can_dept_review : undefined
   const hqRolesInput = body.hq_roles !== undefined ? normalizeHqRoles(body.hq_roles) : undefined
+  const requestedDepartment =
+    body.department !== undefined ? String(body.department || '').trim() : undefined
   if (!targetUserId || !ALLOWED.has(newRole)) {
     return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
   }
   if (newRole === 'dept_staff' && hqRolesInput !== undefined && hqRolesInput.length === 0) {
     return NextResponse.json({ error: 'יש לבחור לפחות תפקיד מטה אחד' }, { status: 400 })
+  }
+  if (requestedDepartment !== undefined && requestedDepartment && !isValidAssignableDepartment(requestedDepartment)) {
+    return NextResponse.json({ error: 'מחלקה לא חוקית' }, { status: 400 })
   }
 
   const supabase = await createSupabaseServerClient()
@@ -65,7 +71,11 @@ export async function POST(request: Request, { params }: RouteContext) {
   }
 
   const currentMeta = (authData.user.user_metadata || {}) as Record<string, unknown>
-  const department = String(currentMeta.department || '')
+  const nextDepartment =
+    requestedDepartment && isValidAssignableDepartment(requestedDepartment)
+      ? requestedDepartment
+      : String(currentMeta.department || '')
+  const department = nextDepartment
 
   let nextHqRoles = newRole === 'dept_staff' ? ensureDefaultHqRoles(hqRolesInput ?? normalizeHqRoles(currentMeta.hq_roles)) : []
   if (newRole === 'dept_staff' && hqRolesInput === undefined && canDeptReview !== undefined) {
@@ -79,6 +89,7 @@ export async function POST(request: Request, { params }: RouteContext) {
       role: newRole,
       can_dept_review: nextCanDeptReview,
       hq_roles: nextHqRoles,
+      ...(requestedDepartment !== undefined && nextDepartment ? { department: nextDepartment } : {}),
     },
   })
   if (updateErr) {
@@ -89,6 +100,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     .from('profiles')
     .update({
       hq_roles: nextHqRoles,
+      ...(requestedDepartment !== undefined && nextDepartment ? { department: nextDepartment } : {}),
     })
     .eq('id', targetUserId)
 
@@ -113,5 +125,6 @@ export async function POST(request: Request, { params }: RouteContext) {
     role: newRole,
     hq_roles: nextHqRoles,
     can_dept_review: nextCanDeptReview,
+    department: nextDepartment || undefined,
   })
 }
