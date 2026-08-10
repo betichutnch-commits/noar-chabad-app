@@ -110,6 +110,7 @@ export const TRIP_STATUS_ICONS: Record<TripStatus, LucideIcon> = {
 
 export type TripActor =
   | "coordinator"
+  | "dept_staff"
   | "dept_trips_officer"
   | "safety_admin"
   | "system";
@@ -149,9 +150,20 @@ const TRANSITIONS: Record<TripActor, Array<{ from: TripStatus; to: TripStatus }>
     { from: "approved", to: "cancelled" },
     { from: "approved_for_execution", to: "cancelled" },
   ],
+  // HQ staff submitters skip department review and go straight to safety.
+  dept_staff: [
+    { from: "draft", to: "pending" },
+    { from: "returned_for_changes", to: "pending" },
+    { from: "pending", to: "cancelled" },
+    { from: "approved", to: "cancelled" },
+    { from: "approved_for_execution", to: "cancelled" },
+  ],
   dept_trips_officer: [
     { from: "pending_dept_review", to: "returned_for_changes" },
     { from: "pending_dept_review", to: "pending" },
+    // Legacy role may also submit trips as HQ staff.
+    { from: "draft", to: "pending" },
+    { from: "returned_for_changes", to: "pending" },
   ],
   safety_admin: [
     { from: "pending", to: "approved" },

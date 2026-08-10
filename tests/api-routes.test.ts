@@ -109,6 +109,100 @@ describe("API route authorization guards", () => {
     expect(json.id).toBe("trip-1");
   });
 
+  it("routes coordinator pending submit to pending_dept_review", async () => {
+    isManagerUserMock.mockReturnValue(false);
+
+    const insertSingle = vi.fn().mockResolvedValue({ data: { id: "trip-coord" }, error: null });
+    const insertSelect = vi.fn(() => ({ single: insertSingle }));
+    const insertFn = vi.fn(() => ({ select: insertSelect }));
+    const tripsFrom = { insert: insertFn };
+
+    const profilesSingle = vi
+      .fn()
+      .mockResolvedValue({ data: { role: "coordinator", department: "תמים" } });
+    const profilesEq = vi.fn(() => ({ single: profilesSingle }));
+    const profilesFrom = { select: vi.fn(() => ({ eq: profilesEq })) };
+
+    createSupabaseServerClientMock.mockResolvedValue({
+      auth: {
+        getUser: vi
+          .fn()
+          .mockResolvedValue({ data: { user: { id: "user-coord", user_metadata: {} } } }),
+      },
+      from: vi.fn((table: string) => {
+        if (table === "trips") return tripsFrom;
+        if (table === "profiles") return profilesFrom;
+        return {};
+      }),
+    } as never);
+
+    const req = new Request("http://localhost/api/trips/save", {
+      method: "POST",
+      body: JSON.stringify({
+        status: "pending",
+        tripData: {
+          coordinator_name: "coord",
+          name: "trip",
+          start_date: "2026-01-01",
+          details: {},
+        },
+      }),
+    });
+
+    const res = await tripSavePost(req);
+    expect(res.status).toBe(200);
+    expect(insertFn).toHaveBeenCalledWith([
+      expect.objectContaining({ status: "pending_dept_review" }),
+    ]);
+  });
+
+  it("routes dept_staff pending submit straight to pending safety queue", async () => {
+    isManagerUserMock.mockReturnValue(false);
+
+    const insertSingle = vi.fn().mockResolvedValue({ data: { id: "trip-hq" }, error: null });
+    const insertSelect = vi.fn(() => ({ single: insertSingle }));
+    const insertFn = vi.fn(() => ({ select: insertSelect }));
+    const tripsFrom = { insert: insertFn };
+
+    const profilesSingle = vi
+      .fn()
+      .mockResolvedValue({ data: { role: "dept_staff", department: "תמים" } });
+    const profilesEq = vi.fn(() => ({ single: profilesSingle }));
+    const profilesFrom = { select: vi.fn(() => ({ eq: profilesEq })) };
+
+    createSupabaseServerClientMock.mockResolvedValue({
+      auth: {
+        getUser: vi
+          .fn()
+          .mockResolvedValue({ data: { user: { id: "user-hq", user_metadata: {} } } }),
+      },
+      from: vi.fn((table: string) => {
+        if (table === "trips") return tripsFrom;
+        if (table === "profiles") return profilesFrom;
+        return {};
+      }),
+    } as never);
+
+    const req = new Request("http://localhost/api/trips/save", {
+      method: "POST",
+      body: JSON.stringify({
+        status: "pending",
+        tripData: {
+          coordinator_name: "hq staff",
+          name: "trip",
+          start_date: "2026-01-01",
+          details: {},
+        },
+      }),
+    });
+
+    const res = await tripSavePost(req);
+    expect(res.status).toBe(200);
+    expect(insertFn).toHaveBeenCalledWith([
+      expect.objectContaining({ status: "pending" }),
+    ]);
+  });
+
   it("blocks cancel when trip is not owned by requester", async () => {
     const tripsSelectSingle = vi.fn().mockResolvedValue({
       data: { id: "trip-1", user_id: "other-user", details: {} },

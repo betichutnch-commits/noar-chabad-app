@@ -41,9 +41,15 @@ export async function POST(request: Request) {
 
   const userLike = { id: user.id, user_metadata: user.user_metadata ?? {} } as User
   const isManager = isManagerUser(userLike, profile)
+  const submitterRole = String(profile?.role ?? user.user_metadata?.role ?? '')
+    .trim()
+    .toLowerCase()
+  const isDeptStaffSubmitter =
+    submitterRole === 'dept_staff' || submitterRole === 'dept_trips_officer'
+  const skipsDeptReview = isManager || isDeptStaffSubmitter
 
   const submissionStatus =
-    body.status === 'pending' && !isManager ? 'pending_dept_review' : body.status
+    body.status === 'pending' && !skipsDeptReview ? 'pending_dept_review' : body.status
 
   const departmentForTrip =
     body.tripData.department ?? (profile?.department ? String(profile.department) : null)
@@ -108,7 +114,7 @@ export async function POST(request: Request) {
     }
 
     const updatePayload: Record<string, unknown> = { ...tripPayload }
-    if (body.status === 'pending' && !isManager) {
+    if (body.status === 'pending' && !skipsDeptReview) {
       updatePayload.dept_review_notes = null
     }
 
